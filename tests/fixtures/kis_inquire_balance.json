@@ -1,0 +1,49 @@
+{
+  "rt_cd": "0",
+  "msg_cd": "20310000",
+  "msg1": "모의투자 조회가 완료되었습니다.",
+  "output1": [
+    {
+      "pdno": "005930",
+      "prdt_name": "삼성전자",
+      "hldg_qty": "10",
+      "ord_psbl_qty": "10",
+      "pchs_avg_pric": "68000.0000",
+      "pchs_amt": "680000",
+      "prpr": "70500",
+      "evlu_amt": "705000",
+      "evlu_pfls_amt": "25000",
+      "evlu_pfls_rt": "3.67",
+      "evlu_erng_rt": "3.6764",
+      "fltt_rt": "1.20"
+    },
+    {
+      "pdno": "000660",
+      "prdt_name": "SK하이닉스",
+      "hldg_qty": "5",
+      "ord_psbl_qty": "5",
+      "pchs_avg_pric": "180000.0000",
+      "pchs_amt": "900000",
+      "prpr": "175000",
+      "evlu_amt": "875000",
+      "evlu_pfls_amt": "-25000",
+      "evlu_pfls_rt": "-2.78",
+      "evlu_erng_rt": "-2.7777",
+      "fltt_rt": "-0.85"
+    }
+  ],
+  "output2": [
+    {
+      "dnca_tot_amt": "1000000",
+      "nxdy_excc_amt": "1000000",
+      "prvs_rcdl_excc_amt": "1000000",
+      "pchs_amt_smtl_amt": "1580000",
+      "evlu_amt_smtl_amt": "1580000",
+      "evlu_pfls_smtl_amt": "0",
+      "tot_evlu_amt": "2580000",
+      "nass_amt": "2580000",
+      "asst_icdc_amt": "0",
+      "asst_icdc_erng_rt": "0.00"
+    }
+  ]
+}

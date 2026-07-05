@@ -1,0 +1,18 @@
+{
+  "chart": {
+    "result": [
+      {
+        "meta": {
+          "currency": "USD",
+          "symbol": "^VIX",
+          "regularMarketPrice": 18.42,
+          "regularMarketTime": 1751529600,
+          "exchangeTimezoneName": "America/New_York"
+        },
+        "timestamp": [1751529600],
+        "indicators": {"quote": [{"close": [18.42]}]}
+      }
+    ],
+    "error": null
+  }
+}

@@ -1,0 +1,26 @@
+# 환경변수 / 시크릿
+.env
+.env.local
+
+# 캐시 / 토큰 영속
+.cache/
+*.token.json
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+*.egg-info/
+
+# uv
+# (uv.lock은 커밋 대상 — 무시하지 않음)
+
+# 프론트엔드 (Vite/React)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE / OS
+.idea/
+.DS_Store

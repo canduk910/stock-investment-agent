@@ -1,0 +1,194 @@
+/* 컴포넌트 스타일 — 색은 theme.css 토큰(var())만 참조한다(팔레트 SSOT). */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Apple SD Gothic Neo',
+    'Malgun Gothic', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.dashboard {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+}
+
+.dashboard__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.dashboard__header h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--c-navy);
+}
+
+.dashboard__subtitle {
+  margin: 6px 0 0;
+  color: var(--c-text-secondary);
+  font-size: 13px;
+}
+
+.refresh {
+  background: var(--c-surface);
+  color: var(--c-navy);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm);
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+.refresh:hover:not(:disabled) {
+  border-color: var(--c-blue);
+  color: var(--c-blue);
+}
+.refresh:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.gauge-placeholder {
+  margin: 22px 0;
+  padding: 22px 20px;
+  background: var(--c-blue-soft);
+  border: 1px dashed var(--c-border-strong);
+  border-radius: var(--radius);
+  color: var(--c-text-secondary);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gauge-placeholder__badge {
+  background: var(--c-navy);
+  color: var(--c-white);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.04em;
+}
+
+.banner {
+  margin: 12px 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+.banner--error {
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-navy);
+  color: var(--c-navy);
+  font-weight: 500;
+}
+.banner--warn {
+  background: var(--c-blue-soft);
+  border: 1px solid var(--c-blue);
+  color: var(--c-blue-strong);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  padding: 18px;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.card:hover {
+  box-shadow: var(--shadow-raise);
+  border-color: var(--c-border-strong);
+}
+.card--failed {
+  background: var(--c-surface-2);
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.card__label {
+  color: var(--c-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.card__value {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--c-black);
+}
+.card__value--muted {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--c-text-muted);
+}
+
+.card__unit {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--c-text-muted);
+  margin-left: 3px;
+}
+
+.card__delta {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--c-text-muted);
+  min-height: 15px;
+}
+.card__delta.up {
+  color: var(--c-up);
+}
+.card__delta.down {
+  color: var(--c-down);
+}
+
+.card__meta {
+  margin-top: auto;
+  padding-top: 10px;
+  font-size: 11px;
+  color: var(--c-text-muted);
+}
+
+.dashboard__footer {
+  margin-top: 26px;
+  color: var(--c-text-muted);
+  font-size: 11.5px;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

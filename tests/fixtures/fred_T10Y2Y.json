@@ -1,0 +1,15 @@
+{
+  "realtime_start": "2026-07-05",
+  "realtime_end": "2026-07-05",
+  "observation_start": "1600-01-01",
+  "observation_end": "9999-12-31",
+  "units": "lin",
+  "output_type": 1,
+  "count": 4,
+  "observations": [
+    {"realtime_start": "2026-07-05", "realtime_end": "2026-07-05", "date": "2026-06-30", "value": "0.38"},
+    {"realtime_start": "2026-07-05", "realtime_end": "2026-07-05", "date": "2026-07-01", "value": "0.41"},
+    {"realtime_start": "2026-07-05", "realtime_end": "2026-07-05", "date": "2026-07-02", "value": "0.42"},
+    {"realtime_start": "2026-07-05", "realtime_end": "2026-07-05", "date": "2026-07-03", "value": "."}
+  ]
+}

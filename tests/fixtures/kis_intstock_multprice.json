@@ -1,0 +1,23 @@
+{
+  "rt_cd": "0",
+  "msg_cd": "MCA00000",
+  "msg1": "정상처리 되었습니다.",
+  "output": [
+    {
+      "inter_shrn_iscd": "005930",
+      "inter_kor_isnm": "삼성전자",
+      "inter2_prpr": "70500",
+      "prdy_vrss": "500",
+      "prdy_vrss_sign": "2",
+      "prdy_ctrt": "0.71"
+    },
+    {
+      "inter_shrn_iscd": "000660",
+      "inter_kor_isnm": "SK하이닉스",
+      "inter2_prpr": "175000",
+      "prdy_vrss": "-1500",
+      "prdy_vrss_sign": "5",
+      "prdy_ctrt": "-0.85"
+    }
+  ]
+}

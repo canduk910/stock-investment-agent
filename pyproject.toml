@@ -1,0 +1,29 @@
+[project]
+name = "stock-investment-agent"
+version = "0.1.0"
+description = "개인 투자자용 금융 분석 AI Agent — 데이터 파이프라인 (WEEK 06)"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31",
+    "fredapi>=0.5.2",
+    "fear-and-greed>=0.4",
+    "python-dotenv>=1.0",
+    "pandas>=2.0",
+    "fastapi>=0.139.0",
+    "uvicorn[standard]>=0.50.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=8.0",
+    "responses>=0.25",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+markers = [
+    "live: 실 외부 API를 호출하는 테스트 (기본 실행에서 제외; `-m live`로만 실행)",
+]
+addopts = "-m 'not live'"

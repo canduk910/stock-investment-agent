@@ -1,0 +1,24 @@
+{
+  "rt_cd": "0",
+  "msg_cd": "MCA00000",
+  "msg1": "정상처리 되었습니다.",
+  "output": {
+    "pdno": "005930",
+    "prdt_type_cd": "300",
+    "prdt_name": "삼성전자",
+    "prdt_abrv_name": "삼성전자",
+    "mket_id_cd": "STK",
+    "scty_grp_id_cd": "ST",
+    "excg_dvsn_cd": "02",
+    "lstg_stqt": "5969782550",
+    "lstg_cptl_amt": "7780466850000",
+    "cpta": "778046685000",
+    "papr": "100",
+    "issu_pric": "0",
+    "kospi200_item_yn": "Y",
+    "idx_bztp_lcls_cd_name": "전기전자",
+    "idx_bztp_mcls_cd_name": "전기전자",
+    "idx_bztp_scls_cd_name": "반도체와반도체장비",
+    "std_idst_clsf_cd_name": "반도체 제조업"
+  }
+}

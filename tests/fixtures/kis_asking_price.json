@@ -1,0 +1,27 @@
+{
+  "rt_cd": "0",
+  "msg_cd": "MCA00000",
+  "msg1": "정상처리 되었습니다.",
+  "output1": {
+    "aspr_acpt_hour": "101530",
+    "stck_shrn_iscd": "005930",
+    "stck_prpr": "70500",
+    "antc_cntg_prdy_ctrt": "1.20",
+    "askp1": "70600",
+    "askp2": "70700",
+    "bidp1": "70500",
+    "bidp2": "70400",
+    "askp_rsqn1": "12000",
+    "bidp_rsqn1": "9000",
+    "total_askp_rsqn": "150000",
+    "total_bidp_rsqn": "130000"
+  },
+  "output2": {
+    "stck_prpr": "70500",
+    "stck_oprc": "70000",
+    "stck_hgpr": "70800",
+    "stck_lwpr": "69800",
+    "stck_sdpr": "69660",
+    "antc_cnpr": "70500"
+  }
+}

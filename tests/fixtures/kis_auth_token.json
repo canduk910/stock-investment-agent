@@ -1,0 +1,6 @@
+{
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.sample-access-token.signature",
+  "token_type": "Bearer",
+  "expires_in": 86400,
+  "access_token_token_expired": "2026-07-06 09:00:00"
+}
