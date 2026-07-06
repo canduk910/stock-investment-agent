@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { fetchMacroIndicators } from '../api.js'
 import { INDICATOR_ORDER } from '../indicatorMeta.js'
 import IndicatorCard from './IndicatorCard.jsx'
+import RegimeGauge from './RegimeGauge.jsx'
 
 export default function MacroDashboard() {
   const [data, setData] = useState(null)
@@ -32,18 +33,15 @@ export default function MacroDashboard() {
       <header className="dashboard__header">
         <div>
           <h1>시장 국면 대시보드</h1>
-          <p className="dashboard__subtitle">거시 지표 실시간 수집 · WEEK 06 데이터 파이프라인</p>
+          <p className="dashboard__subtitle">거시 지표 실시간 수집 + 규칙 기반 국면 판정</p>
         </div>
         <button className="refresh" onClick={load} disabled={loading}>
           {loading ? '수집 중…' : '↻ 새로고침'}
         </button>
       </header>
 
-      {/* WEEK 07 매크로 엔진이 연결될 국면 게이지 자리 */}
-      <div className="gauge-placeholder">
-        <span className="gauge-placeholder__badge">W07</span>
-        <span>국면 판정 게이지 · 권장 현금비중 — 매크로 엔진 연결 예정</span>
-      </div>
+      {/* WEEK 07 매크로 엔진 국면 게이지 — GET /api/macro/regime 소비(자체 로딩/에러 처리) */}
+      <RegimeGauge />
 
       {error && <div className="banner banner--error">API 오류: {error}</div>}
       {failed.length > 0 && (
@@ -52,6 +50,7 @@ export default function MacroDashboard() {
         </div>
       )}
 
+      <h2 className="section-label">구성 지표</h2>
       <div className="grid">
         {INDICATOR_ORDER.map((id) => (
           <IndicatorCard key={id} id={id} point={indicators[id]} />
