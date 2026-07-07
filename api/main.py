@@ -43,6 +43,15 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+# 종목 종합리포트 번들(§6.5) — GET /api/detail/{ticker}/bundle.
+# 라우터를 별도 모듈로 분리(2단계 병렬 + partial_failure + 캐시 게이트는 api/detail.py).
+from api.detail import router as detail_router  # noqa: E402
+from api.stocks import router as stocks_router  # noqa: E402
+
+app.include_router(detail_router)
+app.include_router(stocks_router)
+
+
 @app.get("/api/macro/indicators")
 def macro_indicators() -> dict:
     """매크로 지표 스냅샷(§5.1 병렬 + partial_failure).

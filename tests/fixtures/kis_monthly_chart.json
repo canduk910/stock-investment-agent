@@ -1,0 +1,35 @@
+{
+  "rt_cd": "0",
+  "msg_cd": "MCA00000",
+  "msg1": "정상처리 되었습니다.",
+  "output1": {
+    "hts_kor_isnm": "삼성전자",
+    "stck_shrn_iscd": "005930"
+  },
+  "output2": [
+    {
+      "stck_bsop_date": "20231229",
+      "stck_clpr": "78500",
+      "stck_oprc": "72700",
+      "stck_hgpr": "78800",
+      "stck_lwpr": "72300",
+      "acml_vol": "250000000"
+    },
+    {
+      "stck_bsop_date": "20221229",
+      "stck_clpr": "55300",
+      "stck_oprc": "60300",
+      "stck_hgpr": "61900",
+      "stck_lwpr": "54500",
+      "acml_vol": "300000000"
+    },
+    {
+      "stck_bsop_date": "20211230",
+      "stck_clpr": "78600",
+      "stck_oprc": "80400",
+      "stck_hgpr": "80900",
+      "stck_lwpr": "77800",
+      "acml_vol": "280000000"
+    }
+  ]
+}

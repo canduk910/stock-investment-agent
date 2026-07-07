@@ -112,3 +112,98 @@ def test_normalize_stock_info_shape(load_fixture):
     assert result["name"] == "삼성전자"
     assert result["sector"] == "반도체와반도체장비"
     assert result["listed_shares"] == 5969782550
+
+
+# --- inquire_price (현재가 시세 — 라이브 밸류에이션, FHKST01010100) ----------
+
+def test_normalize_price_shape(load_fixture):
+    """단일 output dict → 정규화 밸류에이션 필드(clean snake). raw stck_prpr 노출 금지."""
+    body = load_fixture("kis_inquire_price")
+    result = normalize.normalize_price(body)
+
+    # 계약 필드명(엔진 stock/summary 가 소비) — raw KIS 명이 아니라 clean snake.
+    assert set(result.keys()) == {
+        "ticker", "price", "change_rate", "per", "pbr", "eps", "bps",
+        "week52_high", "week52_low", "market_cap", "as_of",
+    }
+    assert result["ticker"] == "005930"
+    assert result["price"] == 70500.0
+    assert result["change_rate"] == 0.71
+    assert result["per"] == 12.34
+    assert result["pbr"] == 1.23
+    assert result["eps"] == 5700.0
+    assert result["bps"] == 57000.0
+    assert result["week52_high"] == 88000.0
+    assert result["week52_low"] == 49900.0
+    assert result["market_cap"] == 4207000.0
+
+
+def test_normalize_price_missing_fields_are_graceful():
+    """필드 부재 시 None (KeyError 금지). 빈 output 도 graceful."""
+    result = normalize.normalize_price({"output": {"stck_shrn_iscd": "000660"}})
+    assert result["ticker"] == "000660"
+    assert result["price"] is None
+    assert result["per"] is None
+    assert result["week52_high"] is None
+
+    empty = normalize.normalize_price({})
+    assert empty["price"] is None
+    assert empty["ticker"] is None
+
+
+# --- income statement (손익계산서 — FHKST66430200) --------------------------
+
+def test_normalize_income_statement_shape(load_fixture):
+    """output 리스트 → 연도별 [{period, revenue, operating_income, net_income}]."""
+    body = load_fixture("kis_income_statement")
+    result = normalize.normalize_income_statement(body)
+
+    assert isinstance(result, list)
+    assert len(result) == 3
+    # 순서는 KIS 응답 그대로(정렬은 엔진 담당) — 최근(202312) 먼저.
+    r0 = result[0]
+    assert set(r0.keys()) == {"period", "revenue", "operating_income", "net_income"}
+    assert r0["period"] == "202312"
+    assert r0["revenue"] == 2589355.0
+    assert r0["operating_income"] == 65670.0
+    assert r0["net_income"] == 154871.0
+    assert result[2]["period"] == "202112"
+    assert result[2]["operating_income"] == 516339.0
+
+
+def test_normalize_income_statement_empty_output_is_empty_list():
+    """빈 output(신규상장 재무 결측) → [] (KeyError·크래시 금지)."""
+    assert normalize.normalize_income_statement({"output": []}) == []
+    assert normalize.normalize_income_statement({}) == []
+
+
+def test_normalize_income_statement_single_dict_output_coerced_to_list():
+    """output 이 단일 dict 로 오는 KIS 변형도 1원소 리스트로 정규화."""
+    body = {"output": {"stac_yymm": "202312", "sale_account": "100", "bsop_prti": "10", "thtr_ntin": "5"}}
+    result = normalize.normalize_income_statement(body)
+    assert len(result) == 1
+    assert result[0]["period"] == "202312"
+    assert result[0]["revenue"] == 100.0
+
+
+# --- financial ratio (재무비율 — FHKST66430300) -----------------------------
+
+def test_normalize_financial_ratio_shape(load_fixture):
+    """output 리스트 → 연도별 [{period, eps, bps, roe}]. roe 는 roe_val 에서."""
+    body = load_fixture("kis_financial_ratio")
+    result = normalize.normalize_financial_ratio(body)
+
+    assert isinstance(result, list)
+    assert len(result) == 3
+    r0 = result[0]
+    assert set(r0.keys()) == {"period", "eps", "bps", "roe"}
+    assert r0["period"] == "202312"
+    assert r0["eps"] == 2131.0
+    assert r0["bps"] == 52068.0
+    assert r0["roe"] == 4.14
+    assert result[2]["roe"] == 13.92
+
+
+def test_normalize_financial_ratio_empty_output_is_empty_list():
+    assert normalize.normalize_financial_ratio({"output": []}) == []
+    assert normalize.normalize_financial_ratio({}) == []

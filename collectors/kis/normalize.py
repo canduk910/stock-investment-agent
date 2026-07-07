@@ -160,3 +160,124 @@ def normalize_stock_info(body: dict) -> dict:
         "par_value": to_float(pick(o, "papr")),
         "security_group": pick(o, "scty_grp_id_cd"),
     }
+
+
+def _output_rows(body: dict) -> list:
+    """output 섹션을 항상 리스트로 정규화.
+
+    KIS 재무 API(income/ratio)는 행이 여러 개면 리스트, 하나면 단일 dict 로 오는
+    변형이 있다(MCP 예제 finance_income_statement 가 `if not isinstance(list):
+    [output]` 로 방어). 빈/부재는 [] (신규상장 재무 결측 graceful).
+    """
+    section = body.get("output")
+    if isinstance(section, list):
+        return section
+    if isinstance(section, dict):
+        return [section]
+    return []
+
+
+def normalize_price(body: dict) -> dict:
+    """주식현재가 시세(FHKST01010100) → 라이브 밸류에이션 dict(단일 output).
+
+    현재가·PER·PBR·EPS·BPS·52주 고저·시가총액 등 전부 실시간 값이므로 캐시 금지
+    (원칙1). raw KIS 명(stck_prpr 등)을 노출하지 않고 clean snake 로 통일 —
+    엔진(stock.summary)이 이 이름을 소비한다. as_of 는 이 응답에 조회시점 날짜
+    필드가 없어(실시간 시세) None 으로 둔다(키는 계약상 유지).
+    """
+    o = body.get("output") or {}
+    return {
+        "ticker": pick(o, "stck_shrn_iscd"),
+        "price": to_float(pick(o, "stck_prpr")),
+        "change_rate": to_float(pick(o, "prdy_ctrt")),
+        "per": to_float(pick(o, "per")),
+        "pbr": to_float(pick(o, "pbr")),
+        "eps": to_float(pick(o, "eps")),
+        "bps": to_float(pick(o, "bps")),
+        "week52_high": to_float(pick(o, "w52_hgpr")),
+        "week52_low": to_float(pick(o, "w52_lwpr")),
+        "market_cap": to_float(pick(o, "hts_avls")),
+        "as_of": None,
+    }
+
+
+def normalize_income_statement(body: dict) -> list[dict]:
+    """국내주식 손익계산서(FHKST66430200) → 연도별 [{period, revenue, operating_income, net_income}].
+
+    period=stac_yymm(결산 년월). 순서는 KIS 응답 그대로(정렬은 엔진 stock.summary 가
+    stac_yymm 오름차순으로 수행 — 부호역전 방지). 빈 output → [].
+    """
+    rows = []
+    for row in _output_rows(body):
+        rows.append({
+            "period": pick(row, "stac_yymm"),
+            "revenue": to_float(pick(row, "sale_account")),
+            "operating_income": to_float(pick(row, "bsop_prti")),
+            "net_income": to_float(pick(row, "thtr_ntin")),
+        })
+    return rows
+
+
+def normalize_financial_ratio(body: dict) -> list[dict]:
+    """국내주식 재무비율(FHKST66430300) → 연도별 [{period, eps, bps, roe}].
+
+    roe 는 roe_val 필드에서 취득. 빈 output → [].
+    """
+    rows = []
+    for row in _output_rows(body):
+        rows.append({
+            "period": pick(row, "stac_yymm"),
+            "eps": to_float(pick(row, "eps")),
+            "bps": to_float(pick(row, "bps")),
+            "roe": to_float(pick(row, "roe_val")),
+        })
+    return rows
+
+
+# 종목추정실적(estimate_perform) 응답 구조 — 행=지표, 열 data1~5=결산연도(output4 가 라벨).
+_EST_EPS_SCALE = 10.0  # output3 EPS·PER 은 0.1 스케일(라이브 검증: 2025 EPS×10 ≈ inquire_price eps)
+
+
+def _est_col(section: list, row_idx: int, col_idx: int):
+    """output{2,3}[row_idx].data{col_idx+1} → float. 행/열 부재 시 None(KeyError 금지)."""
+    if not isinstance(section, list) or row_idx >= len(section):
+        return None
+    return to_float(pick(section[row_idx], f"data{col_idx + 1}"))
+
+
+def normalize_estimate_perform(body: dict) -> dict:
+    """종목추정실적(HHKST668300C0) → {analyst, est_date, recommendation, periods:[...]}.
+
+    output4 로 각 열(data1~5)의 결산년월·실적/추정('E')을 동적 매핑한다(열 위치 하드코딩 금지).
+    output2: r0 매출·r2 영업이익·r4 순이익(억원). output3: r1 EPS·r3 PER(÷_EST_EPS_SCALE).
+    리서치 미대상 종목은 output4 가 비어 periods=[] (graceful).
+    """
+    o1 = body.get("output1") or {}
+    o2 = body.get("output2") or []
+    o3 = body.get("output3") or []
+    o4 = body.get("output4") or []
+
+    periods = []
+    for i, dtrow in enumerate(o4):
+        dt = pick(dtrow, "dt")  # 예 "2026.12E"
+        if not dt:
+            continue
+        label = str(dt).upper().replace("E", "").replace(".", "").strip()  # "202612"
+        eps_raw = _est_col(o3, 1, i)
+        per_raw = _est_col(o3, 3, i)
+        periods.append({
+            "period": label,
+            "is_estimate": "E" in str(dt).upper(),
+            "revenue": _est_col(o2, 0, i),
+            "operating_income": _est_col(o2, 2, i),
+            "net_income": _est_col(o2, 4, i),
+            "eps": eps_raw / _EST_EPS_SCALE if eps_raw is not None else None,
+            "per": per_raw / _EST_EPS_SCALE if per_raw is not None else None,
+        })
+
+    return {
+        "analyst": pick(o1, "name1"),
+        "est_date": pick(o1, "estdate"),
+        "recommendation": pick(o1, "rcmd_name"),
+        "periods": periods,
+    }

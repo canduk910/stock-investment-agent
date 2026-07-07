@@ -37,6 +37,8 @@ def build_criteria_text() -> str:
 
 ## 2. chat.py — function calling + text/popups 분리
 
+> **구현 골격**(agent 루프·tool JSON 스키마·세션 슬라이딩 윈도우)은 `references/llm-agent-patterns.md` 참조 — W06 강의 노트북에서 추출한 재사용 코드 스켈레톤.
+
 - 모델: OpenAI `gpt-4o`, `tools=TOOLS, tool_choice="auto"`
 - 응답을 `{"text": msg.content or "", "popups": [{"name", "args"}, ...]}`로 분리 반환 — text는 말풍선, popups는 프론트의 팝업 트리거. **이 shape이 프론트와의 계약이다. 바꾸면 frontend-engineer에게 알릴 것.**
 - LLM은 팝업에 들어갈 데이터를 만들지 않는다. "무엇을 띄울지"만 결정하고, 실데이터는 프론트가 API에서 직접 조회한다.

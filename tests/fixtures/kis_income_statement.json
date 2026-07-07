@@ -1,0 +1,40 @@
+{
+  "rt_cd": "0",
+  "msg_cd": "MCA00000",
+  "msg1": "정상처리 되었습니다.",
+  "output": [
+    {
+      "stac_yymm": "202312",
+      "sale_account": "2589355",
+      "sale_cost": "1803886",
+      "sale_totl_prfi": "785469",
+      "bsop_prti": "65670",
+      "op_prfi": "112668",
+      "spec_prfi": "0",
+      "spec_loss": "0",
+      "thtr_ntin": "154871"
+    },
+    {
+      "stac_yymm": "202212",
+      "sale_account": "3022314",
+      "sale_cost": "1900418",
+      "sale_totl_prfi": "1121896",
+      "bsop_prti": "433766",
+      "op_prfi": "464405",
+      "spec_prfi": "0",
+      "spec_loss": "0",
+      "thtr_ntin": "556541"
+    },
+    {
+      "stac_yymm": "202112",
+      "sale_account": "2796048",
+      "sale_cost": "1664113",
+      "sale_totl_prfi": "1131935",
+      "bsop_prti": "516339",
+      "op_prfi": "533518",
+      "spec_prfi": "0",
+      "spec_loss": "0",
+      "thtr_ntin": "399074"
+    }
+  ]
+}

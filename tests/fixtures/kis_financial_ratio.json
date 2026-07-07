@@ -1,0 +1,43 @@
+{
+  "rt_cd": "0",
+  "msg_cd": "MCA00000",
+  "msg1": "정상처리 되었습니다.",
+  "output": [
+    {
+      "stac_yymm": "202312",
+      "grs": "-14.33",
+      "bsop_prfi_inrt": "-84.86",
+      "ntin_inrt": "-72.17",
+      "roe_val": "4.14",
+      "eps": "2131",
+      "sps": "34333",
+      "bps": "52068",
+      "rsrv_rate": "38144.29",
+      "lblt_rate": "25.36"
+    },
+    {
+      "stac_yymm": "202212",
+      "grs": "8.09",
+      "bsop_prfi_inrt": "-16.01",
+      "ntin_inrt": "39.46",
+      "roe_val": "17.07",
+      "eps": "8057",
+      "sps": "40068",
+      "bps": "50817",
+      "rsrv_rate": "36884.11",
+      "lblt_rate": "26.41"
+    },
+    {
+      "stac_yymm": "202112",
+      "grs": "18.07",
+      "bsop_prfi_inrt": "43.45",
+      "ntin_inrt": "50.98",
+      "roe_val": "13.92",
+      "eps": "5777",
+      "sps": "37070",
+      "bps": "43611",
+      "rsrv_rate": "34110.56",
+      "lblt_rate": "28.73"
+    }
+  ]
+}

@@ -13,5 +13,15 @@ def stock_meta_key(ticker: str) -> str:
     return f"stock:meta:{ticker}"
 
 
+def stock_meta_sub_key(ticker: str, section: str) -> str:
+    """섹션별 메타 서브키 (financials/basic 등).
+
+    상위 stock_meta_key 와 동일하게 `stock:meta:` 프리픽스를 유지하므로 캐시
+    정책(policy.ALLOWED_PREFIXES 화이트리스트, 원칙1)을 그대로 통과한다. 번들의
+    섹션 단위 캐시(원칙2 명시 게이트)가 이 키로 financials·basic 메타만 저장한다.
+    """
+    return f"stock:meta:{ticker}:{section}"
+
+
 def kis_token_key(env: str) -> str:
     return f"kis:token:{env}"

@@ -11,7 +11,16 @@ import inspect
 
 import pytest
 
-from collectors.kis import balance, chart, multiprice, quote, stock_info
+from collectors.kis import (
+    balance,
+    chart,
+    finance_financial_ratio,
+    finance_income_statement,
+    inquire_price,
+    multiprice,
+    quote,
+    stock_info,
+)
 
 
 class StubClient:
@@ -80,12 +89,63 @@ def test_stock_info_returns_normalized(load_fixture):
     assert client.calls[0]["params"]["PDNO"] == "005930"
 
 
+# --- inquire_price (현재가 시세, FHKST01010100) — MCP 검증 -----------------
+
+def test_inquire_price_returns_normalized(load_fixture):
+    client = StubClient(load_fixture("kis_inquire_price"))
+    result = inquire_price.inquire_price(client, "005930")
+
+    assert result["price"] == 70500.0
+    assert result["per"] == 12.34
+    assert result["week52_high"] == 88000.0
+    # MCP 확정 TR_ID·파라미터(추측 아님).
+    assert client.calls[0]["tr_id"] == "FHKST01010100"
+    assert client.calls[0]["path"] == "/uapi/domestic-stock/v1/quotations/inquire-price"
+    assert client.calls[0]["params"]["FID_INPUT_ISCD"] == "005930"
+    assert client.calls[0]["params"]["FID_COND_MRKT_DIV_CODE"] == "J"
+
+
+# --- finance_income_statement (손익계산서, FHKST66430200) — MCP 검증 --------
+
+def test_finance_income_statement_returns_normalized(load_fixture):
+    client = StubClient(load_fixture("kis_income_statement"))
+    result = finance_income_statement.finance_income_statement(client, "005930")
+
+    assert isinstance(result, list)
+    assert result[0]["period"] == "202312"
+    assert result[0]["revenue"] == 2589355.0
+    assert client.calls[0]["tr_id"] == "FHKST66430200"
+    assert client.calls[0]["path"] == "/uapi/domestic-stock/v1/finance/income-statement"
+    # MCP 확정: 연도(0) 분류 + 대소문자 혼합 파라미터 키(추측 금지).
+    assert client.calls[0]["params"]["FID_DIV_CLS_CODE"] == "0"
+    assert client.calls[0]["params"]["fid_cond_mrkt_div_code"] == "J"
+    assert client.calls[0]["params"]["fid_input_iscd"] == "005930"
+
+
+# --- finance_financial_ratio (재무비율, FHKST66430300) — MCP 검증 ----------
+
+def test_finance_financial_ratio_returns_normalized(load_fixture):
+    client = StubClient(load_fixture("kis_financial_ratio"))
+    result = finance_financial_ratio.finance_financial_ratio(client, "005930")
+
+    assert isinstance(result, list)
+    assert result[0]["period"] == "202312"
+    assert result[0]["roe"] == 4.14
+    assert result[0]["eps"] == 2131.0
+    assert client.calls[0]["tr_id"] == "FHKST66430300"
+    assert client.calls[0]["path"] == "/uapi/domestic-stock/v1/finance/financial-ratio"
+    assert client.calls[0]["params"]["FID_DIV_CLS_CODE"] == "0"
+    assert client.calls[0]["params"]["fid_cond_mrkt_div_code"] == "J"
+    assert client.calls[0]["params"]["fid_input_iscd"] == "005930"
+
+
 # --- 캐시 원칙1: 현재가 계열 어댑터는 캐시를 주입받지 않는다 --------------
 
 @pytest.mark.parametrize("func", [
     quote.inquire_asking_price_exp_ccn,
     multiprice.intstock_multprice,
     balance.inquire_balance,
+    inquire_price.inquire_price,  # 현재가·PER·52주 라이브 → 캐시 금지(원칙1)
 ])
 def test_current_price_adapters_have_no_cache_param__plan_7_1(func):
     """현재가를 포함하는 어댑터 시그니처에 cache 인자가 없어야 한다."""
