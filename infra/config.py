@@ -55,3 +55,8 @@ def fred_api_key() -> str:
 
 def dart_api_key() -> str:
     return _require("DART_API_KEY")
+
+
+def openai_api_key() -> str:
+    """W09 LLM 챗봇용. 미설정 시 ConfigError(LLM 계층에서만 호출 — 조회/엔진 계층은 무관)."""
+    return _require("OPENAI_API_KEY")
