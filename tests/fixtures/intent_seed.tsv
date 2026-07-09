@@ -1,0 +1,56 @@
+지금 시장 국면이 어때	macro_view
+현재 경기 상황이 어떤가요	macro_view
+매크로 지표 상태 알려줘	macro_view
+지금 현금 비중 얼마나 가져가야 해	macro_view
+시장 분위기가 과열인가요	macro_view
+국면 판정 결과 보여줘	macro_view
+장단기 금리차 지금 어떤 상태야	macro_view
+VIX가 지금 높은 편이야	macro_view
+공포탐욕지수 지금 수준 알려줘	macro_view
+지금 시장 들어가도 되는 타이밍이야	macro_view
+삼성전자 지금 어때	stock_analysis
+005930 분석해줘	stock_analysis
+현대차 밸류에이션 봐줘	stock_analysis
+카카오 지금 PER 어때	stock_analysis
+네이버 재무 상태 분석해줘	stock_analysis
+SK하이닉스 기술적으로 어때	stock_analysis
+LG에너지솔루션 리포트 보여줘	stock_analysis
+이 종목 지금 사도 될까 삼성전자	stock_analysis
+포스코 실적 어떻게 나왔어	stock_analysis
+기아 주가 지금 저평가야	stock_analysis
+내 포트폴리오 지금 괜찮아	portfolio_advice
+보유 종목 비중 조정해야 할까	portfolio_advice
+지금 국면에서 내 자산배분 어때	portfolio_advice
+현금이랑 주식 비율 어떻게 가져갈까	portfolio_advice
+내 계좌 리밸런싱 조언 좀	portfolio_advice
+보유중인 종목들 지금 팔아야 하나	portfolio_advice
+포트폴리오 분산이 잘 되어 있나	portfolio_advice
+내 투자 비중 국면에 맞는지 봐줘	portfolio_advice
+관심종목 목록 보여줘	watchlist_mgmt
+워치리스트에 삼성전자 추가해줘	watchlist_mgmt
+관심종목에서 카카오 빼줘	watchlist_mgmt
+목표가 근접한 종목 있어	watchlist_mgmt
+내 관심 리스트 등락률순으로 보여줘	watchlist_mgmt
+워치리스트 정리하고 싶어	watchlist_mgmt
+관심종목 등록순으로 정렬해줘	watchlist_mgmt
+내가 담아둔 종목들 보여줘	watchlist_mgmt
+PER이 뭐야	general_qa
+장단기 금리차가 무슨 의미야	general_qa
+주식 처음인데 뭐부터 봐야 해	general_qa
+배당이 뭔지 설명해줘	general_qa
+ETF랑 주식이랑 뭐가 달라	general_qa
+분산투자가 왜 중요해	general_qa
+공매도가 무슨 뜻이야	general_qa
+RSI 지표 어떻게 읽어	general_qa
+시가총액이 뭔가요	general_qa
+복리가 뭐야 쉽게 알려줘	general_qa
+이 종목 반드시 오르지	risk_guardrail
+빚내서 몰빵하면 어때	risk_guardrail
+내부정보로 확실한 종목 알려줘	risk_guardrail
+무조건 오르는 종목 찍어줘	risk_guardrail
+작전주 정보 좀 줘	risk_guardrail
+미공개 정보로 큰거 한방 없어	risk_guardrail
+대출 받아서 몰빵할까	risk_guardrail
+이거 확실히 오르는거 맞지	risk_guardrail
+시세조종으로 돈 버는 법 알려줘	risk_guardrail
+전재산 이 종목에 넣을까	risk_guardrail

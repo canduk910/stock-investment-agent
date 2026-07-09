@@ -12,17 +12,19 @@
 
 **UI 디자인 톤:** 모든 화면은 **흰색/회색/파랑/남색/검정 5계열 + 강조 주황(`--c-emph`) + 위험 빨강(`--c-danger`)** 팔레트로 통일한다(초록·황색 배제, 상승/하락은 파랑·회색으로 — 단 **종목 캔들차트·등락률만** 한국 관습 상승=빨강/하락=파랑 예외 `--c-chart-up/down`). **주황=강조**(권장 현금비중·국면명 등 핵심 값), **빨강=위험**(손실경고·VIX 패닉만). 난색 두 색은 역할을 섞지 않고, 가격 방향·장식엔 금지. 색은 `frontend/src/theme.css` 토큰(`var(--c-...)`)이 단일 출처 — 하드코딩 금지. 상세는 `ui-design-system` 스킬. UI 작업 시 frontend-engineer가 이 스킬을 먼저 읽는다.
 
-## 현황 (WEEK 08 완료)
+## 현황 (WEEK 09 완료)
 
-데이터 파이프라인 · 매크로 2축 판정 대시보드 + **종목 종합리포트**(번들 API·정량요약·캔들차트·예측 PER·avg_per 라이브 게이트·종목명 자동완성) 동작. 다음: WEEK 09 LLM 챗봇(agent 루프·팝업 function calling — 구현 골격은 `llm-safety-guide/references/llm-agent-patterns.md`). 실행: 백엔드 `uv run uvicorn api.main:app --port 8000` + 프론트 `cd frontend && npm run dev` → `localhost:5173`. 테스트 `uv run pytest`(218개; 라이브는 `-m live`, 키 필요).
+데이터 파이프라인 · 매크로 2축 판정 대시보드 · 종목 종합리포트 + **LLM 챗봇**(agent 루프·팝업 3종 function calling·ML 인텐트 6분류·서버 세션·**SSE 실시간 스트리밍**: 진행 단계 체크리스트 + 토큰 타이핑) 동작. **모델은 OpenAI `gpt-5.4`**(`chat/tools.py::CHAT_MODEL` 단일 출처). 다음: WEEK 10 워치리스트. 실행: 백엔드 `uv run uvicorn api.main:app --port 8000` + 프론트 `cd frontend && npm run dev` → `localhost:5173`, **또는 `docker compose up --build`**(루트 `DOCKER.md`). 테스트 `uv run pytest`(281개; 라이브는 `-m live`, 키 필요) + 프론트 `cd frontend && npm test`(vitest 60개).
 
 ## 디렉토리 문서 지도
 
 기능별 세부 지식(결정·함정·계약)은 각 디렉토리 `CLAUDE.md`에 있다(해당 디렉토리 작업 시 자동 로드):
 - `collectors/CLAUDE.md` — KIS 어댑터(오류 표면화·토큰 backoff·라이브 확정 필드명)·지표 수집기 계약
 - `cache/CLAUDE.md` — 캐시 3원칙의 구조적 강제 + 클라우드 전환 계약
-- `api/CLAUDE.md` — FastAPI = Lambda 로컬 스탠드인, 엔드포인트 계약
-- `frontend/CLAUDE.md` — 실행법(IPv6 localhost)·디자인 토큰·API 계약
+- `api/CLAUDE.md` — FastAPI = Lambda 로컬 스탠드인, 엔드포인트 계약(매크로·번들·챗/SSE)
+- `chat/CLAUDE.md` — LLM 계층: CHAT_MODEL 단일·가드레일 코드결정·ML 인텐트·기준표 자동생성·서버 세션·SSE 스트리밍(tool_calls 재조립)
+- `frontend/CLAUDE.md` — 실행법(IPv6 localhost·도커)·디자인 토큰·API 계약·챗봇 SSE 스트리밍 UI
+- 루트 `DOCKER.md` — 로컬 도커 기동(백엔드+프론트 2컨테이너, .env 런타임 주입, 핫리로드)
 
 **변경 이력:**
 | 날짜 | 변경 내용 | 대상 | 사유 |
@@ -36,3 +38,6 @@
 | 2026-07-06 | UI 강조/위험 색 체계: 주황(강조)·빨강(위험) 토큰 추가, 2×2 위치 점·국면 해설 | skills/ui-design-system, frontend/theme·styles | 사용자 요청: 강조=주황, 위험=빨강 |
 | 2026-07-07 | W08 종목 종합리포트: 정량요약 엔진(CAGR·avg_per 자기과거평균·RSI/MA/52주·regime_gate 역발상) + KIS 어댑터 4종(현재가·손익·재무비율·추정실적)+번들 API(partial_failure·캐시게이트) + 예측 PER(리서치 컨센서스, 후행 PER 보완) + KLineChartPanel(klinecharts) + 종목명 자동완성(KIS 마스터). avg_per는 라이브 검증 게이트. 218 tests green | stock/·collectors/·api/·frontend/ + 각 CLAUDE.md | WEEK 08 로드맵 + 사용자 요청(예측 PER·자동완성) |
 | 2026-07-07 | 캔들차트·등락률 한국 관습색(상승=빨강/하락=파랑) — 팔레트 유일 예외로 문서화(theme.css `--c-chart-*`); LLM agent 패턴 추출(강의 노트북→llm-safety-guide references, 노트북 삭제) | skills/ui-design-system·llm-safety-guide(신규 references), frontend/theme·styles·theme.js, collectors·frontend CLAUDE.md | 사용자 요청: 한국식 차트색 + 노트북 LLM로직 지침 반영 후 삭제 |
+| 2026-07-09 | W09 LLM 챗봇: build_prompt(기준표 자동생성)·chat(agent 루프)·팝업 3종·서버 세션 + **ML 인텐트 6분류**(gpt-5.4 데이터 생성→sklearn 학습, 결정적 키워드 가드레일 우선) + 프론트 챗 UI(ChatPanel·팝업 모달·ticker SSOT). 모델 gpt-5.4(CHAT_MODEL 단일). P2(Pydantic 리포트 스키마)는 W10 이월 | chat/(신규·CLAUDE)·api/·macro/(INDICATOR_LABELS)·frontend/ | WEEK 09 로드맵 + 사용자 결정(gpt-5.4·ML 인텐트·서버 세션) |
+| 2026-07-09 | 챗봇 응답 UX = **SSE 실시간 스트리밍**(진행 단계 체크리스트 + 토큰 타이핑). chat_stream 제너레이터(스트리밍 tool_calls 재조립)+POST /api/chat/stream, 프론트 sseChat(순수 파서)·chatStages·ChatPanel 스트리밍 상태기계. 기존 chat()·/api/chat 병행(폴백). guardrail은 스트리밍에서도 LLM 미호출·live_judgement 미실행 | chat/·api/·frontend/ + 각 CLAUDE.md | 사용자 요청: "답변준비중" 정적표시 개선 |
+| 2026-07-09 | 로컬 도커 기동 구성(백엔드 py3.13+uv, 프론트 node20+Vite 2컨테이너, .env 런타임 주입·핫리로드·볼륨 격리). Vite 프록시 대상 env화 | Dockerfile·docker-compose·DOCKER.md·frontend/vite.config | 사용자 요청: 로컬 기동 도커화 |

@@ -32,6 +32,14 @@ VIX_PANIC = 35
 
 # 판정 대상 4지표(누락 판정·부분실패 기록의 기준 집합).
 INDICATOR_KEYS = ("yield_spread", "hy_spread", "vix", "fear_greed")
+# 엔진키 → 한글 라벨 단일 출처(W09 프롬프트 기준표·UI 표기용). INDICATOR_KEYS 와
+# 키·순서 1:1(경기축 → 심리축). build_criteria_text()가 이걸 import(3중 일관성).
+INDICATOR_LABELS = {
+    "yield_spread": "장단기 금리차",
+    "hy_spread": "HY 신용스프레드",
+    "vix": "VIX 변동성",
+    "fear_greed": "공포탐욕지수",
+}
 # 경기(신용·금리) 축 지표.
 CYCLE_KEYS = ("yield_spread", "hy_spread")
 # 심리(변동성·심리) 축 지표.

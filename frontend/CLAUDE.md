@@ -12,4 +12,14 @@
 
 ## 계약
 - `GET /api/macro/indicators` → `{indicators, partial_failure}` 소비. 지표가 `null`이면 "일시 조회 불가" 카드로 표시하고 나머지는 정상 렌더(부분 실패 보존). 지표 키·shape은 백엔드(`api/main.py`)와 일치해야 한다.
-- 화면은 단계적으로 성장: 1단계 지표 대시보드(완료) → W07 국면 게이지 → W08 종목 리포트 → W09~10 챗봇/팝업. 새 화면도 같은 토큰을 조합해 한 제품처럼 보이게.
+- 화면은 단계적으로 성장: 1단계 지표 대시보드(완료) → W07 국면 게이지 → W08 종목 리포트 → W09 챗봇/팝업(완료) → W10 워치리스트. 새 화면도 같은 토큰을 조합해 한 제품처럼 보이게.
+
+## 챗봇 (W09)
+- **응답은 SSE 스트리밍**(`postChatStream`→`POST /api/chat/stream`)이 기본, `postChat`(논스트림)은 폴백. `lib/sseChat.js`의 `parseSSEBuffer`(순수함수)가 `\n\n` 경계로 이벤트를 재조립한다 — 청크가 경계를 가로질러/여러 이벤트가 한 청크로 오는 경우 방어(TextDecoder `stream:true`). 이벤트 `{type:stage|token|popups|done}`, stage enum은 `lib/chatStages.js`가 백엔드와 **SSOT로 공유**.
+- `ChatPanel`은 스트리밍 상태기계: 봇 placeholder를 만들고 `onStage`(진행 체크리스트)·`onToken`(라이브 타이핑)·`onDone`(→`routePopups`→모달) 갱신. 스트림 실패 시 `postChat` 폴백 1회. streaming 중 입력 비활성, 무한 스피너 금지(에러 배너+재시도).
+- **팝업 실데이터는 LLM 응답이 아니라 프론트가 직접 조회**(환각 차단): `popups[].name`→`lib/popupRouter.js`가 컴포넌트로 라우팅(show_stock_report→번들 API, show_macro_dashboard→regime API). LLM은 "무엇을 띄울지"만 준다.
+- **ticker 유효성은 `lib/ticker.js` 단일 출처**(`/^[0-9A-Za-z]{6}$/`) — 직접입력(StockReport)과 팝업 라우팅이 공유. 불량 코드는 조회 없이 안내로 graceful 처리.
+- 챗 신규 UI도 `theme.css` 토큰만(hex/초록/황색 0), 면책 고지 상시 노출.
+
+## 로컬 도커 기동 (대안 실행)
+- `docker compose up --build` → `localhost:5173`(프론트)+`:8000`(백엔드). 시크릿은 `.env` 런타임 주입(`env_file`), 소스 핫리로드. Vite 프록시 대상은 `VITE_PROXY_TARGET`로 재정의(도커=`http://backend:8000`). 상세는 루트 `DOCKER.md`.

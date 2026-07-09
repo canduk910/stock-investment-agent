@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchStockBundle, searchStocks } from '../api.js'
+import { isValidTicker } from '../lib/ticker.js'
 import { sampleBundle } from '../fixtures/sampleBundle.js'
 import StockReportView from './StockReportView.jsx'
 
@@ -96,9 +97,9 @@ export default function StockReport() {
     if (!q) return
     if (open && activeIdx >= 0 && suggestions[activeIdx]) {
       selectStock(suggestions[activeIdx])
-    } else if (/^[0-9A-Za-z]{6}$/.test(q)) {
+    } else if (isValidTicker(q)) {
       setOpen(false)
-      load(q) // 6자리 코드 직접 입력
+      load(q) // 6자 코드 직접 입력(isValidTicker = 팝업 라우팅과 동일 규칙, ticker.js SSOT)
     } else if (suggestions.length) {
       selectStock(suggestions[0]) // 이름 입력 → 첫 후보
     } else {

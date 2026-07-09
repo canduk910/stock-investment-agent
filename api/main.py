@@ -26,16 +26,45 @@ _REGIME_INPUT_MAP = {
     "fear_greed": "fear_greed",
 }
 
-# Vite 개발 서버(5173)에서의 브라우저 호출 허용.
+# Vite 개발 서버(5173)에서의 브라우저 호출 허용. POST 는 /api/chat(챗봇) 때문에 필요.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+def _map_engine_input(snapshot: dict) -> tuple[dict, list[str]]:
+    """수집 스냅샷 → (엔진 입력 dict, 못 쓴 국면지표 목록). 단일 매핑 출처.
+
+    실패(None)·부분실패(value=None)·키 부재는 판정에서 제외하고 partial_failure 에 기록만
+    한다(임의 기본값 금지). macro_regime 과 챗봇의 live judgement 가 공유한다.
+    """
+    indicators = snapshot["indicators"]
+    engine_input: dict = {}
+    partial_failure: list[str] = []
+    for collector_key, engine_key in _REGIME_INPUT_MAP.items():
+        point = indicators.get(collector_key)
+        if point is not None and point.get("value") is not None:
+            engine_input[engine_key] = point["value"]
+        else:
+            partial_failure.append(engine_key)
+    return engine_input, partial_failure
+
+
+def live_judgement() -> tuple[dict, dict, list[str]]:
+    """실시간 수집(캐시 미경유) → 매핑 → judge_regime. (judgement, indicators_used, partial_failure).
+
+    챗봇(api/chat.py)이 매 요청 최신 국면을 얻는 단일 출처 — 시스템 프롬프트 주입에 쓴다.
+    """
+    snapshot = collect_macro_indicators(fred_api_key())
+    engine_input, partial_failure = _map_engine_input(snapshot)
+    judgement = judge_regime(engine_input)
+    return judgement, engine_input, partial_failure
 
 
 @app.get("/api/health")
@@ -50,6 +79,11 @@ from api.stocks import router as stocks_router  # noqa: E402
 
 app.include_router(detail_router)
 app.include_router(stocks_router)
+
+# 챗봇(§6.2~6.5) — POST /api/chat. live judgement 는 위 live_judgement() 재사용.
+from api.chat import router as chat_router  # noqa: E402
+
+app.include_router(chat_router)
 
 
 @app.get("/api/macro/indicators")
@@ -76,20 +110,7 @@ def macro_regime() -> dict:
     axes.cycle·axes.sentiment 는 {score,sign} dict, key_drivers 의 tuple(label,axis,
     direction)은 FastAPI 인코더가 각각 JSON 객체·배열로 직렬화한다.
     """
-    snapshot = collect_macro_indicators(fred_api_key())
-    indicators = snapshot["indicators"]
-
-    engine_input: dict = {}
-    partial_failure: list[str] = []
-    for collector_key, engine_key in _REGIME_INPUT_MAP.items():
-        point = indicators.get(collector_key)
-        # 실패(None)·부분실패(value=None)·키 부재 모두 판정에서 제외하고 기록만.
-        if point is not None and point.get("value") is not None:
-            engine_input[engine_key] = point["value"]
-        else:
-            partial_failure.append(engine_key)
-
-    judgement = judge_regime(engine_input)
+    judgement, engine_input, partial_failure = live_judgement()
     return {
         **judgement,
         "indicators_used": dict(engine_input),
