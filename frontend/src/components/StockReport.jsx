@@ -39,6 +39,7 @@ export default function StockReport() {
     setError(null)
     setOpen(false)
     setWlState('idle') // 종목이 바뀌면 담김 상태 초기화.
+    setWlErrorMsg('')
     try {
       // 섹션 실패(partial_failure)는 정상 200 응답이라 그대로 렌더(전체 에러 화면 금지).
       const b = await fetchStockBundle(ticker)
@@ -140,7 +141,9 @@ export default function StockReport() {
     try {
       await addWatchlist({ ticker, stockName: bundle?.basic?.name })
       setWlState('added')
-    } catch {
+    } catch (e) {
+      // status별 안내(409=상한 30 초과 등). addErrorMessage 가 회색 중립 문구를 만든다(주황·빨강 아님).
+      setWlErrorMsg(addErrorMessage(e?.status))
       setWlState('error')
     }
   }
@@ -244,7 +247,9 @@ export default function StockReport() {
             ) : wlState === 'removed' ? (
               <span className="wl-add-status">관심종목에서 제거했습니다.</span>
             ) : wlState === 'error' ? (
-              <span className="wl-add-status wl-add-status--err">처리하지 못했습니다. 다시 시도해 주세요.</span>
+              <span className="wl-add-status wl-add-status--err">
+                {wlErrorMsg || '처리하지 못했습니다. 다시 시도해 주세요.'}
+              </span>
             ) : !canWatchlist && bundle ? (
               <span className="wl-add-status">샘플/미검증 종목은 담을 수 없습니다.</span>
             ) : null}

@@ -17,6 +17,7 @@ Red 먼저(`watchlistLogic.test.js`) → 실패 확인(모듈 없음 / detectTar
 - **sortItems**(재조회 없이 프론트 재배열, 원본 불변): registered=added_at asc / change_rate=등락률 desc / near_target=distance asc(더 하락=강한 매수신호 먼저)·target없음(dist null) 후순위. 미지 sort_by→registered 폴백, 비배열→[].
 - **entrySignalLabel**(진입신호 배지 문구·톤): entry_blocked→"신규 진입 억제"(muted) / per_over·pbr_over→"밸류에이션 부담"(muted) / entry_allowed→"진입 검토 가능"(**emph 주황**) / null→"진입 판정 불가"(muted). **빨강 미사용**(억제는 위험이 아님).
 - **detectTargetAlerts**(능동 알림 전이): 이전관측(prevMap {ticker:status}) 대비 **far→near/reached** + **near→reached 승격**만 발화. 유지·악화·none·신규관측(초기 스팸 방지)·prevMap null(초기 로드)→[].
+- **addErrorMessage**(POST 실패 status→안내, 후속 추가): 409=상한 30 초과 안내 / 400=불량 ticker / 422=값(target 음수) / default=일반 실패. 모두 **회색 중립 안내**(상한 초과는 위험·강조 아님 → 주황·빨강 미사용). `addWatchlist`가 `err.status` 실어줌 → StockReport onAddWatchlist가 이 매퍼로 분기.
 
 ### Task #9 — `src/lib/reportFormat.js` (순수, vitest 5개)
 - **opinionTone**: 종합의견 `긍정적`→up(파랑)/`중립`→muted(회색)/`신중`→emph(주황). 미지값(매수 등 스키마 배제 라벨)·결측→muted 방어.
