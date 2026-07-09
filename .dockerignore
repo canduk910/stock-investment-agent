@@ -1,0 +1,20 @@
+# 시크릿 — 이미지에 굽지 않는다(런타임엔 compose env_file/볼륨으로 주입).
+.env
+.env.local
+
+# 프론트는 별도 이미지(./frontend 컨텍스트)로 빌드 — 백엔드 이미지엔 불필요.
+frontend
+
+# 호스트 빌드 산출물(mac) — 컨테이너에서 재생성.
+.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+
+# VCS·에디터·문서·작업기록.
+.git
+.gitignore
+.DS_Store
+_workspace
+*.md
+.claude

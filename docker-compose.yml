@@ -1,0 +1,32 @@
+# 로컬 개발용 도커 구성 — 백엔드(FastAPI:8000) + 프론트(Vite:5173).
+#   기동:  docker compose up --build   →   http://localhost:5173
+#   중지:  docker compose down
+# 시크릿은 이미지에 굽지 않고 .env 를 런타임 주입(env_file). .env 는 .gitignore/.dockerignore 대상.
+services:
+  backend:
+    build: .
+    container_name: sia-backend
+    env_file: .env                 # KIS/FRED/DART/OPENAI 키를 런타임 주입(이미지에 미포함)
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/app                    # 소스 핫리로드(uvicorn --reload)
+      - backend-venv:/app/.venv    # 컨테이너(Linux) .venv 보존 — 호스트(mac) .venv 로 덮이지 않게
+
+  frontend:
+    build: ./frontend
+    container_name: sia-frontend
+    environment:
+      - VITE_PROXY_TARGET=http://backend:8000  # 컨테이너 네트워크에서 백엔드 서비스명으로 프록시
+      - VITE_USE_POLLING=1                       # 도커 볼륨 파일감시 폴링(HMR 안정화)
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules  # 컨테이너 node_modules 보존(호스트로 덮이지 않게)
+    depends_on:
+      - backend
+
+volumes:
+  backend-venv:
+  frontend-node-modules:
