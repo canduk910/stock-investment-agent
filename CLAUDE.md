@@ -12,16 +12,17 @@
 
 **UI 디자인 톤:** 모든 화면은 **흰색/회색/파랑/남색/검정 5계열 + 강조 주황(`--c-emph`) + 위험 빨강(`--c-danger`)** 팔레트로 통일한다(초록·황색 배제, 상승/하락은 파랑·회색으로 — 단 **종목 캔들차트·등락률만** 한국 관습 상승=빨강/하락=파랑 예외 `--c-chart-up/down`). **주황=강조**(권장 현금비중·국면명 등 핵심 값), **빨강=위험**(손실경고·VIX 패닉만). 난색 두 색은 역할을 섞지 않고, 가격 방향·장식엔 금지. 색은 `frontend/src/theme.css` 토큰(`var(--c-...)`)이 단일 출처 — 하드코딩 금지. 상세는 `ui-design-system` 스킬. UI 작업 시 frontend-engineer가 이 스킬을 먼저 읽는다.
 
-## 현황 (WEEK 09 완료)
+## 현황 (WEEK 10 완료 — 5주 로드맵 완성)
 
-데이터 파이프라인 · 매크로 2축 판정 대시보드 · 종목 종합리포트 + **LLM 챗봇**(agent 루프·팝업 3종 function calling·ML 인텐트 6분류·서버 세션·**SSE 실시간 스트리밍**: 진행 단계 체크리스트 + 토큰 타이핑) 동작. **모델은 OpenAI `gpt-5.4`**(`chat/tools.py::CHAT_MODEL` 단일 출처). 다음: WEEK 10 워치리스트. 실행: 백엔드 `uv run uvicorn api.main:app --port 8000` + 프론트 `cd frontend && npm run dev` → `localhost:5173`, **또는 `docker compose up --build`**(루트 `DOCKER.md`). 테스트 `uv run pytest`(281개; 라이브는 `-m live`, 키 필요) + 프론트 `cd frontend && npm test`(vitest 60개).
+데이터 파이프라인 · 매크로 2축 판정 대시보드 · 종목 종합리포트 · **LLM 챗봇**(agent 루프·팝업 3종·ML 인텐트 6분류·서버 세션·SSE 스트리밍) · **워치리스트(모듈 3)**(CRUD + 진입신호 국면 게이트[`regime_gate` 재사용·`single_cap`] + 팝업 겸 독립 페이지 + 능동 목표가 알림) · **[P2] 구조화 리포트**(`StockReport` Pydantic 검증·히스토리) 동작 — **5주 로드맵(WEEK 06~10) 완성**. **모델은 OpenAI `gpt-5.4`**(`chat/tools.py::CHAT_MODEL` 단일 출처). 실행: 백엔드 `uv run uvicorn api.main:app --port 8000` + 프론트 `cd frontend && npm run dev` → `localhost:5173`, **또는 `docker compose up --build`**(루트 `DOCKER.md`). 테스트 `uv run pytest`(403개; 라이브는 `-m live`, 키 필요) + 프론트 `cd frontend && npm test`(vitest 94개). 잔여(P2): 라이브 e2e·클라우드 배포.
 
 ## 디렉토리 문서 지도
 
 기능별 세부 지식(결정·함정·계약)은 각 디렉토리 `CLAUDE.md`에 있다(해당 디렉토리 작업 시 자동 로드):
 - `collectors/CLAUDE.md` — KIS 어댑터(오류 표면화·토큰 backoff·라이브 확정 필드명)·지표 수집기 계약
 - `cache/CLAUDE.md` — 캐시 3원칙의 구조적 강제 + 클라우드 전환 계약
-- `api/CLAUDE.md` — FastAPI = Lambda 로컬 스탠드인, 엔드포인트 계약(매크로·번들·챗/SSE)
+- `api/CLAUDE.md` — FastAPI = Lambda 로컬 스탠드인, 엔드포인트 계약(매크로·번들·챗/SSE·워치리스트 CRUD·구조화 리포트)
+- `watchlist/CLAUDE.md` — 관심종목 백엔드: `regime_gate` 재사용 진입신호(regime-agnostic)·durable JSON store(`(user_id,ticker)`)·상한 게이트(409)·목표가 매수관점 semantics
 - `chat/CLAUDE.md` — LLM 계층: CHAT_MODEL 단일·가드레일 코드결정·ML 인텐트·기준표 자동생성·서버 세션·SSE 스트리밍(tool_calls 재조립)
 - `frontend/CLAUDE.md` — 실행법(IPv6 localhost·도커)·디자인 토큰·API 계약·챗봇 SSE 스트리밍 UI
 - 루트 `DOCKER.md` — 로컬 도커 기동(백엔드+프론트 2컨테이너, .env 런타임 주입, 핫리로드)
@@ -41,3 +42,4 @@
 | 2026-07-09 | W09 LLM 챗봇: build_prompt(기준표 자동생성)·chat(agent 루프)·팝업 3종·서버 세션 + **ML 인텐트 6분류**(gpt-5.4 데이터 생성→sklearn 학습, 결정적 키워드 가드레일 우선) + 프론트 챗 UI(ChatPanel·팝업 모달·ticker SSOT). 모델 gpt-5.4(CHAT_MODEL 단일). P2(Pydantic 리포트 스키마)는 W10 이월 | chat/(신규·CLAUDE)·api/·macro/(INDICATOR_LABELS)·frontend/ | WEEK 09 로드맵 + 사용자 결정(gpt-5.4·ML 인텐트·서버 세션) |
 | 2026-07-09 | 챗봇 응답 UX = **SSE 실시간 스트리밍**(진행 단계 체크리스트 + 토큰 타이핑). chat_stream 제너레이터(스트리밍 tool_calls 재조립)+POST /api/chat/stream, 프론트 sseChat(순수 파서)·chatStages·ChatPanel 스트리밍 상태기계. 기존 chat()·/api/chat 병행(폴백). guardrail은 스트리밍에서도 LLM 미호출·live_judgement 미실행 | chat/·api/·frontend/ + 각 CLAUDE.md | 사용자 요청: "답변준비중" 정적표시 개선 |
 | 2026-07-09 | 로컬 도커 기동 구성(백엔드 py3.13+uv, 프론트 node20+Vite 2컨테이너, .env 런타임 주입·핫리로드·볼륨 격리). Vite 프록시 대상 env화 | Dockerfile·docker-compose·DOCKER.md·frontend/vite.config | 사용자 요청: 로컬 기동 도커화 |
+| 2026-07-09 | **W10 워치리스트(모듈 3) — 5주 로드맵 완성**: CRUD 라우트(GET/POST[409 상한]/DELETE/PATCH)·durable JSON store(`(user_id,ticker)` DynamoDB 계약, 단일 로컬 사용자)·진입신호(`regime_gate` 재사용, `single_cap` 게이트 **regime-agnostic**)·종목별 `inquire_price` 병렬 + 팝업 겸 독립 페이지 `WatchlistView`·능동 목표가 알림(App 레벨 전이 배너/Notification·60s) + **[P2] 구조화 리포트**(`StockReport` Pydantic 안전강제[리스크 min1·면책 필수·종합의견 Literal]·생성 폴백·`.cache` 히스토리). 백엔드 403 + 프론트 94 green, QA GO | watchlist/(신규·CLAUDE)·api/(watchlist·report)·chat/(report*·build_prompt)·frontend/(WatchlistView·AiReportPanel·watchlistLogic·reportFormat) + 각 CLAUDE.md | WEEK 10 로드맵 + 사용자 결정(파일 단일사용자·능동 알림·P2 리포트 포함) |

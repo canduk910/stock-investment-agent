@@ -33,7 +33,7 @@ app.add_middleware(
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ],
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE", "PATCH"],
     allow_headers=["*"],
 )
 
@@ -84,6 +84,17 @@ app.include_router(stocks_router)
 from api.chat import router as chat_router  # noqa: E402
 
 app.include_router(chat_router)
+
+# 워치리스트(§3 모듈 3) — GET/POST/DELETE/PATCH /api/watchlist (CRUD + 진입신호 국면 게이트).
+# 라우트는 api.detail 의 _build_kis_client·_build_judgement 재사용(api.main 미참조 → 사이클 없음).
+from api.watchlist import router as watchlist_router  # noqa: E402
+
+app.include_router(watchlist_router)
+
+# 종목 구조화 리포트(§6.5b P2) — POST/GET /api/detail/{ticker}/report[/history].
+from api.report import router as report_router  # noqa: E402
+
+app.include_router(report_router)
 
 
 @app.get("/api/macro/indicators")

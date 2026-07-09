@@ -1,0 +1,222 @@
+"""워치리스트 CRUD 라우트 계약 — plan §"api/watchlist.py"·Phase 3.
+
+api.main 은 편집 대상이 아니므로(리더 전담) 로컬 앱으로 라우터만 테스트한다:
+    app = FastAPI(); app.include_router(router); TestClient(app).
+경계(store·_build_kis_client·_build_judgement·_resolve_stock_name)를 monkeypatch 하고,
+그 안쪽 라우트 로직(검증·upsert·view 조립·부분실패)은 실제 코드를 통과시킨다.
+
+확정 계약(frontend 의존):
+- GET  /api/watchlist?sort_by=&user_id= → {items, regime, sort_by, partial_failure}
+- POST /api/watchlist {ticker, stock_name?, reason?, target_price?, user_id?} → {ok, item}
+- DELETE /api/watchlist/{ticker}?user_id= → {ok}
+- PATCH  /api/watchlist/{ticker} {target_price, user_id?} → {ok, item}
+"""
+from __future__ import annotations
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+import api.watchlist as wl
+from macro.engine import REGIME_PARAMS
+from watchlist.store import InMemoryWatchlistStore
+
+
+def _judgement(regime="수축"):
+    return {"regime": regime, "params": dict(REGIME_PARAMS[regime])}
+
+
+def _valuation(price=80000, change_rate=1.0, per=10.0, pbr=1.0):
+    return {
+        "ticker": None, "price": price, "change_rate": change_rate, "per": per, "pbr": pbr,
+        "eps": None, "bps": None, "week52_high": None, "week52_low": None,
+        "market_cap": None, "as_of": None,
+    }
+
+
+@pytest.fixture
+def client(monkeypatch):
+    """로컬 앱 + 인메모리 store + 시세/판정 경계 stub. 종목별 시세는 기본 정상."""
+    store = InMemoryWatchlistStore()
+    monkeypatch.setattr(wl, "_get_store", lambda: store)
+    monkeypatch.setattr(wl, "_build_kis_client", lambda: object())
+    monkeypatch.setattr(wl, "_build_judgement", lambda: _judgement())
+    # inquire_price 는 service 안에서 호출 → service 모듈의 것을 patch.
+    monkeypatch.setattr(
+        wl.service.inquire_price, "inquire_price",
+        lambda client, ticker, market="J": _valuation(),
+    )
+    # stock_name 해석(POST) — 마스터/시세 실 호출 회피.
+    monkeypatch.setattr(wl, "_resolve_stock_name", lambda client, ticker: f"종목{ticker}")
+
+    app = FastAPI()
+    app.include_router(wl.router)
+    tc = TestClient(app)
+    tc.store = store  # 테스트에서 직접 상태 조작용
+    return tc
+
+
+# ── GET ──────────────────────────────────────────────────────────────────────
+
+def test_get_empty(client):
+    r = client.get("/api/watchlist")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["items"] == []
+    assert body["sort_by"] == "registered"  # 기본
+    assert body["partial_failure"] == []
+    assert body["regime"] == {"regime": "수축", "single_cap": 5, "entry_blocked": False}
+
+
+def test_get_returns_enriched_items(client):
+    client.post("/api/watchlist", json={"ticker": "005930", "stock_name": "삼성전자"})
+    r = client.get("/api/watchlist")
+    body = r.json()
+    assert len(body["items"]) == 1
+    it = body["items"][0]
+    assert it["ticker"] == "005930"
+    assert it["current_price"] == 80000
+    assert it["entry_signal"]["entry_allowed"] is True
+
+
+def test_get_echoes_sort_by(client):
+    r = client.get("/api/watchlist", params={"sort_by": "near_target"})
+    assert r.json()["sort_by"] == "near_target"
+
+
+def test_get_invalid_sort_by_falls_back(client):
+    # enum 밖 값은 기본(registered)로 안전 폴백(500 아님).
+    r = client.get("/api/watchlist", params={"sort_by": "bogus"})
+    assert r.status_code == 200
+    assert r.json()["sort_by"] == "registered"
+
+
+def test_get_regime_degraded_when_judgement_fails(client, monkeypatch):
+    def _boom():
+        raise RuntimeError("FRED down")
+
+    monkeypatch.setattr(wl, "_build_judgement", _boom)
+    client.post("/api/watchlist", json={"ticker": "005930", "stock_name": "삼성전자"})
+    body = client.get("/api/watchlist").json()
+    assert body["regime"] is None
+    assert "regime" in body["partial_failure"]
+    # 시세는 정상.
+    assert body["items"][0]["current_price"] == 80000
+    assert body["items"][0]["entry_signal"] is None
+
+
+# ── POST ─────────────────────────────────────────────────────────────────────
+
+def test_post_adds_item(client):
+    r = client.post("/api/watchlist", json={
+        "ticker": "005930", "stock_name": "삼성전자",
+        "reason": "저평가", "target_price": 90000.0,
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["item"]["ticker"] == "005930"
+    assert body["item"]["stock_name"] == "삼성전자"
+    assert body["item"]["target_price"] == 90000.0
+    assert "added_at" in body["item"] and body["item"]["added_at"]
+    # 실제로 store 에 들어갔는지.
+    assert client.store.get("local", "005930") is not None
+
+
+def test_post_resolves_stock_name_when_missing(client):
+    # stock_name 없으면 _resolve_stock_name 으로 해석(stub → "종목005930").
+    r = client.post("/api/watchlist", json={"ticker": "005930"})
+    assert r.status_code == 200
+    assert r.json()["item"]["stock_name"] == "종목005930"
+
+
+def test_post_invalid_ticker_rejected(client):
+    r = client.post("/api/watchlist", json={"ticker": "삼성", "stock_name": "삼성전자"})
+    assert r.status_code == 400
+    # 저장 안 됨.
+    assert client.store.list_items("local") == []
+
+
+def test_post_rejected_when_at_max_items(client, monkeypatch):
+    # 상한(WATCHLIST_MAX_ITEMS) 도달 시 신규 추가 거부 + 저장 안 함(계획 §리스크 방어).
+    monkeypatch.setattr(wl, "WATCHLIST_MAX_ITEMS", 2)
+    assert client.post("/api/watchlist", json={"ticker": "005930", "stock_name": "A"}).status_code == 200
+    assert client.post("/api/watchlist", json={"ticker": "000660", "stock_name": "B"}).status_code == 200
+    # 3번째 신규 종목 → 거부.
+    r = client.post("/api/watchlist", json={"ticker": "035720", "stock_name": "C"})
+    assert r.status_code == 409  # 한도 충돌(4xx)
+    assert client.store.get("local", "035720") is None  # 저장 안 됨
+    assert len(client.store.list_items("local")) == 2  # 기존 2개 유지
+
+
+def test_post_upsert_allowed_at_max_items(client, monkeypatch):
+    # 상한 도달 상태에서도 기존 ticker 갱신(upsert)은 허용(개수 안 늘어남).
+    monkeypatch.setattr(wl, "WATCHLIST_MAX_ITEMS", 2)
+    client.post("/api/watchlist", json={"ticker": "005930", "stock_name": "A"})
+    client.post("/api/watchlist", json={"ticker": "000660", "stock_name": "B"})
+    # 이미 있는 005930 갱신 → 허용.
+    r = client.post("/api/watchlist", json={"ticker": "005930", "stock_name": "A", "reason": "갱신"})
+    assert r.status_code == 200
+    assert r.json()["item"]["reason"] == "갱신"
+    assert len(client.store.list_items("local")) == 2  # 개수 그대로
+
+
+def test_post_upsert_preserves_added_at(client):
+    first = client.post("/api/watchlist", json={"ticker": "005930", "stock_name": "삼성전자"})
+    added_at = first.json()["item"]["added_at"]
+    second = client.post("/api/watchlist", json={
+        "ticker": "005930", "stock_name": "삼성전자", "reason": "갱신",
+    })
+    assert second.json()["item"]["added_at"] == added_at  # 최초 보존
+    assert second.json()["item"]["reason"] == "갱신"
+    assert len(client.store.list_items("local")) == 1  # 중복 아님
+
+
+# ── DELETE ───────────────────────────────────────────────────────────────────
+
+def test_delete_removes(client):
+    client.post("/api/watchlist", json={"ticker": "005930", "stock_name": "삼성전자"})
+    r = client.delete("/api/watchlist/005930")
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+    assert client.store.get("local", "005930") is None
+
+
+def test_delete_missing_is_ok(client):
+    r = client.delete("/api/watchlist/999999")
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+
+
+# ── PATCH ────────────────────────────────────────────────────────────────────
+
+def test_patch_updates_target(client):
+    client.post("/api/watchlist", json={"ticker": "005930", "stock_name": "삼성전자"})
+    r = client.patch("/api/watchlist/005930", json={"target_price": 95000.0})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["item"]["target_price"] == 95000.0
+    assert client.store.get("local", "005930").target_price == 95000.0
+
+
+def test_patch_missing_item_404(client):
+    r = client.patch("/api/watchlist/999999", json={"target_price": 95000.0})
+    assert r.status_code == 404
+
+
+def test_patch_negative_target_rejected(client):
+    client.post("/api/watchlist", json={"ticker": "005930", "stock_name": "삼성전자"})
+    r = client.patch("/api/watchlist/005930", json={"target_price": -1.0})
+    assert r.status_code == 422  # Pydantic 검증(ge=0)
+
+
+# ── user_id 격리 ─────────────────────────────────────────────────────────────
+
+def test_user_id_isolation_via_query(client):
+    client.post("/api/watchlist", json={"ticker": "005930", "stock_name": "삼성전자", "user_id": "alice"})
+    # 기본 user_id(local)로 조회하면 alice 종목 안 보임.
+    assert client.get("/api/watchlist").json()["items"] == []
+    # alice 로 조회하면 보임.
+    r = client.get("/api/watchlist", params={"user_id": "alice"})
+    assert [i["ticker"] for i in r.json()["items"]] == ["005930"]

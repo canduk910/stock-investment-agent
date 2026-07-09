@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { fetchStockBundle, searchStocks } from '../api.js'
+import {
+  fetchStockBundle,
+  searchStocks,
+  addWatchlist,
+  removeWatchlist,
+} from '../api.js'
 import { isValidTicker } from '../lib/ticker.js'
+import { addErrorMessage } from '../lib/watchlistLogic.js'
 import { sampleBundle } from '../fixtures/sampleBundle.js'
 import StockReportView from './StockReportView.jsx'
 
@@ -16,6 +22,11 @@ export default function StockReport() {
   const [error, setError] = useState(null)
   const [usingSample, setUsingSample] = useState(false)
 
+  // 관심종목 담기 상태 — 'idle' | 'saving' | 'added' | 'removed' | 'error'.
+  // upsert 라 멱등하지만, 사용자 피드백을 위해 담김/뺌 상태를 짧게 표시한다.
+  const [wlState, setWlState] = useState('idle')
+  const [wlErrorMsg, setWlErrorMsg] = useState('') // status별 안내(409 상한 등, addErrorMessage)
+
   // 자동완성 상태
   const [suggestions, setSuggestions] = useState([])
   const [open, setOpen] = useState(false)
@@ -27,6 +38,7 @@ export default function StockReport() {
     setLoading(true)
     setError(null)
     setOpen(false)
+    setWlState('idle') // 종목이 바뀌면 담김 상태 초기화.
     try {
       // 섹션 실패(partial_failure)는 정상 200 응답이라 그대로 렌더(전체 에러 화면 금지).
       const b = await fetchStockBundle(ticker)
@@ -120,6 +132,32 @@ export default function StockReport() {
     }
   }
 
+  // 현재 종목을 관심종목에 담기/빼기. ticker 는 번들 기준(조회 성공한 종목). 실데이터 조회는 워치리스트가.
+  async function onAddWatchlist() {
+    const ticker = bundle?.ticker
+    if (!ticker || !isValidTicker(ticker)) return
+    setWlState('saving')
+    try {
+      await addWatchlist({ ticker, stockName: bundle?.basic?.name })
+      setWlState('added')
+    } catch {
+      setWlState('error')
+    }
+  }
+  async function onRemoveWatchlist() {
+    const ticker = bundle?.ticker
+    if (!ticker) return
+    setWlState('saving')
+    try {
+      await removeWatchlist(ticker)
+      setWlState('removed')
+    } catch {
+      setWlState('error')
+    }
+  }
+
+  const canWatchlist = bundle?.ticker && isValidTicker(bundle.ticker) && !usingSample
+
   return (
     <section className="dashboard report-page">
       <header className="dashboard__header">
@@ -183,7 +221,36 @@ export default function StockReport() {
       )}
 
       {bundle ? (
-        <StockReportView bundle={bundle} />
+        <>
+          <div className="report-page__wl-bar">
+            <button
+              type="button"
+              className="wl-add-btn"
+              onClick={onAddWatchlist}
+              disabled={!canWatchlist || wlState === 'saving'}
+            >
+              ☆ 관심종목 추가
+            </button>
+            <button
+              type="button"
+              className="wl-remove-btn"
+              onClick={onRemoveWatchlist}
+              disabled={!canWatchlist || wlState === 'saving'}
+            >
+              관심종목에서 제거
+            </button>
+            {wlState === 'added' ? (
+              <span className="wl-add-status wl-add-status--ok">관심종목에 담았습니다.</span>
+            ) : wlState === 'removed' ? (
+              <span className="wl-add-status">관심종목에서 제거했습니다.</span>
+            ) : wlState === 'error' ? (
+              <span className="wl-add-status wl-add-status--err">처리하지 못했습니다. 다시 시도해 주세요.</span>
+            ) : !canWatchlist && bundle ? (
+              <span className="wl-add-status">샘플/미검증 종목은 담을 수 없습니다.</span>
+            ) : null}
+          </div>
+          <StockReportView bundle={bundle} />
+        </>
       ) : (
         <div className="report__empty">종목명 또는 코드로 조회하세요.</div>
       )}

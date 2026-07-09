@@ -1,6 +1,7 @@
 import KLineChartPanel from './KLineChartPanel.jsx'
 import StatCard from './StatCard.jsx'
 import FinancialTrendTable from './FinancialTrendTable.jsx'
+import AiReportPanel from './AiReportPanel.jsx'
 import { sectionFailed, isValuationReady } from '../lib/reportLogic.js'
 
 // ── 표시 포맷 헬퍼(순수) — 값·판정은 백엔드 summary 가 확정, 여기선 표시만. 결측은 '—'. ──
@@ -235,12 +236,9 @@ export default function StockReportView({ bundle }) {
         <FinancialTrendTable income={financials.income} ratio={financials.ratio} />
       )}
 
-      {/* ── 하단: W09 LLM 서술 자리 + 면책고지(코드 고정 상시노출) ── */}
+      {/* ── 하단: AI 종합 서술(W10 P2, 요청 시 생성) + 면책고지(코드 고정 상시노출) ── */}
       <h3 className="report__section-label">AI 종합 서술</h3>
-      <div className="report__llm-placeholder">
-        AI 서술 요약은 WEEK 09에서 제공됩니다. 현재 화면의 수치·판정은 모두 코드가 결정적으로 계산한
-        값입니다(LLM 미개입).
-      </div>
+      <AiReportPanel ticker={ticker} />
 
       <p className="report__disclaimer" role="note">
         {DISCLAIMER}

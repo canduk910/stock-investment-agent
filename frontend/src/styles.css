@@ -1217,6 +1217,426 @@ body {
   color: var(--c-navy);
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * 워치리스트(W10) — 팝업·독립패널 공유. 색은 토큰만.
+ *   상승=파랑(--c-up)/하락=회색(--c-down)  [차트 예외 아님 — 카드/표는 전역 규칙]
+ *   진입 검토가능·목표가 도달/근접 = 강조 주황(--c-emph)  [빨강 금지 — 위험 전용]
+ * ═════════════════════════════════════════════════════════════════════════ */
+
+/* 범용 배지(진입신호·목표가 상태). tone: emph(주황=강조) / muted(회색=중립·억제). */
+.badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface-2);
+  color: var(--c-text-secondary);
+  white-space: nowrap;
+}
+.badge--emph {
+  background: var(--c-emph-soft);
+  border-color: var(--c-emph);
+  color: var(--c-emph-strong);
+}
+.badge--muted {
+  background: var(--c-surface-2);
+  border-color: var(--c-border);
+  color: var(--c-text-secondary);
+}
+
+/* 능동 알림 배너 — 강조(주황). 손실경고 아님 → 빨강 아님. "안내"만. */
+.banner--emph {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--c-emph-soft);
+  border: 1px solid var(--c-emph);
+  color: var(--c-emph-strong);
+  font-weight: 500;
+}
+
+.watchlist-page__alert {
+  margin: 0 0 14px;
+}
+
+/* 국면 배너 — 현재 국면 + 신규진입 억제 여부. 국면명은 주황(강조). */
+.wl__regime {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+  padding: 12px 16px;
+  margin: 0 0 14px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  font-size: 13px;
+}
+.wl__regime.is-blocked {
+  border-color: var(--c-border-strong);
+  background: var(--c-surface-2);
+}
+.wl__regime--fail {
+  border-style: dashed;
+  color: var(--c-text-secondary);
+}
+.wl__regime-label {
+  font-size: 12px;
+  color: var(--c-text-secondary);
+}
+.wl__regime-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--c-emph); /* 국면명 = 강조 주황 */
+}
+.wl__regime-flag {
+  color: var(--c-text-secondary);
+  font-weight: 600;
+}
+.wl__regime-note {
+  color: var(--c-text-secondary);
+}
+
+/* 툴바(정렬 드롭다운) */
+.wl__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 10px;
+}
+.wl__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--c-text-secondary);
+}
+.wl__sort select {
+  font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-white);
+  color: var(--c-text);
+}
+.wl__refreshing {
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+
+.wl__state,
+.wl__empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--c-text-secondary);
+  font-size: 14px;
+}
+
+/* 목록 표 */
+.wl__table-wrap {
+  overflow-x: auto;
+}
+.wl__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.wl__table th,
+.wl__table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--c-border);
+  vertical-align: top;
+}
+.wl__table thead th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+  border-bottom: 1px solid var(--c-border-strong);
+  white-space: nowrap;
+}
+.wl__num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.wl__name-cell {
+  font-weight: 400;
+}
+.wl__name {
+  display: block;
+  font-weight: 700;
+  color: var(--c-navy);
+}
+.wl__ticker {
+  font-size: 11px;
+  color: var(--c-text-muted);
+}
+.wl__reason {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--c-text-secondary);
+}
+.wl__change {
+  font-weight: 600;
+  color: var(--c-text-secondary);
+}
+/* 워치리스트 등락률 — 전역 규칙(상승=파랑/하락=회색). 차트 예외 아님. */
+.wl__change.up {
+  color: var(--c-up);
+}
+.wl__change.down {
+  color: var(--c-down);
+}
+.wl__ratio {
+  color: var(--c-text);
+}
+.wl__fail {
+  color: var(--c-text-muted);
+}
+
+/* 목표가 셀 + 인라인 편집(브라우저 prompt 금지 규칙 준수) */
+.wl__target {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.wl__target-val {
+  font-variant-numeric: tabular-nums;
+  color: var(--c-text);
+}
+.wl__target-dist {
+  font-size: 11px;
+  color: var(--c-text-muted);
+}
+.wl__target-none {
+  color: var(--c-text-muted);
+}
+.wl__target-edit-btn,
+.wl__target-save,
+.wl__target-cancel,
+.wl__remove {
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-white);
+  color: var(--c-text-secondary);
+  cursor: pointer;
+}
+.wl__target-edit-btn:hover,
+.wl__target-save:hover,
+.wl__remove:hover {
+  border-color: var(--c-blue);
+  color: var(--c-blue-strong);
+}
+.wl__target-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wl__target-input {
+  width: 96px;
+  font-size: 13px;
+  padding: 4px 8px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-white);
+  color: var(--c-text);
+}
+.wl__actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 종목 리포트 → 관심종목 담기 툴바 */
+.report-page__wl-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 4px;
+}
+.wl-add-btn,
+.wl-remove-btn {
+  font-size: 13px;
+  padding: 7px 14px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-white);
+  color: var(--c-text);
+  cursor: pointer;
+}
+.wl-add-btn:hover:not(:disabled),
+.wl-remove-btn:hover:not(:disabled) {
+  border-color: var(--c-blue);
+  color: var(--c-blue-strong);
+}
+.wl-add-btn:disabled,
+.wl-remove-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.wl-add-status {
+  font-size: 12px;
+  color: var(--c-text-secondary);
+}
+.wl-add-status--ok {
+  color: var(--c-blue-strong);
+}
+.wl-add-status--err {
+  color: var(--c-text-secondary);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * AI 종합 리포트(W10 P2) — 종목 리포트 하단. 종합의견 배지: 긍정적=파랑/중립=회색/신중=주황.
+ *   .badge 는 워치리스트와 공유. 톤(up/muted/emph)만 여기서 종합의견용으로 추가 매핑.
+ * ═════════════════════════════════════════════════════════════════════════ */
+.badge--up {
+  background: var(--c-blue-soft);
+  border-color: var(--c-blue);
+  color: var(--c-blue-strong);
+}
+
+.ai-report {
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  background: var(--c-surface);
+  box-shadow: var(--shadow-card);
+  padding: 16px;
+}
+.ai-report__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.ai-report__history-toggle {
+  font-size: 13px;
+  padding: 7px 12px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-white);
+  color: var(--c-text-secondary);
+  cursor: pointer;
+}
+.ai-report__history-toggle:hover {
+  border-color: var(--c-blue);
+  color: var(--c-blue-strong);
+}
+.ai-report__ts {
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+.ai-report__hint,
+.ai-report__failed {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--c-text-secondary);
+  line-height: 1.6;
+}
+.ai-report__failed {
+  padding: 12px 14px;
+  border: 1px dashed var(--c-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface-2);
+}
+.ai-report__body {
+  margin-top: 14px;
+}
+.ai-report__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.ai-report__opinion {
+  font-size: 14px;
+  padding: 5px 14px;
+}
+.ai-report__regime {
+  font-size: 12px;
+  color: var(--c-text-secondary);
+}
+.ai-report__summary {
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--c-text);
+}
+.ai-report__block {
+  margin: 0 0 14px;
+}
+.ai-report__block-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--c-text-secondary);
+}
+.ai-report__list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--c-text);
+}
+.ai-report__list li {
+  margin-bottom: 3px;
+}
+.ai-report__fit {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--c-text);
+}
+.ai-report__disclaimer {
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--c-border);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--c-text-muted);
+}
+
+.ai-report__history {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--c-border);
+}
+.ai-report__history-empty {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--c-text-muted);
+}
+.ai-report__history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ai-report__history-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--c-border);
+  font-size: 13px;
+}
+.ai-report__history-meta {
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+.ai-report__history-summary {
+  flex-basis: 100%;
+  color: var(--c-text-secondary);
+  line-height: 1.6;
+}
+
 @media (max-width: 640px) {
   .chat__bubble {
     max-width: 88%;
