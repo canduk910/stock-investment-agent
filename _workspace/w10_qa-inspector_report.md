@@ -188,7 +188,18 @@ incremental — 각 모듈 완성 즉시 검증. **라우터 wiring(api/main.py 
 
 ---
 
-## 최종 판정: 통과 13사이클 / 실패 0 / 안전위반 0 / **W10 통합 검증 완료 · 배포 가능(GO)**
-(완료·검증 통과: T1·T2·T3(+409)·T4·T5·T6·T7·T8·T9 전부 + 통합 wiring)
+## 사이클 14 — 프론트 409 상한 UX 대응 보강 (frontend-engineer 후속) : 통과 / 실패 0
+
+백엔드 409 상한 게이트에 프론트가 사용자 안내로 대응 — 경계면(백엔드 status ↔ 프론트 문구) 강화.
+- api.js addWatchlist: `!res.ok`이면 `err.status = res.status` 실어 throw → 호출부 409 판별 근거.
+- watchlistLogic.js addErrorMessage(status): 409="가득 찼습니다(최대 30개)"·400="종목 코드 인식 못함"·422="목표가 0 이상"·default
+  = 백엔드 상태코드(409/400/422) 정확 대응. StockReport.jsx가 addWatchlist 실패 시 `setWlErrorMsg(addErrorMessage(e?.status))`.
+- **안전**: wl-add-status--err = var(--c-text-secondary)(회색), 빨강·주황 아님(상한 초과는 위험 아닌 단순 안내). 테스트 계약 명시.
+- watchlistLogic.test.js 20→33(+13, addErrorMessage·detectTargetAlerts 전이 보강). 프론트 vitest 94→98 순증, build clean.
+- 변경 후 프론트 안전 재확인: 빨강/초록/황색/명령형 0.
+
+## 최종 판정: 통과 14사이클 / 실패 0 / 안전위반 0 / **W10 통합 검증 완료 · 배포 가능(GO)**
+(완료·검증 통과: T1·T2·T3(+409)·T4·T5·T6·T7·T8·T9 전부 + 통합 wiring + 프론트 409 UX 대응)
+현재 스냅샷: 백엔드 403 passed / 9 deselected(live) · 프론트 98 passed / 8 files · build clean.
 
 ### 잔여(배포 비차단): 라이브 e2e(-m live, KIS/OPENAI 키 필요) — 실 KIS 워치리스트 enrich·실 gpt-5.4 리포트 생성 스모크. 유닛은 경계 mock으로 계약 고정(계획대로). 브라우저 UI 시각 캡처는 vitest 94 + 빌드로 계약 대체. doc-commit 전 마지막 게이트 통과.
