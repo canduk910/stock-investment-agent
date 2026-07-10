@@ -106,6 +106,24 @@ def test_regime_alignment_required():
         StockReport(**kwargs)
 
 
+# ── 안전 강제: 빈 문자열도 누락으로 취급(min_length=1, IMP-14) ────────────────
+
+
+@pytest.mark.parametrize("field", ["요약", "국면정합성", "면책고지"])
+def test_required_str_fields_reject_empty_string(field):
+    # '키만 있으면 통과'가 아니라 비어있으면 검증 실패(면책고지='' 통과하던 구멍 차단).
+    with pytest.raises(ValidationError):
+        StockReport(**_valid_kwargs(**{field: ""}))
+
+
+def test_risk_factor_empty_element_rejected():
+    # 리스크요인=[''] 는 '리스크 1개'로 위장한 빈 항목 — 원소 min_length=1 로 거부(장밋빛 방지).
+    with pytest.raises(ValidationError):
+        StockReport(**_valid_kwargs(리스크요인=[""]))
+    with pytest.raises(ValidationError):
+        StockReport(**_valid_kwargs(리스크요인=["실질 리스크", ""]))
+
+
 # ── 직렬화 계약(프론트·저장소가 소비) ────────────────────────────────────────
 
 

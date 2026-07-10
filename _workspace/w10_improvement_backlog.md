@@ -23,7 +23,7 @@
 ## P2 (여유 시)
 - [x] IMP-12 (architecture, S) 리포트 라우트 _get_store() 간접 진입점(watchlist 패턴 통일) — api/report.py ✅ 435(무변경)
 - [x] IMP-13 (architecture, S) JSON-파일 Store 원자적 write 공통 헬퍼 AtomicJsonFile(infra/json_store.py) — watchlist·report store has-a ✅ 435→440
-- [ ] IMP-14 (safety, S) 면책고지·요약·리스크 min_length 강화 + 과대 주석 정정
+- [x] IMP-14 (safety, S) 면책고지·요약·국면정합성 min_length=1 + 리스크요인 원소 비어있지않음 + 과대주석 정정 — report_schema.py ✅ 440→444
 - [ ] IMP-15 (safety, S) AiReportPanel 자족 코드고정 면책 이중화 + regime_block entry_blocked 파생
 - [ ] IMP-16 (product, S) 리포트 히스토리 중복저장 게이트 + 상한 + 과거대비 비교 UI
 - [ ] IMP-17 (tests, M) 프론트 컴포넌트 렌더 테스트 인프라(jsdom+@testing-library)
