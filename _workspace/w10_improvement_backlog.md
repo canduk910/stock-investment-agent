@@ -1,4 +1,4 @@
-# W10 개선 백로그 (코드리뷰 워크플로우 산출, 39발견→30검증→20병합)
+# W10 개선 백로그 (코드리뷰 워크플로우 산출, 39발견→30검증→20병합) — **20/20 완료** ✅
 
 총평: 활성 버그 없음(안전 원칙 준수·판정은 코드·면책 상시). 개선 축 = ①국면 매핑/진입차단/target=0 판정 중복(3중 일관성 부채) ②챗봇 워치리스트 편집 제품 갭 ③저비용 하드닝(ticker 검증·KIS 동시성) ④테스트 공백(컴포넌트·라이브 e2e).
 
@@ -29,4 +29,4 @@
 - [x] IMP-17 (tests, M) 프론트 컴포넌트 렌더 테스트 인프라(jsdom+@testing-library) + WatchlistView·AiReportPanel 스모크 ✅ 프99→104
 - [x] IMP-18 (tests, S) api.main W10 wiring(라우터 include+CORS DELETE/PATCH) 회귀 스모크 — tests/unit/api/test_main_wiring.py ✅
 - [x] IMP-19 (tests, S) 리포트 라이브 e2e(-m live) gpt-5.4 실 JSON 스키마 충족/폴백 계약 — tests/live/test_live_report.py ✅
-- [ ] IMP-20 (tests, M) Store 동시성(threading.Lock) 회귀 테스트
+- [x] IMP-20 (tests, M) Store 동시성(threading.Lock) 회귀 테스트(watchlist put·update_target·report append) ✅ 백452→455
