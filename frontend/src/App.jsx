@@ -21,32 +21,30 @@ export default function App() {
   const [alertBanner, setAlertBanner] = useState(null)
   // 이전 관측 상태({ticker: target_status}) — 전이 감지 기준. 마운트 첫 관측은 알림 억제.
   const prevStatusRef = useRef(null)
-  const notifiedRef = useRef(false) // 브라우저 알림 권한 요청은 최초 1회만.
+  // 브라우저 알림 권한 상태 — 요청은 사용자 제스처(CTA)에서만(IMP-11: interval 콜백 요청은 Safari/FF가 무시).
+  const [notifPerm, setNotifPerm] = useState(
+    typeof Notification !== 'undefined' ? Notification.permission : 'unsupported',
+  )
 
   useEffect(() => {
     const id = setInterval(() => setRefreshKey((k) => k + 1), REFRESH_MS)
     return () => clearInterval(id) // 언마운트 시 정리(무한 타이머·중복 방지).
   }, [])
 
-  // 브라우저 알림 발화(권한 있을 때만). 권한 미요청이면 최초 1회 요청하고 이후엔 조용히 스킵.
-  const fireBrowserNotification = useCallback((alerts) => {
+  // 권한 요청은 사용자 제스처(CTA 버튼)에서만 — interval 콜백 안 요청은 브라우저가 무시(transient activation 필요).
+  const enableNotifications = useCallback(() => {
     if (typeof Notification === 'undefined') return
-    const send = () => {
-      try {
-        new Notification('목표가 알림', { body: alertMessage(alerts) })
-      } catch {
-        /* 알림 실패는 조용히 무시 — 배너로 이미 안내됨 */
-      }
+    Notification.requestPermission().then((perm) => setNotifPerm(perm))
+  }, [])
+
+  // 브라우저 알림 발화 — 이미 granted 일 때만(여기서 권한 요청하지 않는다). 주황 배너는 항상 폴백.
+  const fireBrowserNotification = useCallback((alerts) => {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+    try {
+      new Notification('목표가 알림', { body: alertMessage(alerts) })
+    } catch {
+      /* 알림 실패는 조용히 무시 — 배너로 이미 안내됨 */
     }
-    if (Notification.permission === 'granted') {
-      send()
-    } else if (Notification.permission === 'default' && !notifiedRef.current) {
-      notifiedRef.current = true
-      Notification.requestPermission().then((perm) => {
-        if (perm === 'granted') send()
-      })
-    }
-    // 'denied' 는 배너만(브라우저 알림 스킵).
   }, [])
 
   // WatchlistView 가 새 view 를 받을 때마다 호출 — 전이 감지 → 배너 + 브라우저 알림.
@@ -78,6 +76,16 @@ export default function App() {
               신규 진입(살까·언제) 관점 · 시세·진입신호는 실시간 직접 조회(LLM 미개입) · 60초 자동 갱신
             </p>
           </div>
+          {notifPerm === 'default' ? (
+            <button
+              type="button"
+              className="watchlist-page__notif-cta"
+              onClick={enableNotifications}
+              title="목표가 도달·근접 시 브라우저 알림을 받습니다(주황 배너는 권한과 무관하게 항상 표시)."
+            >
+              목표가 알림 켜기
+            </button>
+          ) : null}
         </header>
         {alertBanner && (
           <div className="banner banner--emph watchlist-page__alert" role="status">

@@ -1261,6 +1261,24 @@ body {
   margin: 0 0 14px;
 }
 
+/* 목표가 알림 켜기 CTA — 사용자 제스처로 권한 요청(IMP-11). 강조 주황(테두리), 위험 빨강 아님. */
+.watchlist-page__notif-cta {
+  align-self: center;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-emph-strong);
+  background: var(--c-emph-soft);
+  border: 1px solid var(--c-emph);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.watchlist-page__notif-cta:hover {
+  background: var(--c-emph);
+  color: var(--c-white);
+}
+
 /* 국면 배너 — 현재 국면 + 신규진입 억제 여부. 국면명은 주황(강조). */
 .wl__regime {
   display: flex;
