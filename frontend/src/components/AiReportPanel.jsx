@@ -7,7 +7,12 @@ import { opinionTone } from '../lib/reportFormat.js'
 //   백엔드 Pydantic StockReport 가 강제 — 프론트는 검증 통과분(report)만 구조화해 보여준다.
 //   검증 실패(validation_failed)면 report=null → "AI 서술 생성 실패" 안내(정량요약은 화면에 이미 있음).
 //   종합의견 배지: 긍정적=파랑/중립=회색/신중=주황(reportFormat.opinionTone). 매수·매도 라벨은 스키마가 배제.
-//   면책 고지는 리포트 하단에 항상 노출(백엔드 report.면책고지 + 화면 자체 상시 고지가 이미 존재).
+//   면책 고지는 패널 하단에 **코드고정 상수**로 항상 노출(부모 배치·LLM 산출에 의존하지 않음, IMP-15).
+//   report.면책고지(LLM 산출)는 리포트 본문의 자체 문구로 보조 노출된다.
+
+// 코드고정 면책(자족) — 리포트 유무·검증 결과·부모 컴포넌트와 무관하게 패널이 항상 노출한다(IMP-15).
+const AI_REPORT_DISCLAIMER =
+  '이 AI 서술은 참고용이며 면허 있는 투자자문·매매 권유가 아닙니다. 판정·수치는 코드가 확정하고 설명만 AI가 돕습니다.'
 
 export default function AiReportPanel({ ticker }) {
   const [report, setReport] = useState(null) // 검증 통과 구조화 리포트(6필드) | null
@@ -108,6 +113,11 @@ export default function AiReportPanel({ ticker }) {
       ) : null}
 
       {historyOpen ? <HistoryList history={history} /> : null}
+
+      {/* 코드고정 면책 — 리포트 유무·검증 결과와 무관하게 이 패널이 항상 자족적으로 노출(IMP-15). */}
+      <p className="ai-report__disclaimer ai-report__disclaimer--fixed" role="note">
+        {AI_REPORT_DISCLAIMER}
+      </p>
     </div>
   )
 }

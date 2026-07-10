@@ -294,6 +294,15 @@ def forward_valuation(estimate, valuation):
     }
 
 
+def regime_entry_blocked(params: dict) -> bool:
+    """국면 실행 파라미터 → 신규진입 차단 여부. **진입차단 규칙 단일 출처**(IMP-15).
+
+    per_max=None(역발상 과열) = 신규 진입 억제 국면(single_cap=0 동반). regime_gate 와
+    watchlist.service.build_watchlist_view(regime 블록)가 이 한 함수를 공유해 규칙이 갈리지 않게 한다.
+    """
+    return (params or {}).get("per_max") is None
+
+
 def regime_gate(stock_valuation, judgement):
     """종목 밸류에이션 × 현재 국면 → 국면정합성 판정(역발상 REGIME_PARAMS 게이트).
 
@@ -311,7 +320,7 @@ def regime_gate(stock_valuation, judgement):
     stock_per = _num(stock_valuation.get("per"))
     stock_pbr = _num(stock_valuation.get("pbr"))
 
-    entry_blocked = per_max is None
+    entry_blocked = regime_entry_blocked(params)  # 진입차단 규칙 단일 출처(IMP-15)
     per_over = per_max is not None and stock_per is not None and stock_per > per_max
     pbr_over = pbr_max is not None and stock_pbr is not None and stock_pbr > pbr_max
 

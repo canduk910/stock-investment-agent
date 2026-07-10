@@ -19,7 +19,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 
 from collectors.kis import inquire_price
-from stock.summary import regime_gate
+from stock.summary import regime_entry_blocked, regime_gate
 from watchlist.constants import NEAR_TARGET_THRESHOLD_PCT, WATCHLIST_FETCH_CONCURRENCY
 from watchlist.models import WatchlistItem
 
@@ -144,8 +144,8 @@ def build_watchlist_view(store, user_id: str, kis_client, judgement) -> dict:
         regime_block = {
             "regime": judgement.get("regime"),
             "single_cap": params.get("single_cap"),
-            # per_max None(과열) = 신규진입 차단 — regime_gate 와 동일 판정.
-            "entry_blocked": params.get("per_max") is None,
+            # 진입차단은 regime_gate 와 같은 헬퍼(단일 출처) — 인라인 재계산 금지(IMP-15).
+            "entry_blocked": regime_entry_blocked(params),
         }
 
     return {

@@ -21,6 +21,7 @@ from stock.summary import (
     _valuation_label,
     build_stock_summary,
     forward_valuation,
+    regime_entry_blocked,
     regime_gate,
 )
 from macro.engine import REGIME_PARAMS
@@ -312,6 +313,16 @@ def test_regime_gate_note_has_no_order_imperative__regime_gate():
     for regime in ("회복", "확장", "과열", "수축"):
         note = regime_gate(_valuation(per=18.0, pbr=1.6), _judgement(regime))["note"] or ""
         assert "매수" not in note and "매도" not in note  # 조회전용·자문금지 톤
+
+
+def test_regime_entry_blocked_single_source__regime_gate():
+    # 진입차단 규칙 단일 출처(IMP-15) — per_max None(과열)만 True. regime_gate·watchlist 가 공유.
+    assert regime_entry_blocked(REGIME_PARAMS["과열"]) is True   # per_max None → 억제
+    assert regime_entry_blocked(REGIME_PARAMS["수축"]) is False  # per_max 20 → 미차단
+    assert regime_entry_blocked(REGIME_PARAMS["회복"]) is False
+    assert regime_entry_blocked({}) is True  # 결측(과열과 동형) — 안전측(진입 억제)
+    # regime_gate.entry_blocked 가 이 헬퍼와 일치.
+    assert regime_gate(_valuation(per=8.0, pbr=0.9), _judgement("과열"))["entry_blocked"] is True
 
 
 # ── forward_valuation — 예측 PER = 현재가 ÷ 예측 EPS (KIS 리서치 컨센서스) ────
