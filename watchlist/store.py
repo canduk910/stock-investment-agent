@@ -12,12 +12,10 @@ JsonFileWatchlistStore:
 """
 from __future__ import annotations
 
-import json
-import os
-import threading
 from pathlib import Path
 from typing import Protocol
 
+from infra.json_store import AtomicJsonFile
 from watchlist.models import WatchlistItem
 
 
@@ -85,29 +83,7 @@ class JsonFileWatchlistStore:
     """JSON 파일 영속 — 원자적 write + threading.Lock. 프로세스 재실행에도 유지."""
 
     def __init__(self, path: str | Path) -> None:
-        self._path = Path(path)
-        self._lock = threading.Lock()
-
-    # ── 디스크 I/O ────────────────────────────────────────────────────────────
-
-    def _read_raw(self) -> dict[str, dict[str, dict]]:
-        """디스크 → {user_id: {ticker: item_dict}}. 부재·손상은 빈 dict(FileCache 관례)."""
-        if not self._path.exists():
-            return {}
-        try:
-            with self._path.open(encoding="utf-8") as f:
-                data = json.load(f)
-            return data if isinstance(data, dict) else {}
-        except (json.JSONDecodeError, OSError):
-            return {}
-
-    def _write_raw(self, data: dict[str, dict[str, dict]]) -> None:
-        """원자적 write: 같은 디렉토리 temp 파일에 쓰고 os.replace 로 교체(부분 쓰기 방지)."""
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self._path.with_name(f"{self._path.name}.tmp.{os.getpid()}")
-        with tmp.open("w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-        os.replace(tmp, self._path)  # 원자적 교체(동일 파일시스템)
+        self._file = AtomicJsonFile(path)  # 원자적 read/write + 락(IMP-13 공용 헬퍼)
 
     def _bucket_items(self, raw: dict, user_id: str) -> list[WatchlistItem]:
         return [WatchlistItem(**d) for d in raw.get(user_id, {}).values()]
@@ -115,43 +91,43 @@ class JsonFileWatchlistStore:
     # ── 계약 ─────────────────────────────────────────────────────────────────
 
     def list_items(self, user_id: str) -> list[WatchlistItem]:
-        with self._lock:
-            raw = self._read_raw()
+        with self._file.lock():
+            raw = self._file.read()
             return _sorted_by_added_at(self._bucket_items(raw, user_id))
 
     def get(self, user_id: str, ticker: str) -> WatchlistItem | None:
-        with self._lock:
-            raw = self._read_raw()
+        with self._file.lock():
+            raw = self._file.read()
             d = raw.get(user_id, {}).get(ticker)
             return WatchlistItem(**d) if d else None
 
     def put(self, item: WatchlistItem) -> WatchlistItem:
-        with self._lock:
-            raw = self._read_raw()
+        with self._file.lock():
+            raw = self._file.read()
             bucket = raw.setdefault(item.user_id, {})
             existing_d = bucket.get(item.ticker)
             existing = WatchlistItem(**existing_d) if existing_d else None
             stored = _apply_upsert(existing, item)
             bucket[item.ticker] = stored.model_dump()
-            self._write_raw(raw)
+            self._file.write(raw)
             return stored
 
     def delete(self, user_id: str, ticker: str) -> None:
-        with self._lock:
-            raw = self._read_raw()
+        with self._file.lock():
+            raw = self._file.read()
             bucket = raw.get(user_id)
             if bucket and bucket.pop(ticker, None) is not None:
-                self._write_raw(raw)
+                self._file.write(raw)
 
     def update_target(
         self, user_id: str, ticker: str, target_price: float | None
     ) -> WatchlistItem | None:
-        with self._lock:
-            raw = self._read_raw()
+        with self._file.lock():
+            raw = self._file.read()
             d = raw.get(user_id, {}).get(ticker)
             if not d:
                 return None
             updated = WatchlistItem(**d).model_copy(update={"target_price": target_price})
             raw[user_id][ticker] = updated.model_dump()
-            self._write_raw(raw)
+            self._file.write(raw)
             return updated
