@@ -16,10 +16,10 @@ __pycache__/
 # uv
 # (uv.lock은 커밋 대상 — 무시하지 않음)
 
-# 프론트엔드 (Vite/React)
-frontend/node_modules/
+# 프론트엔드 (Vite/React) + Node/Vite 부산물 (루트·frontend 등 모든 depth — 재발 방지)
+node_modules/
+.vite/
 frontend/dist/
-frontend/.vite/
 
 # IDE / OS
 .idea/
