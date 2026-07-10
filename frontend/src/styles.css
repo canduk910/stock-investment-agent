@@ -1786,9 +1786,20 @@ body {
 /* 종목검색 인라인 폼(브라우저 prompt 금지 규칙). */
 .right-panel__search {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--c-border);
+}
+.right-panel__search-row {
+  display: flex;
+  gap: 8px;
+}
+/* 형식 불량 안내 — 뉴트럴 회색(빨강은 위험 전용, 폼 힌트엔 금지). */
+.right-panel__search-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--c-text-secondary);
 }
 .right-panel__search-input {
   flex: 1 1 auto;

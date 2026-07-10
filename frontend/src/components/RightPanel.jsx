@@ -58,27 +58,47 @@ function RightPanelBody({ spec, onClose }) {
 }
 
 // 종목검색 인라인 폼 — 브라우저 prompt 금지(WatchlistView 와 동일 원칙). 유효 ticker 만 onSelect.
+// 형식 불량(6자 영숫자 아님)이면 조회하지 않고(잘못된 백엔드 조회 방지) 짧은 안내를 띄운다 —
+//   "조회만 조용히 무시"는 사용자가 왜 안 되는지 몰라 혼란스러웠다(UX 개선). 안내 색은 뉴트럴
+//   회색(--c-text-secondary) — 빨강은 위험(손실·패닉) 전용이라 폼 힌트엔 쓰지 않는다.
 function TickerSearch({ onSubmit }) {
   const [draft, setDraft] = useState('')
+  const [error, setError] = useState('')
   function submit(e) {
     e.preventDefault()
     const t = draft.trim()
-    if (!isValidTicker(t)) return // ticker.js SSOT — 불량이면 조회 없이 무시(안내는 placeholder)
+    if (!isValidTicker(t)) {
+      // ticker.js SSOT — 불량이면 조회 없이 안내만(onSelect 미호출). 잘못된 백엔드 조회 방지.
+      setError('종목코드는 숫자·영문 6자리입니다 (예: 005930).')
+      return
+    }
+    setError('')
     onSubmit(t)
     setDraft('')
   }
   return (
     <form className="right-panel__search" onSubmit={submit} autoComplete="off">
-      <input
-        className="right-panel__search-input"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        placeholder="종목코드 6자리(예: 005930)"
-        aria-label="종목코드 입력"
-      />
-      <button type="submit" className="refresh right-panel__search-go" disabled={!draft.trim()}>
-        조회
-      </button>
+      <div className="right-panel__search-row">
+        <input
+          className="right-panel__search-input"
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value)
+            if (error) setError('') // 다시 타이핑하면 안내 해제(자기치유)
+          }}
+          placeholder="종목코드 6자리(예: 005930)"
+          aria-label="종목코드 입력"
+          aria-invalid={error ? 'true' : undefined}
+        />
+        <button type="submit" className="refresh right-panel__search-go" disabled={!draft.trim()}>
+          조회
+        </button>
+      </div>
+      {error ? (
+        <p className="right-panel__search-hint" role="alert">
+          {error}
+        </p>
+      ) : null}
     </form>
   )
 }
