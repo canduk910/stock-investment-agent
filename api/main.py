@@ -10,21 +10,12 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.deps import map_engine_input  # 국면 4지표 매핑 SSOT(IMP-06) — detail/report 경로와 공유
 from collectors.macro_snapshot import collect_macro_indicators
 from infra.config import fred_api_key
 from macro.engine import judge_regime
 
 app = FastAPI(title="투자 에이전트 데이터 API", version="0.1.0")
-
-# 국면 판정 입력 매핑 — 수집기 dict 키 → 엔진 입력 키(단일 출처).
-# 엔진은 yield_spread 를 쓰지만 수집기는 FRED 시리즈명 t10y2y 로 노출한다.
-# dollar_index·gdp 는 수집되더라도 §4 4지표 판정에 안 쓰므로 여기에 없다.
-_REGIME_INPUT_MAP = {
-    "t10y2y": "yield_spread",
-    "hy_spread": "hy_spread",
-    "vix": "vix",
-    "fear_greed": "fear_greed",
-}
 
 # Vite 개발 서버(5173)에서의 브라우저 호출 허용. POST 는 /api/chat(챗봇) 때문에 필요.
 app.add_middleware(
@@ -38,31 +29,16 @@ app.add_middleware(
 )
 
 
-def _map_engine_input(snapshot: dict) -> tuple[dict, list[str]]:
-    """수집 스냅샷 → (엔진 입력 dict, 못 쓴 국면지표 목록). 단일 매핑 출처.
-
-    실패(None)·부분실패(value=None)·키 부재는 판정에서 제외하고 partial_failure 에 기록만
-    한다(임의 기본값 금지). macro_regime 과 챗봇의 live judgement 가 공유한다.
-    """
-    indicators = snapshot["indicators"]
-    engine_input: dict = {}
-    partial_failure: list[str] = []
-    for collector_key, engine_key in _REGIME_INPUT_MAP.items():
-        point = indicators.get(collector_key)
-        if point is not None and point.get("value") is not None:
-            engine_input[engine_key] = point["value"]
-        else:
-            partial_failure.append(engine_key)
-    return engine_input, partial_failure
-
-
 def live_judgement() -> tuple[dict, dict, list[str]]:
-    """실시간 수집(캐시 미경유) → 매핑 → judge_regime. (judgement, indicators_used, partial_failure).
+    """실시간 수집(캐시 미경유) → 매핑(deps SSOT) → judge_regime.
 
-    챗봇(api/chat.py)이 매 요청 최신 국면을 얻는 단일 출처 — 시스템 프롬프트 주입에 쓴다.
+    반환 (judgement, indicators_used, partial_failure). macro_regime 과 챗봇이 최신 국면을
+    얻는 단일 출처. 매핑은 api.deps.map_engine_input 이 SSOT(IMP-06) — 종목/워치리스트/리포트
+    경로(api.deps.build_judgement)와 **같은 매핑**을 쓴다. 수집기·판정 심볼은 이 모듈
+    네임스페이스에 남겨(collect_macro_indicators·judge_regime) 라우트 테스트가 경계로 patch 한다.
     """
     snapshot = collect_macro_indicators(fred_api_key())
-    engine_input, partial_failure = _map_engine_input(snapshot)
+    engine_input, partial_failure = map_engine_input(snapshot)
     judgement = judge_regime(engine_input)
     return judgement, engine_input, partial_failure
 

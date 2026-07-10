@@ -26,6 +26,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter
 
+from api.deps import build_judgement as _build_judgement  # 국면 판정 빌더 SSOT(IMP-06)
 from cache.keys import stock_meta_sub_key
 from cache.local import LocalCache
 from cache.policy import cache_if_clean
@@ -37,9 +38,7 @@ from collectors.kis import (
     inquire_price,
     stock_info,
 )
-from collectors.macro_snapshot import collect_macro_indicators
-from infra.config import KisConfig, fred_api_key
-from macro.engine import judge_regime
+from infra.config import KisConfig
 from stock.constants import INDICATOR_CONFIG, STOCK_META_TTL_SECONDS
 from stock.summary import build_stock_summary, forward_valuation, regime_gate
 
@@ -54,15 +53,6 @@ _DAILY_ADJ_PRICE = "0"
 #   엔진이 avg_per/valuation_label 을 None 폴백하므로 이 값 자체가 라벨을 오염시키진 않는다.
 _MONTHLY_ADJ_PRICE = "1"
 _TOKEN_CACHE_PATH = ".cache/kis_token.json"
-
-# 국면 4지표: collector 키 → engine 키(api.main._REGIME_INPUT_MAP 과 동일 매핑).
-# NOTE(cleanup): 두 라우트가 같은 매핑을 갖는다 — 공유 헬퍼 추출은 리더 확인 후 P2.
-_REGIME_INPUT_MAP = {
-    "t10y2y": "yield_spread",
-    "hy_spread": "hy_spread",
-    "vix": "vix",
-    "fear_greed": "fear_greed",
-}
 
 # 로컬 스탠드인용 인메모리 메타 캐시(원칙2 게이트 경유 저장). 배포 시 ElastiCache 로 교체.
 _META_CACHE = LocalCache()
@@ -246,18 +236,6 @@ def _build_kis_client():
     token_cache = FileCache(_TOKEN_CACHE_PATH)
     provider = auth.make_token_provider(config, token_cache)
     return KisClient(config, provider)
-
-
-def _build_judgement() -> dict:
-    """매크로 스냅샷 → 국면 4지표 매핑 → judge_regime. 실패는 라우트가 잡아 regime_gate=None."""
-    snapshot = collect_macro_indicators(fred_api_key())
-    indicators = snapshot["indicators"]
-    engine_input: dict = {}
-    for collector_key, engine_key in _REGIME_INPUT_MAP.items():
-        point = indicators.get(collector_key)
-        if point is not None and point.get("value") is not None:
-            engine_input[engine_key] = point["value"]
-    return judge_regime(engine_input)
 
 
 @router.get("/api/detail/{ticker}/bundle")
