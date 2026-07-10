@@ -289,3 +289,14 @@ def test_no_judgement_degrades_regime(patch_prices):
     assert it["entry_signal"] is None
     assert "regime" in view["partial_failure"]
     assert view["regime"] is None
+
+
+# ── 병렬 시세 동시성 상한(IMP-09: KIS 레이트리밋 보호) ────────────────────────
+
+def test_worker_count_capped_at_concurrency_limit():
+    from watchlist.constants import WATCHLIST_FETCH_CONCURRENCY as CAP
+    assert svc._worker_count(1) == 1
+    assert svc._worker_count(3) == 3
+    assert svc._worker_count(30) == CAP   # 종목 많아도 상한으로 캡(폭주 방지)
+    assert svc._worker_count(CAP) == CAP
+    assert svc._worker_count(0) == 1      # 방어(빈 목록은 호출 전 early return)

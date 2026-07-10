@@ -16,6 +16,10 @@ DEFAULT_USER_ID = "local"
 # KIS 레이트리밋 보호 상한(리스트 enrich = 종목별 병렬 시세 조회).
 WATCHLIST_MAX_ITEMS = 30
 
+# KIS 병렬 시세 조회 동시성 상한 — 종목 수와 무관하게 이 값으로 캡(레이트리밋 보호, IMP-09).
+# detail.py 섹션 병렬(고정 5)과 같은 정신. 60s refresh·팝업/패널 이중 마운트와 겹쳐도 폭주 방지.
+WATCHLIST_FETCH_CONCURRENCY = 6
+
 # 목표가 근접 판정 임계(%). |distance_to_target| <= 이 값이면 'near'.
 NEAR_TARGET_THRESHOLD_PCT = 3.0
 

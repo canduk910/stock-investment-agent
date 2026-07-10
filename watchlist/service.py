@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from collectors.kis import inquire_price
 from stock.summary import regime_gate
-from watchlist.constants import NEAR_TARGET_THRESHOLD_PCT
+from watchlist.constants import NEAR_TARGET_THRESHOLD_PCT, WATCHLIST_FETCH_CONCURRENCY
 from watchlist.models import WatchlistItem
 
 _FETCH_TIMEOUT = 15
@@ -100,13 +100,21 @@ def _enrich_item(item: WatchlistItem, valuation, judgement) -> dict:
     }
 
 
+def _worker_count(n_tickers: int) -> int:
+    """병렬 시세 조회 워커 수 — 종목 수와 상한(WATCHLIST_FETCH_CONCURRENCY) 중 작은 값(≥1).
+
+    종목 수만큼 동시 폭주(최대 30 + 팝업/패널 이중 마운트 + 60s refresh)를 막는 레이트리밋 보호(IMP-09).
+    """
+    return max(1, min(n_tickers, WATCHLIST_FETCH_CONCURRENCY))
+
+
 def _fetch_prices_parallel(kis_client, tickers: list[str]) -> tuple[dict, list[str]]:
     """종목별 inquire_price 병렬(ThreadPool, api/detail 패턴). 실패는 partial_failure 로 표면화."""
     valuations: dict = {}
     partial_failure: list[str] = []
     if not tickers:
         return valuations, partial_failure
-    with ThreadPoolExecutor(max_workers=len(tickers)) as ex:
+    with ThreadPoolExecutor(max_workers=_worker_count(len(tickers))) as ex:
         futures = {t: ex.submit(inquire_price.inquire_price, kis_client, t) for t in tickers}
         for ticker, fut in futures.items():
             try:
