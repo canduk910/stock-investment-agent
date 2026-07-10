@@ -49,6 +49,22 @@ class KisConfig:
         )
 
 
+def kis_account() -> tuple[str, str]:
+    """잔고조회(inquire_balance)용 (CANO, ACNT_PRDT_CD) — 단일 로컬 사용자.
+
+    - CANO: KIS_ACNT_NO 우선, 없으면 기존 KIS_ACCOUNT_NO 폴백(하위호환). 계좌번호가
+      "12345678-01" 처럼 하이픈으로 상품코드를 포함하면 앞 8자리(CANO)만 취한다.
+    - ACNT_PRDT_CD: KIS_ACNT_PRDT_CD_STK, 미설정 시 "01"(국내주식 종합계좌).
+    - 미설정 허용(_optional) — 예외 없이 빈 CANO 반환(잔고 라우트가 graceful 처리).
+
+    조회 전용 — 이 값들은 KIS 조회 API 파라미터일 뿐, 주문/매매엔 쓰지 않는다.
+    """
+    cano = _optional("KIS_ACNT_NO") or _optional("KIS_ACCOUNT_NO")
+    cano = cano.split("-", 1)[0]  # "12345678-01" → "12345678"(CANO 8자리)
+    prdt = _optional("KIS_ACNT_PRDT_CD_STK") or "01"
+    return cano, prdt
+
+
 def fred_api_key() -> str:
     return _require("FRED_API_KEY")
 

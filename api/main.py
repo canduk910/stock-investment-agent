@@ -72,6 +72,11 @@ from api.report import router as report_router  # noqa: E402
 
 app.include_router(report_router)
 
+# 계좌 잔고(포트폴리오) — GET /api/balance (조회 전용, 우측 패널). 단일 사용자 계정은 config.
+from api.balance import router as balance_router  # noqa: E402
+
+app.include_router(balance_router)
+
 
 @app.get("/api/macro/indicators")
 def macro_indicators() -> dict:

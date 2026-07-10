@@ -136,6 +136,22 @@ def test_entry_signal_guidance_has_no_hardcoded_regime_param_values():
                 )
 
 
+# ── 잔고(포트폴리오) 팝업 규칙 (UX3) — 판정·조언은 텍스트, 데이터는 코드 ────────────
+
+
+def test_prompt_has_show_balance_rule_in_popup_block():
+    # ⑦ 팝업 규칙에 "계좌 잔고/포트폴리오 현황 → show_balance" 안내가 존재.
+    text = build_prompt(_JUDGEMENT)
+    assert "show_balance" in text
+    assert "잔고" in text
+
+
+def test_prompt_says_rebalance_advice_is_text_only():
+    # 리밸런싱·분산 조언은 팝업 없이 텍스트로만(데이터는 프론트가 조회) — 명령형/자동주문 금지.
+    text = build_prompt(_JUDGEMENT)
+    assert "리밸런싱" in text
+
+
 def _extract_entry_guidance(prompt: str) -> str:
     """진입신호 지침 블록만 잘라낸다(마커 [관심종목 진입 신호] ~ 다음 블록 경계).
 

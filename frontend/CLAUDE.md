@@ -12,20 +12,30 @@
 
 ## 계약
 - `GET /api/macro/indicators` → `{indicators, partial_failure}` 소비. 지표가 `null`이면 "일시 조회 불가" 카드로 표시하고 나머지는 정상 렌더(부분 실패 보존). 지표 키·shape은 백엔드(`api/main.py`)와 일치해야 한다.
-- 화면은 단계적으로 성장: 1단계 지표 대시보드 → W07 국면 게이지 → W08 종목 리포트 → W09 챗봇/팝업 → **W10 워치리스트·구조화 리포트(완료)**. 새 화면도 같은 토큰을 조합해 한 제품처럼 보이게.
+- 화면은 단계적으로 성장: 1단계 지표 대시보드 → W07 국면 게이지 → W08 종목 리포트 → W09 챗봇/팝업 → W10 워치리스트·구조화 리포트 → **UX 개편: 좌측 상시 채팅 + 우측 동적 패널(모달 폐기)·잔고 패널(완료)**. 새 화면도 같은 토큰을 조합해 한 제품처럼 보이게.
+
+## UX 레이아웃 — 좌측 채팅 + 우측 동적 패널 (모달 폐기)
+- **`App.jsx` = 2컬럼 그리드**(`.app__main`: 좌 `ChatPanel` 상시 / 우 `RightPanel`). 반응형 ~1024px 이하 세로 스택. 상단 세로 스택(상시 지표 그리드)·**모달(`Modal.jsx` 삭제)** 폐기 — 컴포넌트를 우측 패널에 **인라인** 렌더한다.
+- **우측 패널은 두 경로로 구동**: (a) 챗봇 tool_call(`onShowPanel(routePopups(popups)[0])`), (b) `RightPanel` 상단 **퀵버튼**(국면·관심종목·잔고·종목검색 — 대화 없이 직접 탐색; 종목검색은 `isValidTicker` 폼). 상태는 `App`의 `rightPanelSpec`(`{kind,args,valid}`) 단일 소유, **랜딩=관심종목**(`{kind:'watchlist'}`).
+- **`RightPanel.jsx`의 `RightPanelBody` switch = 렌더 SSOT**: `stock_report→PopupStockReport`·`macro_dashboard→RegimeGauge`·`watchlist→PopupWatchlist`·`manage_watchlist→ManageWatchlistConfirm`·**`balance→BalancePanel`**. 팝업 컴포넌트는 전부 모달 비종속·자체조회형이라 **재작성 0**으로 인라인 재사용.
+- **목표가 능동 알림은 `App` 레벨로 이관**: WatchlistView가 이제 온디맨드(상시 마운트 아님)라, 60s 폴링을 `App`이 직접(`fetchWatchlist`+`detectTargetAlerts`) 수행 → 패널 내용과 **무관하게** 앱레벨 배너+`Notification` 동작.
 
 ## 챗봇 (W09)
 - **응답은 SSE 스트리밍**(`postChatStream`→`POST /api/chat/stream`)이 기본, `postChat`(논스트림)은 폴백. `lib/sseChat.js`의 `parseSSEBuffer`(순수함수)가 `\n\n` 경계로 이벤트를 재조립한다 — 청크가 경계를 가로질러/여러 이벤트가 한 청크로 오는 경우 방어(TextDecoder `stream:true`). 이벤트 `{type:stage|token|popups|done}`, stage enum은 `lib/chatStages.js`가 백엔드와 **SSOT로 공유**.
-- `ChatPanel`은 스트리밍 상태기계: 봇 placeholder를 만들고 `onStage`(진행 체크리스트)·`onToken`(라이브 타이핑)·`onDone`(→`routePopups`→모달) 갱신. 스트림 실패 시 `postChat` 폴백 1회. streaming 중 입력 비활성, 무한 스피너 금지(에러 배너+재시도).
-- **팝업 실데이터는 LLM 응답이 아니라 프론트가 직접 조회**(환각 차단): `popups[].name`→`lib/popupRouter.js`가 컴포넌트로 라우팅(show_stock_report→번들 API, show_macro_dashboard→regime API). LLM은 "무엇을 띄울지"만 준다.
+- `ChatPanel`은 스트리밍 상태기계: 봇 placeholder를 만들고 `onStage`(진행 체크리스트)·`onToken`(라이브 타이핑)·`onDone`(→`routePopups`→**`onShowPanel`로 우측 패널**) 갱신. 스트림 실패 시 `postChat` 폴백 1회. streaming 중 입력 비활성, 무한 스피너 금지(에러 배너+재시도). (모달·`popupQueue` 폐기 — 팝업은 우측 패널로만.)
+- **팝업 실데이터는 LLM 응답이 아니라 프론트가 직접 조회**(환각 차단): `popups[].name`→`lib/popupRouter.js`가 컴포넌트로 라우팅(`show_stock_report`→번들 API, `show_macro_dashboard`→regime API, `show_watchlist`→watchlist API, **`show_balance`→`/api/balance`**). `POPUP_KIND` 5종이 라우팅 SSOT. LLM은 "무엇을 띄울지"만 준다.
 - **ticker 유효성은 `lib/ticker.js` 단일 출처**(`/^[0-9A-Za-z]{6}$/`) — 직접입력(StockReport)과 팝업 라우팅이 공유. 불량 코드는 조회 없이 안내로 graceful 처리.
 - 챗 신규 UI도 `theme.css` 토큰만(hex/초록/황색 0), 면책 고지 상시 노출.
+
+## 잔고 패널 (UX 개편)
+- **`BalancePanel.jsx`**: `/api/balance` **자체 조회**(환각 차단) → 요약 카드(예수금·매입액·평가액·평가손익·순자산) + 보유종목 표(종목·수량·평단·현재가·평가액·손익/수익률). **조회 전용**(주문/매매 없음), 현재가 포함이라 무캐시. `partial_failure:['balance']`(KIS 실패)는 "일시 조회 불가"·재시도 graceful, 네트워크/HTTP 오류도 재시도 버튼(무한 스피너 금지). 면책 상시.
+- **손익 색 = 글로벌 팔레트(상승=파랑 `--c-up`/하락=회색 `--c-down`)** — WatchlistView 등락률과 동일 규칙. **차트 예외(빨강 상승) 아님**, 손실도 빨강(`--c-danger`) 금지(회색 중립). 색만으로 구분 안 하도록 ▲▼─ 글리프 병기.
 
 ## 로컬 도커 기동 (대안 실행)
 - `docker compose up --build` → `localhost:5173`(프론트)+`:8000`(백엔드). 시크릿은 `.env` 런타임 주입(`env_file`), 소스 핫리로드. Vite 프록시 대상은 `VITE_PROXY_TARGET`로 재정의(도커=`http://backend:8000`). 상세는 루트 `DOCKER.md`.
 
 ## 워치리스트 + 구조화 리포트 (W10)
-- **`WatchlistView`는 팝업 겸 독립 페이지 단일 컴포넌트** — `PopupWatchlist`(모달)와 `App` 4번째 패널이 같은 본문을 공유. 실데이터는 프론트가 `/api/watchlist`로 직접 조회(환각 차단). `popupRouter`의 `show_watchlist→watchlist` 계약 유지.
+- **`WatchlistView`는 단일 본문 컴포넌트** — `PopupWatchlist`가 래핑, 우측 패널(랜딩 기본)·챗 트리거가 같은 본문을 공유(UX 개편으로 모달→우측 인라인). 실데이터는 프론트가 `/api/watchlist`로 직접 조회(환각 차단). `popupRouter`의 `show_watchlist→watchlist` 계약 유지.
 - **정렬은 순수 로직**(`lib/watchlistLogic.js`: `sortItems`·`distanceToTarget`·`classifyTargetStatus`·`detectTargetAlerts`) — 드롭다운 재정렬 시 재조회 없음. `SORT_KEYS`는 백엔드·`chat/tools.py` enum과 **SSOT 일치**. `classifyTargetStatus`는 **매수(진입가) 관점**(current≤target=도달)으로 백엔드 `_target_status`와 동일 — sell 관점으로 뒤집지 말 것.
 - **능동 목표가 알림은 `App.jsx` 앱 레벨**: `far→near/reached` **전이 시에만** 주황 배너 + 브라우저 `Notification`(권한 최초 1회). 60s `setInterval` refresh(언마운트 clear). 알림은 "안내"만(주문 자동실행 금지). 목표가 도달/근접·진입 검토가능 = **주황(`--c-emph`)**, 빨강 금지.
 - **[P2] `AiReportPanel`**: "AI 리포트 생성"→`POST /api/detail/{ticker}/report`→구조화 6필드 렌더(종합의견 배지 긍정적=파랑/중립=회색/**신중=주황**, 투자포인트·리스크요인·국면정합성·면책 상시). `validation_failed`면 정량요약 폴백 + "AI 서술 생성 실패" 안내. `lib/reportFormat.js::opinionTone`(순수)이 종합의견→토큰 매핑.

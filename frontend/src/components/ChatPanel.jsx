@@ -2,55 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import { postChat, postChatStream } from '../api.js'
 import { routePopups } from '../lib/popupRouter.js'
 import ChatMessage from './ChatMessage.jsx'
-import Modal from './Modal.jsx'
-import PopupStockReport from './PopupStockReport.jsx'
-import PopupWatchlist from './PopupWatchlist.jsx'
-import ManageWatchlistConfirm from './ManageWatchlistConfirm.jsx'
-import RegimeGauge from './RegimeGauge.jsx'
 
-// 챗봇 패널(W09) — 자연어 질문 → {text, popups}. text 는 말풍선, popups 는 팝업 모달 트리거.
+// 챗봇 패널(W09→UX 개편) — 자연어 질문 → {text, popups}. text 는 말풍선, popups 는 우측 패널 트리거.
 // 세션: 마운트 시 crypto.randomUUID 1회 → 서버가 히스토리 보관(프론트는 id+메시지만 전송).
-// 팝업 실데이터는 프론트가 직접 조회(환각 차단): show_stock_report→PopupStockReport(fetchStockBundle),
-//   show_macro_dashboard→RegimeGauge(fetchMacroRegime, 자체 조회·무캐시), show_watchlist→W10 플레이스홀더.
+// UX 개편: 팝업 모달 폐기. 응답의 popups 는 onShowPanel(routePopups[0])로 우측 RightPanel 에 인라인 렌더한다
+//   — LLM 은 "무엇을 띄울지"만 주고, 팝업 실데이터는 우측 컴포넌트가 API 로 직접 조회(환각 차단).
 // 색은 theme.css 토큰만. 하단 면책 고지 상시(면허 있는 자문 아님).
-
-const POPUP_TITLE = {
-  stock_report: '종목 종합리포트',
-  macro_dashboard: '시장 국면 대시보드',
-  watchlist: '관심종목',
-  manage_watchlist: '관심종목 관리',
-}
 
 const DISCLAIMER =
   '본 챗봇은 정보 제공 목적이며 투자 자문·매매 권유가 아닙니다. 판정·수치는 코드가 결정하고 ' +
   '설명만 AI 가 돕습니다. 투자 판단과 그 결과의 책임은 전적으로 본인에게 있습니다(면허 있는 투자자문 아님).'
 
-// 팝업 스펙(kind) → 모달 본문. 데이터는 각 컴포넌트가 직접 조회한다.
-// stock_report 는 ticker 형식(6자리 숫자)이 불량이면 조회하지 않고 안내만 한다(잘못된 백엔드 조회 방지).
-function PopupBody({ spec, onClose }) {
-  switch (spec.kind) {
-    case 'stock_report':
-      if (!spec.valid) {
-        return (
-          <div className="popup__state">
-            종목 코드를 인식하지 못했어요. 종목명이나 6자리 코드(예: 005930)로 다시 물어봐 주세요.
-          </div>
-        )
-      }
-      return <PopupStockReport ticker={spec.args.ticker} stockName={spec.args.stock_name} />
-    case 'macro_dashboard':
-      return <RegimeGauge />
-    case 'watchlist':
-      return <PopupWatchlist args={spec.args} />
-    case 'manage_watchlist':
-      // 챗봇 자연어 편집 — 사용자가 [확인]을 눌러야 실제 반영(confirm-before-write, IMP-08).
-      return <ManageWatchlistConfirm args={spec.args} valid={spec.valid} onClose={onClose} />
-    default:
-      return null
-  }
-}
-
-export default function ChatPanel() {
+export default function ChatPanel({ onShowPanel }) {
   const sessionId = useRef(null)
   if (sessionId.current === null) {
     // 마운트 시 1회 생성(구형 브라우저 폴백 포함).
@@ -64,11 +27,14 @@ export default function ChatPanel() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [popupQueue, setPopupQueue] = useState([]) // 열려 있는 팝업 스택(닫으면 다음)
   const lastQueryRef = useRef(null)
   const listRef = useRef(null)
 
-  const activePopup = popupQueue[0] ?? null
+  // 응답 popups → 우측 패널 spec 으로 리프팅(모달 폐기). 첫 spec 을 우측에 인라인 렌더.
+  //   과거 팝업 재열기 칩(ChatMessage.onOpenPopup)도 같은 경로로 우측 패널에 다시 띄운다.
+  function showPanel(specs) {
+    if (specs.length && onShowPanel) onShowPanel(specs[0])
+  }
 
   // 새 메시지·로딩 변화 시 맨 아래로 스크롤(토큰 타이핑 중 messages 갱신마다 하단 유지).
   useEffect(() => {
@@ -88,7 +54,7 @@ export default function ChatPanel() {
     })
   }
 
-  // 스트림 done — 최종 popups 확정 → 라우팅해 모달 오픈(현행 동작 그대로). text 가 비면 폴백 문구.
+  // 스트림 done — 최종 popups 확정 → 라우팅해 우측 패널에 인라인 렌더. text 가 비면 폴백 문구.
   function finishStream(popups) {
     const specs = routePopups(popups)
     setMessages((m) => {
@@ -97,10 +63,10 @@ export default function ChatPanel() {
       if (last.role !== 'bot' || !last.streaming) return m
       const text =
         (last.text && last.text.trim()) ||
-        (specs.length ? '요청하신 내용을 팝업으로 열었습니다.' : '')
+        (specs.length ? '요청하신 내용을 우측 패널에 열었습니다.' : '')
       return [...m.slice(0, -1), { ...last, text, popups, streaming: false }]
     })
-    if (specs.length) setPopupQueue(specs) // 자동으로 팝업 오픈
+    showPanel(specs) // 첫 spec 을 우측 패널로 리프팅(모달 아님)
     setLoading(false)
   }
 
@@ -111,7 +77,7 @@ export default function ChatPanel() {
       const specs = routePopups(res.popups)
       const text =
         (res.text && res.text.trim()) ||
-        (specs.length ? '요청하신 내용을 팝업으로 열었습니다.' : '')
+        (specs.length ? '요청하신 내용을 우측 패널에 열었습니다.' : '')
       // 진행 중 placeholder 가 있으면 교체, 없으면 append.
       setMessages((m) => {
         const last = m[m.length - 1]
@@ -120,7 +86,7 @@ export default function ChatPanel() {
           ? [...m.slice(0, -1), bot]
           : [...m, bot]
       })
-      if (specs.length) setPopupQueue(specs)
+      showPanel(specs)
       setError(null)
     } catch (e) {
       // 폴백도 실패 → 배너 + 재시도. 진행 중 placeholder 는 제거(무한 스피너 금지).
@@ -172,12 +138,8 @@ export default function ChatPanel() {
     if (lastQueryRef.current && !loading) runChat(lastQueryRef.current)
   }
 
-  function closePopup() {
-    setPopupQueue((q) => q.slice(1))
-  }
-
   return (
-    <section className="dashboard chat" aria-label="투자 챗봇">
+    <section className="chat" aria-label="투자 챗봇">
       <header className="dashboard__header">
         <div>
           <h1>투자 챗봇</h1>
@@ -202,7 +164,7 @@ export default function ChatPanel() {
                 popups={msg.popups}
                 streaming={msg.streaming}
                 stage={msg.stage}
-                onOpenPopup={(spec) => setPopupQueue([spec])}
+                onOpenPopup={(spec) => onShowPanel?.(spec)}
               />
             ))
           )}
@@ -235,19 +197,6 @@ export default function ChatPanel() {
       <p className="chat__disclaimer" role="note">
         {DISCLAIMER}
       </p>
-
-      {activePopup && (
-        <Modal
-          title={
-            activePopup.kind === 'stock_report' && activePopup.args.stock_name
-              ? `${activePopup.args.stock_name} · ${POPUP_TITLE.stock_report}`
-              : POPUP_TITLE[activePopup.kind] ?? '팝업'
-          }
-          onClose={closePopup}
-        >
-          <PopupBody spec={activePopup} onClose={closePopup} />
-        </Modal>
-      )}
     </section>
   )
 }

@@ -35,6 +35,7 @@ def test_popup_tool_names__frontend_contract():
         "show_stock_report",
         "show_watchlist",
         "manage_watchlist",  # IMP-08: 자연어 워치리스트 편집(추가/제거/목표가)
+        "show_balance",  # UX3: 계좌 잔고·평가액·보유종목 현황(파라미터 없음)
     }
 
 
@@ -77,8 +78,32 @@ def test_manage_watchlist_action_enum_and_required():
     assert "target_price" in _props("manage_watchlist")
 
 
+def test_show_balance_has_no_parameters():
+    # UX3: 잔고 조회는 파라미터 없음(단일 사용자 계좌 — 프론트가 /api/balance 자체조회).
+    # LLM 은 "잔고를 띄워라"만 지시하고, 어떤 계좌·필드인지는 코드가 정한다.
+    fn = _tool("show_balance")
+    params = fn["parameters"]
+    assert params["type"] == "object"
+    assert params["properties"] == {}
+    # required 없음(빈 파라미터) — 있으면 안 됨.
+    assert not params.get("required")
+
+
+def test_show_balance_description_states_when_to_call_and_not():
+    # 계좌 잔고·평가액·수익/손실 현황 질문 시 호출 / 리밸런싱·분산 조언·단순질문엔 미호출.
+    desc = _tool("show_balance")["description"]
+    assert "잔고" in desc
+    assert "호출하지 않는다" in desc  # misfire 가드 문구(리밸런싱·분산 조언 제외)
+
+
 def test_descriptions_state_when_not_to_call__misfire_guard():
     # 각 description 에 "언제 호출/미호출" 모두 명시(오발동 방지, 스킬 §2).
-    for name in ("show_macro_dashboard", "show_stock_report", "show_watchlist", "manage_watchlist"):
+    for name in (
+        "show_macro_dashboard",
+        "show_stock_report",
+        "show_watchlist",
+        "manage_watchlist",
+        "show_balance",  # UX3: 리밸런싱·분산 조언은 텍스트만 — 미호출 문구 필수.
+    ):
         desc = _tool(name)["description"]
         assert "호출하지 않는다" in desc

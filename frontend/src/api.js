@@ -156,6 +156,18 @@ export async function fetchReportHistory(ticker) {
   return res.json()
 }
 
+// ── 잔고(포트폴리오, UX 개편) ────────────────────────────────────────────────
+// GET /api/balance → {holdings:[{ticker,name,qty,avg_price,current_price,eval_amount,pnl_amount,pnl_pct}],
+//   summary:{deposit,purchase_amount,eval_amount,pnl_amount,total_eval,net_asset}, partial_failure:[]}.
+// 조회 전용(주문/매매 없음). 현재가 포함 → 캐시 없음(원칙1) — 팝업 열 때마다 조회. KIS 실패 시
+// holdings=null·summary=null·partial_failure:['balance'](항상 200) → 컴포넌트가 graceful 안내.
+// 여기서 throw 하는 건 네트워크/HTTP 오류(백엔드 미연결 등)뿐이다.
+export async function fetchBalance() {
+  const res = await fetch('/api/balance')
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
 // 종목 자동완성(W08). GET /api/stocks/search?q=&limit= → [{ticker, name, market}].
 // KIS 마스터(코스피+코스닥 전 종목) 기반. 실패 시 빈 배열(프론트는 코드 직접 입력 폴백).
 export async function searchStocks(query, limit = 8) {

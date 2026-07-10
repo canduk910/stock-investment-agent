@@ -31,6 +31,13 @@ describe('routePopup — 단일 팝업 툴 이름 → 컴포넌트 kind 분기',
     expect(r.valid).toBe(true)
   })
 
+  it('show_balance → kind balance + valid true(파라미터 없음, 단일 계좌)', () => {
+    // llm-engineer UX3 계약: show_balance 는 무파라미터. 잔고 숫자는 프론트가 /api/balance 직접 조회(환각 차단).
+    const r = routePopup({ name: 'show_balance', args: {} })
+    expect(r.kind).toBe('balance')
+    expect(r.valid).toBe(true)
+  })
+
   it('args 누락 시 빈 객체로 기본값(undefined 접근 방지)', () => {
     const r = routePopup({ name: 'show_macro_dashboard' })
     expect(r.args).toEqual({})
@@ -139,10 +146,11 @@ describe('routePopup — manage_watchlist(IMP-08: 편집 확인 팝업)', () => 
   })
 })
 
-describe('POPUP_KIND — 라우팅 계약 상수(4종)', () => {
-  it('정확히 4종 툴 이름만 매핑(오발동 방지)', () => {
+describe('POPUP_KIND — 라우팅 계약 상수(5종)', () => {
+  it('정확히 5종 툴 이름만 매핑(오발동 방지)', () => {
     expect(Object.keys(POPUP_KIND).sort()).toEqual([
       'manage_watchlist',
+      'show_balance',
       'show_macro_dashboard',
       'show_stock_report',
       'show_watchlist',
