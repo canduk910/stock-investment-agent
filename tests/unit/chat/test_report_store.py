@@ -77,3 +77,18 @@ def test_created_at_auto_generated_when_absent(tmp_path):
     entry = store.append("005930", _report(), regime_at_creation="과열")
     assert entry["created_at"]
     assert "T" in entry["created_at"]  # ISO8601 날짜·시각 구분자
+
+
+def test_history_capped_at_limit(tmp_path):
+    # ticker 당 상한(REPORT_HISTORY_CAP) 초과 시 오래된 평가부터 제거(무한 누적 방지, IMP-16).
+    from chat.report_store import REPORT_HISTORY_CAP
+
+    store = JsonFileReportStore(tmp_path / "reports.json")
+    for i in range(REPORT_HISTORY_CAP + 5):
+        store.append(
+            "005930", {"종합의견": "중립"}, regime_at_creation="확장",
+            created_at=f"2026-01-{i + 1:02d}T00:00:00+00:00",
+        )
+    hist = store.list_history("005930")
+    assert len(hist) == REPORT_HISTORY_CAP  # 상한 유지
+    assert all(h["created_at"] >= "2026-01-06T00:00:00+00:00" for h in hist)  # 오래된 5개 제거

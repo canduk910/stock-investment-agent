@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { opinionTone, OPINION_LABELS } from './reportFormat.js'
+import { opinionTone, OPINION_LABELS, historyDeltas } from './reportFormat.js'
 
 // 계약 근거(week-10 계획 P2): 종합의견 배지 색 매핑 — 긍정적=파랑/중립=회색/신중=주황.
 //   Pydantic StockReport 종합의견 Literal["긍정적","중립","신중"](llm-engineer SSOT)만 유효.
@@ -26,5 +26,36 @@ describe('opinionTone — 종합의견 → 배지 톤(색은 컴포넌트가 토
 describe('OPINION_LABELS — 유효 종합의견 3종(스키마 Literal 과 일치)', () => {
   it('긍정적·중립·신중 3종만 정의', () => {
     expect(Object.keys(OPINION_LABELS).sort()).toEqual(['긍정적', '신중', '중립'])
+  })
+})
+
+describe('historyDeltas — 과거 대비 변화 마커(최신 우선 히스토리, IMP-16)', () => {
+  const mk = (opinion, regime) => ({
+    report_json: { 종합의견: opinion },
+    regime_at_creation: regime,
+  })
+
+  it('직전(더 오래된) 대비 종합의견·국면 변화 감지', () => {
+    // 최신 우선: [신중/수축, 중립/확장, 중립/확장]
+    const d = historyDeltas([mk('신중', '수축'), mk('중립', '확장'), mk('중립', '확장')])
+    expect(d[0].opinionChanged).toBe(true) // 중립→신중
+    expect(d[0].regimeChanged).toBe(true) // 확장→수축
+    expect(d[0].prevOpinion).toBe('중립')
+    expect(d[0].prevRegime).toBe('확장')
+    expect(d[1].opinionChanged).toBe(false) // 중립==중립
+    expect(d[1].regimeChanged).toBe(false)
+    expect(d[2].opinionChanged).toBe(false) // 가장 오래된 — 비교 대상 없음
+    expect(d[2].regimeChanged).toBe(false)
+  })
+
+  it('단일 항목은 변화 없음(비교 대상 없음)', () => {
+    const d = historyDeltas([mk('중립', '확장')])
+    expect(d[0].opinionChanged).toBe(false)
+    expect(d[0].regimeChanged).toBe(false)
+  })
+
+  it('비배열 → [](방어)', () => {
+    expect(historyDeltas(null)).toEqual([])
+    expect(historyDeltas(undefined)).toEqual([])
   })
 })

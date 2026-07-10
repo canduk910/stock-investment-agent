@@ -18,6 +18,9 @@ from infra.json_store import AtomicJsonFile
 # 히스토리 파일 기본 경로(watchlist.json 과 나란히 .cache/ 아래).
 REPORT_STORE_PATH = ".cache/stock_reports.json"
 
+# ticker 당 히스토리 상한 — 오래된 평가부터 제거(무한 누적 방지, IMP-16). 과거 대비 비교엔 최근이면 충분.
+REPORT_HISTORY_CAP = 20
+
 
 def _now_iso() -> str:
     """현재 UTC ISO8601(created_at 자동 생성)."""
@@ -52,7 +55,12 @@ class JsonFileReportStore:
         }
         with self._file.lock():
             raw = self._file.read()
-            raw.setdefault(ticker, []).append(entry)
+            lst = raw.setdefault(ticker, [])
+            lst.append(entry)
+            if len(lst) > REPORT_HISTORY_CAP:
+                # created_at 정렬 후 최신 CAP 개만 보존(오래된 평가부터 제거).
+                lst.sort(key=lambda e: e.get("created_at", ""))
+                raw[ticker] = lst[-REPORT_HISTORY_CAP:]
             self._file.write(raw)
         return entry
 

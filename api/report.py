@@ -43,6 +43,22 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _same_as_latest(store, ticker: str, opinion, regime) -> bool:
+    """직전 저장과 종합의견·국면이 모두 같으면 중복(반복 클릭 노이즈) → 저장 생략(IMP-16).
+
+    주의: 리포트 자체는 사용자에게 항상 반환된다 — 비교 히스토리 저장만 생략한다(데모 품질 우선).
+    같은 종합의견·국면이면 정당한 재평가도 걸러질 수 있다(허용 가능한 트레이드오프).
+    """
+    history = store.list_history(ticker)  # 최신 우선(내림차순)
+    if not history:
+        return False
+    latest = history[0]
+    return (
+        (latest.get("report_json") or {}).get("종합의견") == opinion
+        and latest.get("regime_at_creation") == regime
+    )
+
+
 @router.post("/api/detail/{ticker}/report")
 def create_report(ticker: str) -> dict:
     """리포트 생성·검증·저장·반환(§6.5b). 국면 수집 실패는 regime_at_creation=None(항상 200)."""
@@ -60,14 +76,17 @@ def create_report(ticker: str) -> dict:
     regime_at_creation = judgement.get("regime") if judgement else None
     created_at = _now_iso()
 
-    # 검증 통과분만 히스토리에 저장(폴백은 저장하지 않음 — 부분실패 산출을 히스토리에 남기지 않음).
-    if not result.get("validation_failed") and result.get("report") is not None:
-        _get_store().append(
-            ticker,
-            result["report"],
-            regime_at_creation=regime_at_creation,
-            created_at=created_at,
-        )
+    # 검증 통과분만 히스토리에 저장(폴백 미저장). 직전과 동일 평가(종합의견·국면)면 중복 저장 생략(IMP-16).
+    report = result.get("report")
+    if not result.get("validation_failed") and report is not None:
+        store = _get_store()
+        if not _same_as_latest(store, ticker, report.get("종합의견"), regime_at_creation):
+            store.append(
+                ticker,
+                report,
+                regime_at_creation=regime_at_creation,
+                created_at=created_at,
+            )
 
     return {
         "ticker": ticker,

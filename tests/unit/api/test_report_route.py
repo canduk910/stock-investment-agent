@@ -74,7 +74,10 @@ class _SpyStore:
         return entry
 
     def list_history(self, ticker):
-        return list(self._history.get(ticker, []))
+        # 실 store 계약과 동일하게 created_at 내림차순(최신 우선) — 중복 게이트가 최신을 [0]으로 본다.
+        return sorted(
+            self._history.get(ticker, []), key=lambda e: e.get("created_at", ""), reverse=True
+        )
 
 
 # ── POST 생성(검증 통과) ─────────────────────────────────────────────────────
@@ -141,6 +144,39 @@ def test_post_report_fallback_not_stored(client, monkeypatch):
     assert body["report"] is None
     assert body["quant_summary"] == {"current_per": 12.0}  # 정량요약은 남는다
     assert store.appended == []  # 폴백은 저장하지 않음
+
+
+# ── 중복 저장 게이트(IMP-16) ─────────────────────────────────────────────────
+
+
+def test_post_report_dedup_same_opinion_and_regime(client, monkeypatch):
+    # 같은 종합의견·국면으로 두 번 생성 → 두 번째는 히스토리 중복 저장하지 않는다(반복 클릭 노이즈 방지).
+    store = _SpyStore()
+    monkeypatch.setattr(report_mod, "_STORE", store)
+    monkeypatch.setattr(
+        report_mod,
+        "generate_stock_report",
+        _stub_generate({"report": _VALID, "validation_failed": False, "quant_summary": {}}),
+    )
+    r1 = client.post("/api/detail/005930/report")
+    r2 = client.post("/api/detail/005930/report")
+    assert r1.status_code == 200 and r2.status_code == 200
+    assert len(store.appended) == 1  # 두 번째(동일 평가)는 저장 생략
+    assert r2.json()["report"]["종합의견"] == "중립"  # 리포트 자체는 두 번 다 반환
+
+
+def test_post_report_stores_when_opinion_changes(client, monkeypatch):
+    # 종합의견이 바뀌면(재평가) 저장한다 — dedup 은 '직전과 동일'일 때만.
+    store = _SpyStore()
+    monkeypatch.setattr(report_mod, "_STORE", store)
+    seq = iter([
+        {"report": {**_VALID, "종합의견": "중립"}, "validation_failed": False, "quant_summary": {}},
+        {"report": {**_VALID, "종합의견": "신중"}, "validation_failed": False, "quant_summary": {}},
+    ])
+    monkeypatch.setattr(report_mod, "generate_stock_report", lambda b, j, *, client=None: next(seq))
+    client.post("/api/detail/005930/report")
+    client.post("/api/detail/005930/report")
+    assert len(store.appended) == 2
 
 
 # ── judgement 실패(국면 수집 실패) ───────────────────────────────────────────

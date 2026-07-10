@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { generateStockReport, fetchReportHistory } from '../api.js'
-import { opinionTone } from '../lib/reportFormat.js'
+import { opinionTone, historyDeltas } from '../lib/reportFormat.js'
 
 // AI 종합 리포트(W10 P2) — "생성" 버튼 → 구조화 리포트 렌더 + 과거 히스토리 목록.
 // 원칙: LLM 은 서술만, 판정·수치는 코드(현재 화면 정량요약이 이미 확정). 리스크요인 최소 1·면책 필수는
@@ -177,11 +177,13 @@ function HistoryList({ history }) {
   if (!history || history.length === 0) {
     return <div className="ai-report__history-empty">아직 생성된 과거 평가가 없습니다.</div>
   }
+  // 직전(더 오래된) 평가 대비 종합의견·국면 변화를 계산해 마커로 강조(과거 대비 비교 데모, IMP-16).
+  const rows = historyDeltas(history)
   return (
     <div className="ai-report__history">
       <h4 className="ai-report__block-title">과거 평가 (최신순)</h4>
       <ul className="ai-report__history-list">
-        {history.map((h, i) => {
+        {rows.map((h, i) => {
           const rj = h.report_json ?? {}
           const tone = opinionTone(rj.종합의견)
           return (
@@ -191,6 +193,13 @@ function HistoryList({ history }) {
                 {formatTs(h.created_at)}
                 {h.regime_at_creation ? ` · 국면 ${h.regime_at_creation}` : ''}
               </span>
+              {h.opinionChanged || h.regimeChanged ? (
+                <span className="ai-report__history-delta">
+                  {h.opinionChanged ? `의견 ${h.prevOpinion}→${rj.종합의견}` : ''}
+                  {h.opinionChanged && h.regimeChanged ? ' · ' : ''}
+                  {h.regimeChanged ? `국면 ${h.prevRegime}→${h.regime_at_creation}` : ''}
+                </span>
+              ) : null}
               {rj.요약 ? <span className="ai-report__history-summary">{rj.요약}</span> : null}
             </li>
           )

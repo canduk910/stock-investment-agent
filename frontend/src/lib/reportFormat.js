@@ -19,3 +19,24 @@ const OPINION_TONE = {
 export function opinionTone(opinion) {
   return OPINION_TONE[opinion] ?? 'muted'
 }
+
+// 히스토리(최신 우선) → 각 항목에 '직전(더 오래된) 대비' 변화 마커 부착(과거 대비 비교, IMP-16).
+// history[i] 의 비교 대상은 history[i+1](시간상 직전). 가장 오래된 항목은 비교 대상이 없어 변화 없음.
+// 반환: [{...entry, prevOpinion, prevRegime, opinionChanged, regimeChanged}].
+export function historyDeltas(history) {
+  if (!Array.isArray(history)) return []
+  return history.map((h, i) => {
+    const prev = history[i + 1] // 더 오래된 항목(최신 우선 정렬 가정)
+    const opinion = (h?.report_json ?? {}).종합의견 ?? null
+    const regime = h?.regime_at_creation ?? null
+    const prevOpinion = prev ? (prev.report_json ?? {}).종합의견 ?? null : null
+    const prevRegime = prev ? (prev.regime_at_creation ?? null) : null
+    return {
+      ...h,
+      prevOpinion,
+      prevRegime,
+      opinionChanged: prev != null && opinion !== prevOpinion,
+      regimeChanged: prev != null && regime !== prevRegime,
+    }
+  })
+}

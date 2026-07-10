@@ -1711,6 +1711,12 @@ body {
   font-size: 12px;
   color: var(--c-text-muted);
 }
+/* 과거 대비 변화 마커(종합의견/국면 전환) — 강조 주황(위험 아님, IMP-16). */
+.ai-report__history-delta {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-emph);
+}
 .ai-report__history-summary {
   flex-basis: 100%;
   color: var(--c-text-secondary);

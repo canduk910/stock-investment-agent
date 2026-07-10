@@ -25,7 +25,7 @@
 - [x] IMP-13 (architecture, S) JSON-파일 Store 원자적 write 공통 헬퍼 AtomicJsonFile(infra/json_store.py) — watchlist·report store has-a ✅ 435→440
 - [x] IMP-14 (safety, S) 면책고지·요약·국면정합성 min_length=1 + 리스크요인 원소 비어있지않음 + 과대주석 정정 — report_schema.py ✅ 440→444
 - [x] IMP-15 (safety, S) AiReportPanel 코드고정 자족 면책 + regime_entry_blocked 단일출처(regime_gate·watchlist 공유) — stock/summary·service·AiReportPanel ✅ 444→445
-- [ ] IMP-16 (product, S) 리포트 히스토리 중복저장 게이트 + 상한 + 과거대비 비교 UI
+- [x] IMP-16 (product, S) 리포트 히스토리 중복저장 게이트 + 상한(20) + 과거대비 변화 마커 — report_store·report·reportFormat·AiReportPanel ✅ 백445→448·프96→99
 - [ ] IMP-17 (tests, M) 프론트 컴포넌트 렌더 테스트 인프라(jsdom+@testing-library)
 - [ ] IMP-18 (tests, S) api.main W10 wiring(라우터 include+CORS) 회귀 스모크
 - [ ] IMP-19 (tests, S) 리포트 라이브 e2e(-m live) gpt-5.4 실 JSON 스키마 충족
