@@ -169,6 +169,9 @@ describe('addErrorMessage — 관심종목 추가 실패 HTTP status → 안내 
   it('422 → 잘못된 값 안내', () => {
     expect(addErrorMessage(422)).toMatch(/값|목표가|올바/)
   })
+  it('404 → 미등록 종목 안내(제거/목표가 갱신 실패, IMP-10)', () => {
+    expect(addErrorMessage(404)).toMatch(/찾|목록|없/)
+  })
   it('그 외/미상 status → 일반 실패 안내(무한 스피너·크래시 금지)', () => {
     expect(addErrorMessage(500).length).toBeGreaterThan(0)
     expect(addErrorMessage(null).length).toBeGreaterThan(0)

@@ -9,6 +9,7 @@ import {
   SORT_LABELS,
   sortItems,
   entrySignalLabel,
+  addErrorMessage,
 } from '../lib/watchlistLogic.js'
 
 // 워치리스트 본문 — 팝업(PopupWatchlist)과 독립 패널(App)이 공유하는 단일 컴포넌트.
@@ -57,6 +58,9 @@ export default function WatchlistView({ initialSortBy, refreshKey, onView }) {
   const [view, setView] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  // 편집/삭제 등 작업 결과 피드백 — 목록이 이미 떠 있어도(view 존재) 표시(IMP-10: 무음 실패 방지).
+  const [actionError, setActionError] = useState(null)
+  const [actionNote, setActionNote] = useState(null)
   // 정렬은 프론트 재배열이라 재조회 불필요. 초기값은 팝업 args 로 주입될 수 있다(enum 검증).
   const [sortBy, setSortBy] = useState(
     SORT_KEYS.includes(initialSortBy) ? initialSortBy : 'registered',
@@ -67,6 +71,9 @@ export default function WatchlistView({ initialSortBy, refreshKey, onView }) {
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
+    // 새 조회(수동/60s refresh) 시작 시 지난 작업 피드백은 정리(스테일 방지).
+    setActionError(null)
+    setActionNote(null)
     try {
       // sort_by 는 서버 에코용으로만 전달(실제 정렬은 프론트). 시세 부분실패는 200 이라 throw 안 함.
       const v = await fetchWatchlist(sortBy)
@@ -89,9 +96,11 @@ export default function WatchlistView({ initialSortBy, refreshKey, onView }) {
   async function onRemove(ticker) {
     try {
       await removeWatchlist(ticker)
-      await load()
+      await load() // 성공 → 재조회(actionError/Note 초기화) 후 확인 노트.
+      setActionNote('관심종목을 제거했습니다.')
     } catch (e) {
-      setError(e.message)
+      // 목록이 떠 있어도 보이는 dismissible 배너로 status 별 안내(무음 실패 금지).
+      setActionError(addErrorMessage(e?.status))
     }
   }
 
@@ -100,8 +109,9 @@ export default function WatchlistView({ initialSortBy, refreshKey, onView }) {
     try {
       await updateWatchlistTarget(ticker, current)
       await load()
+      setActionNote(current == null ? '목표가를 해제했습니다.' : '목표가를 저장했습니다.')
     } catch (e) {
-      setError(e.message)
+      setActionError(addErrorMessage(e?.status))
     }
   }
 
@@ -145,6 +155,26 @@ export default function WatchlistView({ initialSortBy, refreshKey, onView }) {
           국면 정보 일시 조회 불가 · 진입 신호는 표시하지 않습니다(시세는 정상 표시).
         </div>
       )}
+
+      {/* ── 작업 피드백(편집/삭제) — 목록이 떠 있어도 표시(IMP-10: 무음 실패 방지) ── */}
+      {actionError ? (
+        <div className="banner banner--warn wl__action-msg" role="alert">
+          {actionError}
+          <button
+            type="button"
+            className="banner__retry"
+            onClick={() => setActionError(null)}
+            aria-label="알림 닫기"
+          >
+            ✕
+          </button>
+        </div>
+      ) : null}
+      {actionNote ? (
+        <div className="wl__action-note" role="status">
+          {actionNote}
+        </div>
+      ) : null}
 
       {/* ── 정렬 드롭다운(재조회 없이 프론트 재배열) ── */}
       <div className="wl__toolbar">

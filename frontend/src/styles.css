@@ -1335,6 +1335,22 @@ body {
   font-size: 14px;
 }
 
+/* 작업 피드백(편집/삭제 결과) — 오류 배너(dismissible)·성공 노트. 팔레트 토큰만(위험 빨강 아님). */
+.wl__action-msg {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.wl__action-note {
+  padding: 6px 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--c-text-secondary);
+  background: var(--c-surface-2);
+  border-radius: var(--radius-sm);
+}
+
 /* 목록 표 */
 .wl__table-wrap {
   overflow-x: auto;

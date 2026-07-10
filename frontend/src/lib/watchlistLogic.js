@@ -117,8 +117,8 @@ export function detectTargetAlerts(items, prevMap) {
   return out
 }
 
-// 관심종목 추가(POST) 실패 HTTP status → 사용자 안내 문구. graceful 처리(전체 에러 화면 금지).
-// 계약(data-engineer): 409=상한 30 초과 / 400=불량 ticker / 404=미등록(PATCH) / 422=target 음수.
+// 관심종목 추가/제거/목표가 갱신 실패 HTTP status → 사용자 안내 문구. graceful(전체 에러 화면 금지).
+// 계약: 409=상한 30 초과(추가) / 400=불량 ticker / 404=미등록(제거·PATCH) / 422=target 음수.
 //   모두 단순 안내(회색 중립) — 상한 초과는 위험도 강조도 아니므로 주황·빨강 쓰지 않는다.
 export function addErrorMessage(status) {
   switch (status) {
@@ -126,6 +126,8 @@ export function addErrorMessage(status) {
       return '관심종목이 가득 찼습니다(최대 30개). 기존 종목을 제거한 뒤 추가해 주세요.'
     case 400:
       return '종목 코드를 인식하지 못했습니다. 올바른 종목인지 확인해 주세요.'
+    case 404:
+      return '해당 관심종목을 찾지 못했습니다. 목록을 새로고침해 주세요.'
     case 422:
       return '입력한 값이 올바르지 않습니다(목표가는 0 이상).'
     default:

@@ -103,10 +103,17 @@ export async function addWatchlist({ ticker, stockName, reason, targetPrice } = 
   return res.json()
 }
 
+// status 를 err.status 에 실어 던진다 — 호출부(WatchlistView)가 addErrorMessage(status)로 분기 안내(IMP-10).
+function _throwWithStatus(res) {
+  const err = new Error(`API ${res.status}`)
+  err.status = res.status
+  throw err
+}
+
 // DELETE /api/watchlist/{ticker} → {ok}.
 export async function removeWatchlist(ticker) {
   const res = await fetch(`/api/watchlist/${encodeURIComponent(ticker)}`, { method: 'DELETE' })
-  if (!res.ok) throw new Error(`API ${res.status}`)
+  if (!res.ok) _throwWithStatus(res)
   return res.json()
 }
 
@@ -117,7 +124,7 @@ export async function updateWatchlistTarget(ticker, targetPrice) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ target_price: targetPrice }),
   })
-  if (!res.ok) throw new Error(`API ${res.status}`)
+  if (!res.ok) _throwWithStatus(res)
   return res.json()
 }
 
