@@ -1,4 +1,4 @@
-"""팝업 3종 function calling 스키마 + 모델 상수 — llm-safety-guide §2.
+"""팝업/관리 도구 function calling 스키마 + 모델 상수 — llm-safety-guide §2.
 
 이 파일의 두 가지가 계약이다:
 1. CHAT_MODEL — 챗봇·데이터 생성 LLM 모델 ID 단일 출처(사용자 결정: gpt-5.4).
@@ -79,6 +79,33 @@ TOOLS = [
                         "enum": ["registered", "change_rate", "near_target"],
                     },
                 },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "manage_watchlist",
+            "description": (
+                "관심종목을 추가/제거하거나 목표가를 설정해 달라고 할 때 호출한다"
+                "(예 '삼성전자 관심종목에 담아줘', '005930 목표가 8만원', '카카오 관심목록에서 빼줘'). "
+                "단순 목록 조회(show_watchlist)나 종목 분석(show_stock_report)에는 호출하지 않는다. "
+                "이 도구는 '무엇을 할지 제안'만 하며, 실제 변경은 사용자가 화면에서 확인(confirm)해야 "
+                "반영된다 — 네가 직접 매매하거나 자동 실행하지 않는다."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "description": "수행할 작업(추가/제거/목표가 설정)",
+                        "enum": ["add", "remove", "set_target"],
+                    },
+                    "ticker": {"type": "string", "description": "6자리 종목코드"},
+                    "stock_name": {"type": "string", "description": "종목명(있으면)"},
+                    "target_price": {"type": "number", "description": "set_target 시 목표가(원)"},
+                },
+                "required": ["action", "ticker"],
             },
         },
     },

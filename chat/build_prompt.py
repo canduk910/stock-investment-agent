@@ -126,5 +126,6 @@ def build_prompt(judgement: dict) -> str:
 - 사용자가 시장/국면/현금비중을 물으면 show_macro_dashboard 를 호출해 대시보드를 띄운다.
 - 특정 종목 분석을 요청하면 show_stock_report(ticker 6자리)를 호출한다.
 - 관심종목 목록을 원하면 show_watchlist 를 호출한다.
+- 관심종목을 추가/제거하거나 목표가를 설정해 달라는 요청에는 manage_watchlist(action, ticker[, target_price])를 호출한다. 이는 "제안"일 뿐, 실제 변경은 사용자가 화면에서 확인(confirm)해야 반영된다 — 네가 직접 매매하거나 자동 실행하지 않는다.
 - 도구는 "무엇을 띄울지"만 지시한다. 팝업에 들어갈 실제 시세·재무 숫자는 네가 만들지 않는다(화면이 직접 조회).
 - 단순 용어 설명이나 위험 경고에는 도구를 호출하지 않고 텍스트로만 답한다."""

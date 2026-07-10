@@ -1369,6 +1369,52 @@ body {
   border-radius: var(--radius-sm);
 }
 
+/* 챗봇 자연어 편집 확인 카드(manage_watchlist) — confirm-before-write. 확인=강조 주황, 취소=회색. */
+.wl-confirm__q {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--c-navy);
+  margin: 0 0 6px;
+}
+.wl-confirm__note {
+  font-size: 12px;
+  color: var(--c-text-muted);
+  margin: 0 0 14px;
+}
+.wl-confirm__result {
+  font-size: 14px;
+  color: var(--c-text);
+  margin: 0 0 14px;
+}
+.wl-confirm__result.is-error {
+  color: var(--c-text-secondary);
+}
+.wl-confirm__actions {
+  display: flex;
+  gap: 8px;
+}
+.wl-confirm__ok {
+  padding: 8px 18px;
+  font-weight: 600;
+  color: var(--c-white);
+  background: var(--c-emph);
+  border: 1px solid var(--c-emph);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.wl-confirm__ok:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.wl-confirm__cancel {
+  padding: 8px 18px;
+  color: var(--c-text-secondary);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
 /* 목록 표 */
 .wl__table-wrap {
   overflow-x: auto;

@@ -14,7 +14,7 @@
 - [x] IMP-05 (correctness, S) stock_name 라이브 폴백 inquire_price→stock_info.search_stock_info(죽은 코드) — api/watchlist.py ✅ 백411→414
 - [x] IMP-06 (architecture, M) 국면 매핑·빌더 → api/deps.py SSOT(_REGIME_INPUT_MAP·map_engine_input·build_judgement) — main.live_judgement patch 지점 보존 ✅ 백414→425(테스트 변경 0)
 - [x] IMP-07 (safety, S) 리포트 프롬프트 국면 결측 표면화 + entry_blocked/밸류초과 게이트 + ENTRY_SIGNAL_RULES 공유(build_prompt) — chat/report.py·build_prompt.py ✅ 백425→430
-- [ ] IMP-08 (product, M) 챗봇 자연어 워치리스트 편집 manage_watchlist(add/remove/set_target) 툴 — chat/tools.py, api/chat.py
+- [x] IMP-08 (product, M) 챗봇 자연어 워치리스트 편집 manage_watchlist(add/remove/set_target) — tools·build_prompt·popupRouter·ManageWatchlistConfirm(confirm-before-write) ✅ 백434→435·프90→96
 - [x] IMP-09 (architecture, S) 워치리스트 KIS 병렬 max_workers 고정 상한(6) — watchlist/service.py::_worker_count ✅ 백430→431 (이중 마운트는 요청당 cap으로 바운드)
 - [x] IMP-10 (ux, S) 인라인 편집/삭제 실패 피드백을 view 존재 시에도 표시(dismissible 배너·err.status·404·성공노트) — WatchlistView·api.js·watchlistLogic ✅ 프89→90
 - [x] IMP-11 (ux, S) 목표가 알림 권한요청을 사용자 제스처(CTA 버튼)에 결합 — App.jsx ✅ (Safari/FF 권한 프롬프트 정상화, 배너 폴백 유지)

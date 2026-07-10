@@ -13,17 +13,34 @@ export const POPUP_KIND = {
   show_stock_report: 'stock_report',
   show_macro_dashboard: 'macro_dashboard',
   show_watchlist: 'watchlist',
+  manage_watchlist: 'manage_watchlist', // IMP-08: 자연어 편집 → 화면 confirm 후 반영(자동 매매 아님)
+}
+
+// manage_watchlist 유효 action(워치리스트 편집만 — buy/sell 등 매매 어휘는 애초에 매핑되지 않음).
+const MANAGE_ACTIONS = new Set(['add', 'remove', 'set_target'])
+
+function isValidManage(args) {
+  if (!MANAGE_ACTIONS.has(args.action)) return false
+  if (!isValidTicker(args.ticker)) return false
+  if (args.action === 'set_target') {
+    const n = Number(args.target_price)
+    return Number.isFinite(n) && n >= 0 // 목표가 설정은 유효 수치(>=0) 필수
+  }
+  return true
 }
 
 // 단일 팝업 → 모달 스펙 {kind, name, args, valid} 또는 null(미지·결측).
-// valid: show_stock_report 는 ticker 형식 검증(isValidTicker, ticker.js SSOT — 직접입력과 동일 규칙)
-//   결과, 그 외는 항상 true(ticker 불요). 불량이면 조회 없이 컴포넌트가 안내만 한다(잘못된 백엔드 조회 방지).
+// valid: show_stock_report 는 ticker 형식(isValidTicker, ticker.js SSOT), manage_watchlist 는
+//   action enum+ticker(+set_target 은 target_price>=0) 검증. 그 외 true. 불량이면 조회/실행 없이
+//   컴포넌트가 안내만 한다(잘못된 백엔드 조회·의도치 않은 편집 방지).
 export function routePopup(popup) {
   if (!popup || typeof popup.name !== 'string') return null
   const kind = POPUP_KIND[popup.name]
   if (!kind) return null
   const args = popup.args ?? {}
-  const valid = kind === 'stock_report' ? isValidTicker(args.ticker) : true
+  let valid = true
+  if (kind === 'stock_report') valid = isValidTicker(args.ticker)
+  else if (kind === 'manage_watchlist') valid = isValidManage(args)
   return { kind, name: popup.name, args, valid }
 }
 

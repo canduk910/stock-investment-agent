@@ -5,6 +5,7 @@ import ChatMessage from './ChatMessage.jsx'
 import Modal from './Modal.jsx'
 import PopupStockReport from './PopupStockReport.jsx'
 import PopupWatchlist from './PopupWatchlist.jsx'
+import ManageWatchlistConfirm from './ManageWatchlistConfirm.jsx'
 import RegimeGauge from './RegimeGauge.jsx'
 
 // 챗봇 패널(W09) — 자연어 질문 → {text, popups}. text 는 말풍선, popups 는 팝업 모달 트리거.
@@ -17,6 +18,7 @@ const POPUP_TITLE = {
   stock_report: '종목 종합리포트',
   macro_dashboard: '시장 국면 대시보드',
   watchlist: '관심종목',
+  manage_watchlist: '관심종목 관리',
 }
 
 const DISCLAIMER =
@@ -25,7 +27,7 @@ const DISCLAIMER =
 
 // 팝업 스펙(kind) → 모달 본문. 데이터는 각 컴포넌트가 직접 조회한다.
 // stock_report 는 ticker 형식(6자리 숫자)이 불량이면 조회하지 않고 안내만 한다(잘못된 백엔드 조회 방지).
-function PopupBody({ spec }) {
+function PopupBody({ spec, onClose }) {
   switch (spec.kind) {
     case 'stock_report':
       if (!spec.valid) {
@@ -40,6 +42,9 @@ function PopupBody({ spec }) {
       return <RegimeGauge />
     case 'watchlist':
       return <PopupWatchlist args={spec.args} />
+    case 'manage_watchlist':
+      // 챗봇 자연어 편집 — 사용자가 [확인]을 눌러야 실제 반영(confirm-before-write, IMP-08).
+      return <ManageWatchlistConfirm args={spec.args} valid={spec.valid} onClose={onClose} />
     default:
       return null
   }
@@ -240,7 +245,7 @@ export default function ChatPanel() {
           }
           onClose={closePopup}
         >
-          <PopupBody spec={activePopup} />
+          <PopupBody spec={activePopup} onClose={closePopup} />
         </Modal>
       )}
     </section>

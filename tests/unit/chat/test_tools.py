@@ -28,9 +28,14 @@ def test_chat_model_is_gpt_5_4__single_source():
     assert CHAT_MODEL == "gpt-5.4"
 
 
-def test_exactly_three_popup_tools_by_name__frontend_contract():
+def test_popup_tool_names__frontend_contract():
     names = {t["function"]["name"] for t in TOOLS}
-    assert names == {"show_macro_dashboard", "show_stock_report", "show_watchlist"}
+    assert names == {
+        "show_macro_dashboard",
+        "show_stock_report",
+        "show_watchlist",
+        "manage_watchlist",  # IMP-08: 자연어 워치리스트 편집(추가/제거/목표가)
+    }
 
 
 def test_all_tools_are_openai_function_type():
@@ -64,8 +69,16 @@ def test_show_watchlist_sort_by_enum():
     ]
 
 
+def test_manage_watchlist_action_enum_and_required():
+    # 워치리스트 편집(IMP-08): action enum + ticker 필수. 실제 변경은 프론트 confirm 후 반영.
+    fn = _tool("manage_watchlist")
+    assert fn["parameters"]["required"] == ["action", "ticker"]
+    assert _enum("manage_watchlist", "action") == ["add", "remove", "set_target"]
+    assert "target_price" in _props("manage_watchlist")
+
+
 def test_descriptions_state_when_not_to_call__misfire_guard():
     # 각 description 에 "언제 호출/미호출" 모두 명시(오발동 방지, 스킬 §2).
-    for name in ("show_macro_dashboard", "show_stock_report", "show_watchlist"):
+    for name in ("show_macro_dashboard", "show_stock_report", "show_watchlist", "manage_watchlist"):
         desc = _tool(name)["description"]
         assert "호출하지 않는다" in desc
