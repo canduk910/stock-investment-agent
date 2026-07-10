@@ -27,6 +27,6 @@
 - [x] IMP-15 (safety, S) AiReportPanel 코드고정 자족 면책 + regime_entry_blocked 단일출처(regime_gate·watchlist 공유) — stock/summary·service·AiReportPanel ✅ 444→445
 - [x] IMP-16 (product, S) 리포트 히스토리 중복저장 게이트 + 상한(20) + 과거대비 변화 마커 — report_store·report·reportFormat·AiReportPanel ✅ 백445→448·프96→99
 - [x] IMP-17 (tests, M) 프론트 컴포넌트 렌더 테스트 인프라(jsdom+@testing-library) + WatchlistView·AiReportPanel 스모크 ✅ 프99→104
-- [ ] IMP-18 (tests, S) api.main W10 wiring(라우터 include+CORS) 회귀 스모크
+- [x] IMP-18 (tests, S) api.main W10 wiring(라우터 include+CORS DELETE/PATCH) 회귀 스모크 — tests/unit/api/test_main_wiring.py ✅
 - [ ] IMP-19 (tests, S) 리포트 라이브 e2e(-m live) gpt-5.4 실 JSON 스키마 충족
 - [ ] IMP-20 (tests, M) Store 동시성(threading.Lock) 회귀 테스트
