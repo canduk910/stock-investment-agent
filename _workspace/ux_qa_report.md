@@ -1,5 +1,10 @@
 # QA 리포트 — UX 개편 트랙 (모달 폐기 2컬럼 + 잔고) incremental
 
+> **최종 상태(2026-07-10, HEAD 6d08387): GO 확정 · 백엔드 472 / 프론트 128 green · build clean.**
+> 아래 "실패 항목"은 incremental 착수 시점(사이클 3~4)의 발견 기록이며 **전부 사이클 6에서 해소**됨.
+> BalancePanel CSS(`grep -c 'balance__'`=27, 손익 --c-up/--c-down)·네트워크 테스트(global.fetch 경계 mock) 현재 통과.
+> 리포트를 시간순으로 읽을 때 중간의 "127/1·CSS 0개"는 과거 스냅샷 — 현재 코드베이스와 대조 시 이미 정정됨.
+
 검증 방법론: `invest-qa-checklist`(교차 비교·3중 일관성·안전 grep). Task #15(UX5).
 회귀 기준: W10 통합 검증 완료(GO, w10_qa-inspector_report.md) — 백엔드 403·프론트 98.
 incremental — 각 모듈 완성 즉시 검증. 의존 UX1(#11)·UX2(#12)·UX3(#13)·UX4(#14).

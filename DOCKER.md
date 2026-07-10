@@ -25,6 +25,16 @@ docker compose down -v         # node_modules·.venv 캐시 볼륨까지 제거(
 - 백엔드: 소스가 볼륨 마운트되고 `uvicorn --reload`(폴링) — `*.py` 저장 시 자동 재시작.
 - 프론트: Vite HMR(폴링, `VITE_USE_POLLING=1`) — 컴포넌트 저장 시 즉시 반영.
 
+## `.env` 변경 반영 (주의 — restart로는 안 됨)
+`.env`(env_file)는 **컨테이너 생성 시점에만 주입**된다. 소스처럼 볼륨 마운트가 아니라서 핫리로드 대상이 아니다.
+- `docker compose restart`는 프로세스만 재시작 → **env_file을 다시 읽지 않는다**(옛 값 유지).
+- `.env`를 고쳤으면 컨테이너를 **재생성**해야 한다:
+  ```bash
+  docker compose up -d --force-recreate backend   # .env 재주입(backend만 env_file 사용)
+  ```
+- 프론트는 `.env`가 아니라 compose 인라인 `environment`(VITE_PROXY_TARGET 등)를 쓰므로 `.env` 변경과 무관하다.
+- 확인(값 미노출): `docker compose exec -T backend sh -c 'test -n "$KIS_ACNT_NO" && echo set || echo empty'`.
+
 ## 자주 쓰는 명령
 ```bash
 docker compose exec backend uv run pytest         # 백엔드 테스트
