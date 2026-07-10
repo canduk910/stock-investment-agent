@@ -28,5 +28,5 @@
 - [x] IMP-16 (product, S) 리포트 히스토리 중복저장 게이트 + 상한(20) + 과거대비 변화 마커 — report_store·report·reportFormat·AiReportPanel ✅ 백445→448·프96→99
 - [x] IMP-17 (tests, M) 프론트 컴포넌트 렌더 테스트 인프라(jsdom+@testing-library) + WatchlistView·AiReportPanel 스모크 ✅ 프99→104
 - [x] IMP-18 (tests, S) api.main W10 wiring(라우터 include+CORS DELETE/PATCH) 회귀 스모크 — tests/unit/api/test_main_wiring.py ✅
-- [ ] IMP-19 (tests, S) 리포트 라이브 e2e(-m live) gpt-5.4 실 JSON 스키마 충족
+- [x] IMP-19 (tests, S) 리포트 라이브 e2e(-m live) gpt-5.4 실 JSON 스키마 충족/폴백 계약 — tests/live/test_live_report.py ✅
 - [ ] IMP-20 (tests, M) Store 동시성(threading.Lock) 회귀 테스트
