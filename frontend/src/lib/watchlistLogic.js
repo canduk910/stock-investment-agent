@@ -1,7 +1,7 @@
 // 워치리스트 표현·정렬 로직(순수) — 브라우저 없이 테스트 가능(watchlistLogic.test.js).
-// 원칙: 숫자·진입신호 판정은 백엔드(watchlist/service.py + stock/summary.py::regime_gate)가 확정한다.
-//   여기서는 "어떻게 정렬·표시할지"만 결정한다. target_status/distance/entry_signal 의 판정 계약은
-//   백엔드와 동일해야 하므로(전이 알림의 클라이언트측 근거), 백엔드 _target_status 로직을 그대로 복제한다.
+// 원칙: 숫자·판정(target_status·distance_to_target·entry_signal)은 백엔드(watchlist/service.py +
+//   stock/summary.py::regime_gate)가 확정해 item 에 실어 내려준다. 프론트는 그 값을 "어떻게 정렬·표시할지"만
+//   결정한다 — 백엔드 판정을 복제하지 않는다(IMP-01: 죽은 복제 classifyTargetStatus/distanceToTarget 제거).
 //
 // 정렬 3종은 chat/tools.py show_watchlist enum(LLM-facing SSOT) = watchlist/constants.py SORT_KEYS 와 일치.
 
@@ -16,28 +16,6 @@ export const SORT_LABELS = {
 
 function isFiniteNum(v) {
   return typeof v === 'number' && Number.isFinite(v)
-}
-
-// (current-target)/target*100 (%). target 없음/0/음수/현재가 결측 → null(0 나눗셈·부호역전 방지).
-// 백엔드 watchlist/service.py::_distance_to_target 과 동일 계약.
-export function distanceToTarget(current, target) {
-  if (!isFiniteNum(current)) return null
-  if (!isFiniteNum(target) || target <= 0) return null
-  return ((current - target) / target) * 100.0
-}
-
-// 매수 진입 관점: 목표가 = '사고 싶은 가격'. 현재가가 내려와 목표가에 근접·도달할수록 신호.
-// 백엔드 watchlist/service.py::_target_status 와 동일 계약(능동 알림 전이 판정의 클라이언트측 근거).
-//   none:    target 없음(또는 현재가 결측)
-//   reached: current <= target(목표가 이하로 하락 도달)
-//   near:    current <= target*(1+thr%)(목표가보다 thr% 이내로 근접)
-//   far:     그 외(아직 목표가보다 thr% 초과로 높음)
-export function classifyTargetStatus(current, target, thresholdPct) {
-  if (!isFiniteNum(current)) return 'none'
-  if (!isFiniteNum(target) || target <= 0) return 'none'
-  if (current <= target) return 'reached'
-  if (current <= target * (1.0 + thresholdPct / 100.0)) return 'near'
-  return 'far'
 }
 
 // 비교자 3종 — 각각 (a,b)=>number. null/결측은 항상 후순위로 밀어낸다(NaN 비교 회피).

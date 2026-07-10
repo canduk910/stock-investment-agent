@@ -223,6 +223,36 @@ def test_target_status_far_beyond_threshold(patch_prices):
     assert it["target_status"] == "far"
 
 
+def test_target_status_zero_target_is_none(patch_prices):
+    # target_price=0(ge=0 저장 가능) → distance None 인데 status 도 'none'이어야 한다
+    # (프론트 classifyTargetStatus·백엔드 _distance_to_target 과 동일 계약). 회귀 방지(IMP-01).
+    patch_prices({"005930": _valuation(80000, 1.0, 10.0, 1.0)})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00", target_price=0.0))
+    it = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
+    assert it["distance_to_target"] is None
+    assert it["target_status"] == "none"
+
+
+def test_target_status_reached_at_exact_target(patch_prices):
+    # current == target(경계 포함) → reached.
+    patch_prices({"005930": _valuation(80000, 1.0, 10.0, 1.0)})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00", target_price=80000.0))
+    it = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
+    assert it["target_status"] == "reached"
+
+
+def test_target_status_near_exact_threshold_boundary(patch_prices):
+    # 정확히 +3%(80000*1.03=82400)는 near(경계 포함), 한 틱 위(82401)는 far — 부등호 회귀 고정.
+    patch_prices({"005930": _valuation(82400, 1.0, 10.0, 1.0)})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00", target_price=80000.0))
+    near = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
+    assert near["target_status"] == "near"
+
+    patch_prices({"005930": _valuation(82401, 1.0, 10.0, 1.0)})
+    far = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
+    assert far["target_status"] == "far"
+
+
 # ── 부분 실패 보존 ───────────────────────────────────────────────────────────
 
 def test_price_failure_preserves_partial(patch_prices):

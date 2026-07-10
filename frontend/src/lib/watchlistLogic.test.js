@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest'
 import {
   SORT_KEYS,
   SORT_LABELS,
-  distanceToTarget,
-  classifyTargetStatus,
   sortItems,
   entrySignalLabel,
   detectTargetAlerts,
@@ -25,57 +23,6 @@ describe('SORT_KEYS — chat/tools.py show_watchlist enum 과 일치(SSOT)', () 
       expect(typeof SORT_LABELS[key]).toBe('string')
       expect(SORT_LABELS[key].length).toBeGreaterThan(0)
     }
-  })
-})
-
-describe('distanceToTarget — (current-target)/target*100', () => {
-  it('현재가가 목표가보다 높으면 양수(초과)', () => {
-    expect(distanceToTarget(110, 100)).toBeCloseTo(10)
-  })
-
-  it('현재가가 목표가보다 낮으면 음수(미달)', () => {
-    expect(distanceToTarget(97, 100)).toBeCloseTo(-3)
-  })
-
-  it('목표가가 없으면(null/0/음수) null — 0 나눗셈·부호역전 방지', () => {
-    expect(distanceToTarget(100, null)).toBeNull()
-    expect(distanceToTarget(100, 0)).toBeNull()
-    expect(distanceToTarget(100, -5)).toBeNull()
-  })
-
-  it('현재가가 결측이면 null(임의 방향 금지)', () => {
-    expect(distanceToTarget(null, 100)).toBeNull()
-    expect(distanceToTarget(undefined, 100)).toBeNull()
-  })
-})
-
-describe('classifyTargetStatus — reached/near/far/none (매수 진입 관점: 목표가=사고싶은 가격)', () => {
-  // 백엔드 watchlist/service.py::_target_status 와 동일 계약(능동 알림 전이의 순수 근거):
-  //   reached: current <= target(목표가 이하로 하락 도달)
-  //   near:    current <= target*(1+thr%)(목표가보다 thr% 이내로 근접, 위에서 내려오는 중)
-  //   far:     그 외(아직 목표가보다 thr% 초과로 높음)
-  const thr = 3.0
-  it('현재가가 목표가 이하로 하락 도달(current<=target) → reached', () => {
-    expect(classifyTargetStatus(100, 100, thr)).toBe('reached')
-    expect(classifyTargetStatus(95, 100, thr)).toBe('reached')
-  })
-
-  it('목표가보다 thr% 이내로 근접(target<current<=target*(1+thr%)) → near', () => {
-    expect(classifyTargetStatus(102, 100, thr)).toBe('near') // +2%
-    expect(classifyTargetStatus(103, 100, thr)).toBe('near') // 정확히 +3% 경계 포함
-  })
-
-  it('목표가보다 thr% 초과로 높으면 → far', () => {
-    expect(classifyTargetStatus(104, 100, thr)).toBe('far') // +4%
-  })
-
-  it('목표가가 없으면 → none', () => {
-    expect(classifyTargetStatus(100, null, thr)).toBe('none')
-    expect(classifyTargetStatus(100, 0, thr)).toBe('none')
-  })
-
-  it('현재가 결측이면 → none(판정 불가, 임의 상태 금지)', () => {
-    expect(classifyTargetStatus(null, 100, thr)).toBe('none')
   })
 })
 

@@ -29,8 +29,8 @@ _FETCH_TIMEOUT = 15
 # ── 목표가 상태 ──────────────────────────────────────────────────────────────
 
 def _distance_to_target(current, target):
-    """(current-target)/target*100 (%). target 없음/0/현재가 결측 → None."""
-    if current is None or target is None or target == 0:
+    """(current-target)/target*100 (%). target 없음/≤0/현재가 결측 → None."""
+    if current is None or target is None or target <= 0:
         return None
     return (current - target) / target * 100.0
 
@@ -38,12 +38,12 @@ def _distance_to_target(current, target):
 def _target_status(current, target, threshold_pct: float) -> str:
     """매수 진입 관점: 목표가는 '사고 싶은 가격'. 현재가가 내려와 목표가에 근접·도달할수록 신호.
 
-    - none:   target 없음(또는 현재가 결측)
+    - none:   target 없음/≤0(또는 현재가 결측) — _distance_to_target·프론트와 동일 가드(IMP-01)
     - reached: current <= target(목표가 이하로 도달)
     - near:    current <= target*(1+threshold%)(목표가보다 threshold% 이내로 근접)
     - far:     그 외(아직 멀다)
     """
-    if target is None or current is None:
+    if target is None or target <= 0 or current is None:
         return "none"
     if current <= target:
         return "reached"
