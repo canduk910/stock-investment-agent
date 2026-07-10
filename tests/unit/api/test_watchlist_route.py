@@ -188,6 +188,12 @@ def test_delete_missing_is_ok(client):
     assert r.json()["ok"] is True
 
 
+def test_delete_invalid_ticker_400(client):
+    # 불량 포맷 ticker 는 store 접근 전에 400(IMP-02 — report 라우트와 대칭 검증).
+    r = client.delete("/api/watchlist/abc_de")
+    assert r.status_code == 400
+
+
 # ── PATCH ────────────────────────────────────────────────────────────────────
 
 def test_patch_updates_target(client):
@@ -203,6 +209,12 @@ def test_patch_updates_target(client):
 def test_patch_missing_item_404(client):
     r = client.patch("/api/watchlist/999999", json={"target_price": 95000.0})
     assert r.status_code == 404
+
+
+def test_patch_invalid_ticker_400(client):
+    # 불량 포맷은 404(미등록)가 아니라 400(불량 코드) — store 접근 전 차단(IMP-02).
+    r = client.patch("/api/watchlist/abc_de", json={"target_price": 95000.0})
+    assert r.status_code == 400
 
 
 def test_patch_negative_target_rejected(client):

@@ -185,3 +185,25 @@ def test_get_history_empty(client, monkeypatch):
     monkeypatch.setattr(report_mod, "_STORE", _SpyStore())
     body = client.get("/api/detail/999999/report/history").json()
     assert body["history"] == []
+
+
+# ── ticker 검증(IMP-02) — 불량 ticker 가 외부호출·저장을 트리거하지 않게 ────────
+
+def test_post_report_rejects_invalid_ticker(client, monkeypatch):
+    # 불량 ticker 는 400 — collect_stock_bundle(KIS)·generate(OpenAI)·store.append 를 트리거하지 않는다.
+    def _boom_gen(*a, **k):
+        raise AssertionError("불량 ticker 인데 generate 가 호출됐다(검증 미차단)")
+
+    monkeypatch.setattr(report_mod, "generate_stock_report", _boom_gen)
+    store = _SpyStore()
+    monkeypatch.setattr(report_mod, "_STORE", store)
+    for bad in ("12345", "1234567", "abc_de"):
+        r = client.post(f"/api/detail/{bad}/report")
+        assert r.status_code == 400, f"{bad}: {r.status_code}"
+    assert store.appended == []  # 오염 저장 0
+
+
+def test_get_history_rejects_invalid_ticker(client, monkeypatch):
+    monkeypatch.setattr(report_mod, "_STORE", _SpyStore())
+    r = client.get("/api/detail/abc_de/report/history")
+    assert r.status_code == 400

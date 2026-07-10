@@ -19,6 +19,7 @@ from fastapi import APIRouter
 
 # api.detail 재사용(순수 조회·엔진 조립 — 사이클 없음). 모듈 네임스페이스에 바인딩해
 # 테스트가 report_mod._build_judgement 등을 monkeypatch 할 수 있게 한다.
+from api.deps import assert_valid_ticker
 from api.detail import (
     _build_judgement,
     _build_kis_client,
@@ -40,6 +41,7 @@ def _now_iso() -> str:
 @router.post("/api/detail/{ticker}/report")
 def create_report(ticker: str) -> dict:
     """리포트 생성·검증·저장·반환(§6.5b). 국면 수집 실패는 regime_at_creation=None(항상 200)."""
+    assert_valid_ticker(ticker)  # 불량 코드가 KIS·OpenAI·저장을 트리거하기 전에 400(IMP-02)
     try:
         judgement = _build_judgement()
     except Exception:
@@ -76,4 +78,5 @@ def create_report(ticker: str) -> dict:
 @router.get("/api/detail/{ticker}/report/history")
 def report_history(ticker: str) -> dict:
     """과거 평가 히스토리(created_at 내림차순 — 최신 우선). 과거 대비 비교 데모."""
+    assert_valid_ticker(ticker)  # IMP-02
     return {"ticker": ticker, "history": _STORE.list_history(ticker)}

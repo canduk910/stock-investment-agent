@@ -16,12 +16,12 @@ partial_failure 에 'regime'). ticker 불량 → 400(저장 안 함). target 음
 from __future__ import annotations
 
 import datetime as dt
-import re
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 # api.detail 재사용(순환 회피 — detail 은 api.main 미참조).
+from api.deps import assert_valid_ticker
 from api.detail import _build_judgement, _build_kis_client
 from collectors.kis import inquire_price
 from collectors.stock_master import load_stock_master, search_stocks
@@ -32,10 +32,8 @@ from watchlist.constants import (
     WATCHLIST_MAX_ITEMS,
     WATCHLIST_STORE_PATH,
 )
-from watchlist.models import TICKER_PATTERN, WatchlistItem
+from watchlist.models import WatchlistItem
 from watchlist.store import JsonFileWatchlistStore
-
-_TICKER_RE = re.compile(TICKER_PATTERN)  # ticker.js SSOT 와 동일 규칙
 
 router = APIRouter()
 
@@ -120,8 +118,7 @@ def get_watchlist(
 @router.post("/api/watchlist")
 def add_watchlist(req: AddRequest) -> dict:
     """관심종목 추가/갱신(upsert, added_at 보존). ticker 불량은 400(명확 안내, 저장 안 함)."""
-    if not _TICKER_RE.match(req.ticker):
-        raise HTTPException(status_code=400, detail=f"invalid ticker: {req.ticker}")
+    assert_valid_ticker(req.ticker)  # IMP-02: 공유 헬퍼(api.deps, report 라우트와 대칭)
     uid = req.user_id or DEFAULT_USER_ID
     store = _get_store()
     existing = store.get(uid, req.ticker)
@@ -155,7 +152,8 @@ def add_watchlist(req: AddRequest) -> dict:
 
 @router.delete("/api/watchlist/{ticker}")
 def delete_watchlist(ticker: str, user_id: str | None = Query(default=None)) -> dict:
-    """관심종목 제거(idempotent — 없어도 ok)."""
+    """관심종목 제거(idempotent — 없어도 ok). 불량 ticker 는 400."""
+    assert_valid_ticker(ticker)  # IMP-02
     uid = user_id or DEFAULT_USER_ID
     _get_store().delete(uid, ticker)
     return {"ok": True}
@@ -163,7 +161,8 @@ def delete_watchlist(ticker: str, user_id: str | None = Query(default=None)) -> 
 
 @router.patch("/api/watchlist/{ticker}")
 def patch_watchlist(ticker: str, req: PatchRequest) -> dict:
-    """목표가 갱신. 미등록 종목은 404. 음수는 Pydantic 이 422."""
+    """목표가 갱신. 불량 ticker 는 400. 미등록 종목은 404. 음수는 Pydantic 이 422."""
+    assert_valid_ticker(ticker)  # IMP-02
     uid = req.user_id or DEFAULT_USER_ID
     updated = _get_store().update_target(uid, ticker, req.target_price)
     if updated is None:

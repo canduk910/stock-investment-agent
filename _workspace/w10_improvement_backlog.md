@@ -6,7 +6,7 @@
 
 ## P0 (즉시 이득 큰 저비용)
 - [x] IMP-01 (correctness, S) target=0 백엔드 target_status↔프론트 classify 정합화 + 죽은 프론트 복제본 제거 — watchlist/service.py:46, frontend/src/lib/watchlistLogic.js:23,35 ✅ 백403→406·프98→89
-- [ ] IMP-02 (safety, S) 리포트·워치리스트 라우트 {ticker} 정규식 검증(400) 공유 헬퍼 — api/report.py, api/watchlist.py, models.py TICKER_PATTERN
+- [x] IMP-02 (safety, S) 리포트·워치리스트 라우트 {ticker} 정규식 검증(400) 공유 헬퍼 — api/deps.py(신규)·report·watchlist ✅ 백406→410
 - [ ] IMP-03 (correctness, S) POST 재추가 upsert reason/stock_name None 덮어쓰기 방지 폴백 + 버튼 멤버십 표시 — api/watchlist.py:142-149, StockReport.jsx
 - [ ] IMP-04 (correctness, S) api.js addWatchlist 주석 계약 오류(422→400) 정정 — frontend/src/api.js:85
 
