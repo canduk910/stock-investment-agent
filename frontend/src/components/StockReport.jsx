@@ -4,6 +4,7 @@ import {
   searchStocks,
   addWatchlist,
   removeWatchlist,
+  fetchWatchlistMembership,
 } from '../api.js'
 import { isValidTicker } from '../lib/ticker.js'
 import { addErrorMessage } from '../lib/watchlistLogic.js'
@@ -26,6 +27,7 @@ export default function StockReport() {
   // upsert 라 멱등하지만, 사용자 피드백을 위해 담김/뺌 상태를 짧게 표시한다.
   const [wlState, setWlState] = useState('idle')
   const [wlErrorMsg, setWlErrorMsg] = useState('') // status별 안내(409 상한 등, addErrorMessage)
+  const [member, setMember] = useState(false) // 현재 종목이 워치리스트에 담겨있는지(버튼 토글, IMP-21)
 
   // 자동완성 상태
   const [suggestions, setSuggestions] = useState([])
@@ -40,11 +42,19 @@ export default function StockReport() {
     setOpen(false)
     setWlState('idle') // 종목이 바뀌면 담김 상태 초기화.
     setWlErrorMsg('')
+    setMember(false)
     try {
       // 섹션 실패(partial_failure)는 정상 200 응답이라 그대로 렌더(전체 에러 화면 금지).
       const b = await fetchStockBundle(ticker)
       setBundle(b)
       setUsingSample(false)
+      // 멤버십 조회(경량, 시세 없음) → 버튼을 '추가'/'제거' 토글로 정확히 표시(IMP-21).
+      try {
+        const m = await fetchWatchlistMembership(ticker)
+        setMember(!!m?.member)
+      } catch {
+        setMember(false) // 멤버십 조회 실패는 조용히(버튼은 '추가'로 폴백)
+      }
     } catch (e) {
       // 네트워크/HTTP 오류 = 백엔드 미연결(dev). 샘플로 폴백하되 명시.
       setBundle({ ...sampleBundle, ticker })
@@ -141,6 +151,7 @@ export default function StockReport() {
     try {
       await addWatchlist({ ticker, stockName: bundle?.basic?.name })
       setWlState('added')
+      setMember(true)
     } catch (e) {
       // status별 안내(409=상한 30 초과 등). addErrorMessage 가 회색 중립 문구를 만든다(주황·빨강 아님).
       setWlErrorMsg(addErrorMessage(e?.status))
@@ -154,6 +165,7 @@ export default function StockReport() {
     try {
       await removeWatchlist(ticker)
       setWlState('removed')
+      setMember(false)
     } catch {
       setWlState('error')
     }
@@ -226,22 +238,26 @@ export default function StockReport() {
       {bundle ? (
         <>
           <div className="report-page__wl-bar">
-            <button
-              type="button"
-              className="wl-add-btn"
-              onClick={onAddWatchlist}
-              disabled={!canWatchlist || wlState === 'saving'}
-            >
-              ☆ 관심종목 추가
-            </button>
-            <button
-              type="button"
-              className="wl-remove-btn"
-              onClick={onRemoveWatchlist}
-              disabled={!canWatchlist || wlState === 'saving'}
-            >
-              관심종목에서 제거
-            </button>
+            {/* 멤버십 인지 토글(IMP-21): 담겨있으면 '제거'만, 아니면 '추가'만 노출. */}
+            {member ? (
+              <button
+                type="button"
+                className="wl-remove-btn"
+                onClick={onRemoveWatchlist}
+                disabled={!canWatchlist || wlState === 'saving'}
+              >
+                관심종목에서 제거
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="wl-add-btn"
+                onClick={onAddWatchlist}
+                disabled={!canWatchlist || wlState === 'saving'}
+              >
+                ☆ 관심종목 추가
+              </button>
+            )}
             {wlState === 'added' ? (
               <span className="wl-add-status wl-add-status--ok">관심종목에 담았습니다.</span>
             ) : wlState === 'removed' ? (

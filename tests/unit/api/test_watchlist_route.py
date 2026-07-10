@@ -208,6 +208,27 @@ def test_delete_invalid_ticker_400(client):
     assert r.status_code == 400
 
 
+# ── GET 멤버십(경량, 시세 enrich 없음 — IMP-21) ──────────────────────────────
+
+def test_get_membership_reflects_store(client):
+    # 담기 전 false → POST 후 true. 시세 조회 없이 store 만 본다(레이트리밋 무압박).
+    assert client.get("/api/watchlist/005930").json()["member"] is False
+    client.post("/api/watchlist", json={"ticker": "005930", "stock_name": "삼성전자"})
+    body = client.get("/api/watchlist/005930").json()
+    assert body["member"] is True
+    assert body["ticker"] == "005930"
+
+
+def test_get_membership_invalid_ticker_400(client):
+    assert client.get("/api/watchlist/abc_de").status_code == 400
+
+
+def test_get_membership_user_id_isolation(client):
+    client.post("/api/watchlist", json={"ticker": "005930", "stock_name": "A", "user_id": "alice"})
+    assert client.get("/api/watchlist/005930").json()["member"] is False  # local
+    assert client.get("/api/watchlist/005930", params={"user_id": "alice"}).json()["member"] is True
+
+
 # ── PATCH ────────────────────────────────────────────────────────────────────
 
 def test_patch_updates_target(client):

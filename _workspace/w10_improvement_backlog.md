@@ -18,7 +18,7 @@
 - [x] IMP-09 (architecture, S) 워치리스트 KIS 병렬 max_workers 고정 상한(6) — watchlist/service.py::_worker_count ✅ 백430→431 (이중 마운트는 요청당 cap으로 바운드)
 - [x] IMP-10 (ux, S) 인라인 편집/삭제 실패 피드백을 view 존재 시에도 표시(dismissible 배너·err.status·404·성공노트) — WatchlistView·api.js·watchlistLogic ✅ 프89→90
 - [x] IMP-11 (ux, S) 목표가 알림 권한요청을 사용자 제스처(CTA 버튼)에 결합 — App.jsx ✅ (Safari/FF 권한 프롬프트 정상화, 배너 폴백 유지)
-- [ ] IMP-21 (ux, M) StockReport 관심종목 버튼 멤버십 인지(담김→'제거'만/아니면'추가'만) + 경량 GET /api/watchlist/{ticker} 멤버십 엔드포인트 — IMP-03에서 분리
+- [x] IMP-21 (ux, M) StockReport 관심종목 버튼 멤버십 인지 토글 + 경량 GET /api/watchlist/{ticker} — api/watchlist·StockReport·api.js ✅ 백431→434
 
 ## P2 (여유 시)
 - [ ] IMP-12 (architecture, S) 리포트 라우트 _get_store() 간접 진입점(watchlist 패턴 통일)

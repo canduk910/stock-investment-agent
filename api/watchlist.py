@@ -154,6 +154,14 @@ def add_watchlist(req: AddRequest) -> dict:
     return {"ok": True, "item": stored.model_dump()}
 
 
+@router.get("/api/watchlist/{ticker}")
+def watchlist_membership(ticker: str, user_id: str | None = Query(default=None)) -> dict:
+    """경량 멤버십 조회(시세 enrich·KIS 호출 없음 — 레이트리밋 무압박, IMP-21). {ticker, member}."""
+    assert_valid_ticker(ticker)
+    uid = user_id or DEFAULT_USER_ID
+    return {"ticker": ticker, "member": _get_store().get(uid, ticker) is not None}
+
+
 @router.delete("/api/watchlist/{ticker}")
 def delete_watchlist(ticker: str, user_id: str | None = Query(default=None)) -> dict:
     """관심종목 제거(idempotent — 없어도 ok). 불량 ticker 는 400."""
