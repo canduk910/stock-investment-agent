@@ -13,7 +13,7 @@
 ## P1 (명확한 개선)
 - [x] IMP-05 (correctness, S) stock_name 라이브 폴백 inquire_price→stock_info.search_stock_info(죽은 코드) — api/watchlist.py ✅ 백411→414
 - [x] IMP-06 (architecture, M) 국면 매핑·빌더 → api/deps.py SSOT(_REGIME_INPUT_MAP·map_engine_input·build_judgement) — main.live_judgement patch 지점 보존 ✅ 백414→425(테스트 변경 0)
-- [ ] IMP-07 (safety, S) 리포트 프롬프트에 국면 결측 표면화 + entry_blocked/과열 서술 게이트 build_prompt와 공유 — chat/report.py:63-87
+- [x] IMP-07 (safety, S) 리포트 프롬프트 국면 결측 표면화 + entry_blocked/밸류초과 게이트 + ENTRY_SIGNAL_RULES 공유(build_prompt) — chat/report.py·build_prompt.py ✅ 백425→430
 - [ ] IMP-08 (product, M) 챗봇 자연어 워치리스트 편집 manage_watchlist(add/remove/set_target) 툴 — chat/tools.py, api/chat.py
 - [ ] IMP-09 (architecture, S) 워치리스트 KIS 병렬 max_workers 고정 상한(5~8) + 팝업/패널 이중 마운트 정리 — watchlist/service.py:109
 - [ ] IMP-10 (ux, S) 인라인 편집/삭제 실패 피드백을 view 존재 시에도 표시 — WatchlistView.jsx:89-106

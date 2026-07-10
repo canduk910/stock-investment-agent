@@ -40,6 +40,15 @@ def _format_drivers(key_drivers: list) -> str:
     )
 
 
+# 진입 신호 서술 규칙 — 챗봇(⑤)과 리포트(chat/report.py)가 **공유하는 SSOT**(IMP-07).
+# regime-agnostic: 국면별 숫자(single_cap/per_max 값)는 여기 없고 ④ REGIME_PARAMS 주입 블록에서만
+# 나온다. 두 LLM 표면의 진입 안전 지침이 갈리지 않게 한 곳에서 정의한다.
+ENTRY_SIGNAL_RULES = """- 관심종목의 신규 진입은 국면 실행 파라미터(single_cap·per_max·pbr_max) 기준으로만 서술한다(새 숫자·기준을 지어내지 마라).
+- 종목당 편입상한(single_cap)이 single_cap>0 이고, 그리고(AND) 해당 종목이 국면 PER 상한(per_max)·PBR 상한(pbr_max) 이내일 때에만 "검토 가능"으로 설명한다.
+- single_cap=0 인 국면(신규 진입 억제)에서는 신규 진입을 제안하지 않는다 — "지금은 신규 진입을 권하지 않는 국면"으로 안내하고, 관심종목은 관찰 대상으로만 서술한다.
+- "검토 가능"은 매수 권유가 아니라 게이트 통과 여부의 사실 서술이다. "사라/지금 담아라" 같은 명령형·확정형 표현은 쓰지 않는다."""
+
+
 def _format_params(regime: str) -> str:
     """REGIME_PARAMS[regime] → 인용 근거 문자열(None 은 '해당 없음')."""
     params = REGIME_PARAMS.get(regime, {})
@@ -105,13 +114,7 @@ def build_prompt(judgement: dict) -> str:
 예: "이 종목 PER 18은 현재 국면 상한을 넘는다" 처럼 위 값을 근거로 인용해 설명하라.
 
 ⑤ [관심종목 진입 신호 — 서술 규칙]
-- 관심종목의 신규 진입은 위 ④ 값 기준으로만 서술한다(새 숫자·기준을 지어내지 마라).
-- 현재 국면의 종목당 편입상한(single_cap)이 single_cap>0 이고, 그리고(AND) 해당 종목이
-  국면 PER 상한(per_max)·PBR 상한(pbr_max) 이내일 때에만 "검토 가능"으로 설명한다.
-- single_cap=0 인 국면(신규 진입 억제)에서는 신규 진입을 제안하지 않는다 — "지금은 신규
-  진입을 권하지 않는 국면"으로 안내하고, 관심종목은 관찰 대상으로만 서술한다.
-- "검토 가능"은 매수 권유가 아니라 게이트 통과 여부의 사실 서술이다. "사라/지금 담아라"
-  같은 명령형·확정형 표현은 쓰지 않는다.
+{ENTRY_SIGNAL_RULES}
 
 ⑥ [설명 지침 — 안전]
 - 컨텍스트(위 판정·기준표·조회 데이터) 밖의 숫자를 만들지 마라.

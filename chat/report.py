@@ -22,7 +22,7 @@ import json
 
 from pydantic import ValidationError
 
-from chat.build_prompt import build_criteria_text
+from chat.build_prompt import ENTRY_SIGNAL_RULES, build_criteria_text
 from chat.report_schema import StockReport
 from chat.tools import CHAT_MODEL
 
@@ -40,6 +40,49 @@ def _make_client():
     return OpenAI(api_key=openai_api_key())
 
 
+def _regime_block(judgement: dict, gate: dict) -> str:
+    """국면 컨텍스트 — judgement 결측이면 '국면 데이터 없음'을 명시(근거 없는 국면 서술 유인 차단).
+
+    챗봇 build_prompt 의 missing_line 정신과 동일: 없는 국면·상한 숫자를 지어내지 않게 못박고,
+    국면정합성은 '판단 보류'로 유도한다(폴백이 검증 실패 때만 걸리는 구멍을 프롬프트에서 선제 차단).
+    """
+    regime = judgement.get("regime")
+    if not regime:
+        return (
+            "[국면 데이터]\n"
+            "- 현재 국면 데이터를 수집하지 못했다(FRED 등 실패) — 국면·현금비중·상한 숫자를 지어내지 마라.\n"
+            "- 국면정합성 필드에는 '현재 국면 데이터 없음 — 국면 기준 대비 판단은 보류'라고 서술하라."
+        )
+    cash = judgement.get("recommended_cash_ratio", "")
+    missing = judgement.get("missing_indicators") or []
+    missing_line = (
+        f"- 수집 실패로 제외된 지표: {', '.join(missing)} — 언급 시 '데이터 없음'으로 다뤄라.\n"
+        if missing
+        else ""
+    )
+    return (
+        "[국면 게이트]\n"
+        f"- 현재 국면: {regime} / 권장 현금비중: {cash}%\n"
+        f"{missing_line}"
+        f"{json.dumps(gate, ensure_ascii=False, indent=2)}"
+    )
+
+
+def _entry_emphasis(gate: dict) -> str:
+    """게이트 값 파생 강조(하드코딩 없음) — 진입차단·밸류 초과를 종합의견에 반영시킨다."""
+    if gate.get("entry_blocked"):
+        return (
+            "- 현재는 신규 진입 억제(single_cap=0) 국면이다 — 종합의견을 낙관(긍정적)으로 몰지"
+            " 말고, 이 종목은 관찰 대상으로만 서술하라."
+        )
+    if gate.get("per_over") or gate.get("pbr_over"):
+        return (
+            "- 이 종목은 현재 국면의 밸류에이션 상한(PER/PBR)을 초과한다 — 국면정합성에 상한"
+            " 초과 사실을 명시하고 종합의견에 반영하라."
+        )
+    return "- 국면 게이트상 신규 진입이 차단되지 않았고 밸류에이션도 상한 이내다(사실 서술만, 매수 권유 아님)."
+
+
 def _build_report_prompt(bundle: dict, judgement: dict) -> str:
     """리포트 생성용 시스템 프롬프트 — 정량요약·국면게이트를 근거로 '설명'만 시킨다.
 
@@ -51,8 +94,6 @@ def _build_report_prompt(bundle: dict, judgement: dict) -> str:
     name = basic.get("name") or basic.get("stock_name") or ticker
     summary = bundle.get("summary") or {}
     gate = bundle.get("regime_gate") or {}
-    regime = judgement.get("regime", "")
-    cash = judgement.get("recommended_cash_ratio", "")
 
     schema_hint = (
         '{"종합의견": "긍정적|중립|신중 중 하나", "요약": "문자열", '
@@ -73,9 +114,11 @@ def _build_report_prompt(bundle: dict, judgement: dict) -> str:
 [정량 분석 결과 — 이 값만 근거로 설명]
 {json.dumps(summary, ensure_ascii=False, indent=2)}
 
-[국면 게이트]
-- 현재 국면: {regime} / 권장 현금비중: {cash}%
-{json.dumps(gate, ensure_ascii=False, indent=2)}
+{_regime_block(judgement, gate)}
+
+[진입 신호 — 서술 규칙(챗봇과 동일 SSOT)]
+{_entry_emphasis(gate)}
+{ENTRY_SIGNAL_RULES}
 
 [생성 규칙 — 안전]
 - 반드시 아래 JSON 스키마 형태로만 답하라(추가 텍스트·마크다운 금지):
@@ -83,7 +126,7 @@ def _build_report_prompt(bundle: dict, judgement: dict) -> str:
 - 종합의견은 "긍정적"·"중립"·"신중" 중 하나만. "매수/매도" 같은 명령형 라벨은 쓰지 마라.
 - 리스크요인은 최소 1개 이상 반드시 포함하라(장밋빛 리포트 금지).
 - 위 컨텍스트 밖의 숫자를 지어내지 마라. "반드시 오른다" 같은 단정 표현 금지.
-- 국면정합성에는 현재 국면 PER/PBR 상한 대비 이 종목의 위치를 서술하라.
+- 국면정합성에는 위 국면 게이트/데이터에 근거해 서술하라(국면 데이터가 없으면 '판단 보류').
 - 면책고지에는 "이 설명은 참고용이며 면허 있는 투자자문이 아니다"를 반드시 담아라."""
 
 
