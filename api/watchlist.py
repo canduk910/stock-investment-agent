@@ -131,7 +131,8 @@ def add_watchlist(req: AddRequest) -> dict:
             detail=f"watchlist full (max {WATCHLIST_MAX_ITEMS} items)",
         )
 
-    stock_name = req.stock_name
+    # stock_name: 미제공 시 기존값 보존(재-resolve·불필요 KIS 호출 회피) → 없으면 라이브 해석.
+    stock_name = req.stock_name or (existing.stock_name if existing else None)
     if not stock_name:
         client = _build_kis_client()
         stock_name = _resolve_stock_name(client, req.ticker)
@@ -140,7 +141,8 @@ def add_watchlist(req: AddRequest) -> dict:
         user_id=uid,
         ticker=req.ticker,
         stock_name=stock_name,
-        reason=req.reason,
+        # 미제공 필드는 기존값 보존(재추가로 사유·목표가 소실 방지, IMP-03; target_price 와 동일 패턴).
+        reason=req.reason if req.reason is not None else (existing.reason if existing else None),
         # upsert 시 added_at 은 store 가 최초값으로 보존 → 여기선 신규 시각을 준다.
         target_price=req.target_price if req.target_price is not None
         else (existing.target_price if existing else None),

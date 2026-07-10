@@ -172,6 +172,20 @@ def test_post_upsert_preserves_added_at(client):
     assert len(client.store.list_items("local")) == 1  # 중복 아님
 
 
+def test_post_upsert_preserves_reason_and_name_when_omitted(client):
+    # 최초에 사유·이름·목표가 저장 → 재추가 시 미제공 필드는 기존값 보존(None 덮어쓰기 금지, IMP-03).
+    client.post("/api/watchlist", json={
+        "ticker": "005930", "stock_name": "삼성전자", "reason": "저평가", "target_price": 90000.0,
+    })
+    # 다른 화면의 '관심종목 추가' 버튼이 reason 미전송 + ticker 만 재전송하는 시나리오.
+    r = client.post("/api/watchlist", json={"ticker": "005930"})
+    assert r.status_code == 200
+    item = r.json()["item"]
+    assert item["reason"] == "저평가"        # 보존(기존엔 None 으로 소실됐음)
+    assert item["stock_name"] == "삼성전자"   # 보존(재-resolve 로 덮지 않음 — stub '종목005930' 아님)
+    assert item["target_price"] == 90000.0   # 기존 target_price 폴백(회귀 확인)
+
+
 # ── DELETE ───────────────────────────────────────────────────────────────────
 
 def test_delete_removes(client):

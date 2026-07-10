@@ -7,7 +7,7 @@
 ## P0 (즉시 이득 큰 저비용)
 - [x] IMP-01 (correctness, S) target=0 백엔드 target_status↔프론트 classify 정합화 + 죽은 프론트 복제본 제거 — watchlist/service.py:46, frontend/src/lib/watchlistLogic.js:23,35 ✅ 백403→406·프98→89
 - [x] IMP-02 (safety, S) 리포트·워치리스트 라우트 {ticker} 정규식 검증(400) 공유 헬퍼 — api/deps.py(신규)·report·watchlist ✅ 백406→410
-- [ ] IMP-03 (correctness, S) POST 재추가 upsert reason/stock_name None 덮어쓰기 방지 폴백 + 버튼 멤버십 표시 — api/watchlist.py:142-149, StockReport.jsx
+- [x] IMP-03 (correctness, S) POST 재추가 upsert reason/stock_name None 덮어쓰기 방지 폴백 — api/watchlist.py ✅ 백410→411 (버튼 멤버십 UX는 P1 후속 IMP-21로 분리)
 - [ ] IMP-04 (correctness, S) api.js addWatchlist 주석 계약 오류(422→400) 정정 — frontend/src/api.js:85
 
 ## P1 (명확한 개선)
@@ -18,6 +18,7 @@
 - [ ] IMP-09 (architecture, S) 워치리스트 KIS 병렬 max_workers 고정 상한(5~8) + 팝업/패널 이중 마운트 정리 — watchlist/service.py:109
 - [ ] IMP-10 (ux, S) 인라인 편집/삭제 실패 피드백을 view 존재 시에도 표시 — WatchlistView.jsx:89-106
 - [ ] IMP-11 (ux, S) 목표가 알림 권한요청을 사용자 제스처(CTA)에 결합 — App.jsx:45
+- [ ] IMP-21 (ux, M) StockReport 관심종목 버튼 멤버십 인지(담김→'제거'만/아니면'추가'만) + 경량 GET /api/watchlist/{ticker} 멤버십 엔드포인트 — IMP-03에서 분리
 
 ## P2 (여유 시)
 - [ ] IMP-12 (architecture, S) 리포트 라우트 _get_store() 간접 진입점(watchlist 패턴 통일)
