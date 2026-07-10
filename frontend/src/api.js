@@ -82,7 +82,8 @@ export async function fetchWatchlist(sortBy) {
 }
 
 // POST /api/watchlist {ticker, stock_name?, reason?, target_price?} → {ok, item}. upsert(중복=갱신, added_at 보존).
-// stock_name 없으면 백엔드가 KIS 마스터/시세로 해석. ticker 불량은 백엔드 Pydantic 이 422 로 거른다.
+// stock_name 없으면 백엔드가 KIS 마스터/시세로 해석. 상태코드: 불량 ticker=400(api.deps.assert_valid_ticker),
+// 상한 초과=409, target 음수=422(Pydantic ge=0) — err.status 로 실어 addErrorMessage 가 분기 안내.
 export async function addWatchlist({ ticker, stockName, reason, targetPrice } = {}) {
   const body = { ticker }
   if (stockName != null) body.stock_name = stockName

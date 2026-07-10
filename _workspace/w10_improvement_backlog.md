@@ -8,7 +8,7 @@
 - [x] IMP-01 (correctness, S) target=0 백엔드 target_status↔프론트 classify 정합화 + 죽은 프론트 복제본 제거 — watchlist/service.py:46, frontend/src/lib/watchlistLogic.js:23,35 ✅ 백403→406·프98→89
 - [x] IMP-02 (safety, S) 리포트·워치리스트 라우트 {ticker} 정규식 검증(400) 공유 헬퍼 — api/deps.py(신규)·report·watchlist ✅ 백406→410
 - [x] IMP-03 (correctness, S) POST 재추가 upsert reason/stock_name None 덮어쓰기 방지 폴백 — api/watchlist.py ✅ 백410→411 (버튼 멤버십 UX는 P1 후속 IMP-21로 분리)
-- [ ] IMP-04 (correctness, S) api.js addWatchlist 주석 계약 오류(422→400) 정정 — frontend/src/api.js:85
+- [x] IMP-04 (correctness, S) api.js addWatchlist 주석 계약 오류(422→400) 정정 — frontend/src/api.js:85 ✅
 
 ## P1 (명확한 개선)
 - [ ] IMP-05 (correctness, S) stock_name 라이브 폴백 inquire_price→stock_info.search_stock_info(죽은 코드) — api/watchlist.py:85-92
