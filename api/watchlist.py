@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 # api.detail 재사용(순환 회피 — detail 은 api.main 미참조).
 from api.deps import assert_valid_ticker
 from api.detail import _build_judgement, _build_kis_client
-from collectors.kis import inquire_price
+from collectors.kis import stock_info
 from collectors.stock_master import load_stock_master, search_stocks
 from watchlist import service
 from watchlist.constants import (
@@ -69,7 +69,7 @@ class PatchRequest(BaseModel):
 # ── stock_name 해석 ──────────────────────────────────────────────────────────
 
 def _resolve_stock_name(client, ticker: str) -> str:
-    """stock_name 미제공 시 이름 해석: 마스터 exact match 우선 → inquire_price 폴백 → ticker.
+    """stock_name 미제공 시 이름 해석: 마스터 exact match 우선 → KIS 기본조회 폴백 → ticker.
 
     실패해도 예외를 던지지 않는다(추가는 성공시킨다 — 이름은 부가 정보).
     """
@@ -81,8 +81,10 @@ def _resolve_stock_name(client, ticker: str) -> str:
     except Exception:
         pass
     try:
-        val = inquire_price.inquire_price(client, ticker)
-        name = (val or {}).get("name")  # inquire_price 는 이름을 주지 않을 수 있음
+        # 이름(prdt_name)을 주는 어댑터는 search_stock_info(CTPF1002R)다 — inquire_price 반환엔
+        # name 키가 없어 폴백이 무의미했다(IMP-05). 다른 TR/캐시경로라 try/except 필수.
+        info = stock_info.search_stock_info(client, ticker)
+        name = (info or {}).get("name")
         if name:
             return name
     except Exception:

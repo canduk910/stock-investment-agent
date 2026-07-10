@@ -246,3 +246,42 @@ def test_user_id_isolation_via_query(client):
     # alice 로 조회하면 보임.
     r = client.get("/api/watchlist", params={"user_id": "alice"})
     assert [i["ticker"] for i in r.json()["items"]] == ["005930"]
+
+
+# ── _resolve_stock_name 3분기(IMP-05: 라이브 폴백은 name 을 주는 stock_info 사용) ──
+
+class _FakeClient:
+    """KisClient.get(tr_id, path, params) 자리표시자 — body 반환 또는 예외."""
+
+    def __init__(self, body=None, exc=None):
+        self._body, self._exc = body, exc
+
+    def get(self, tr_id, path, params, extra_headers=None):
+        if self._exc:
+            raise self._exc
+        return self._body
+
+
+def test_resolve_stock_name_master_hit(monkeypatch):
+    # 마스터 exact match 가 있으면 그 이름(KIS 호출 없음).
+    monkeypatch.setattr(wl, "load_stock_master", lambda: {"_": 1})
+    monkeypatch.setattr(
+        wl, "search_stocks", lambda master, q, limit=5: [{"ticker": "005930", "name": "삼성전자"}]
+    )
+    assert wl._resolve_stock_name(object(), "005930") == "삼성전자"
+
+
+def test_resolve_stock_name_live_uses_stock_info(monkeypatch):
+    # 마스터 미스 → KIS 기본조회(search_stock_info, prdt_name)가 이름을 준다.
+    # 기존 inquire_price 폴백은 name 필드가 없어 항상 ticker 로 떨어졌다(IMP-05 죽은 코드 회귀).
+    monkeypatch.setattr(wl, "load_stock_master", lambda: {})
+    monkeypatch.setattr(wl, "search_stocks", lambda master, q, limit=5: [])
+    body = {"output": {"prdt_name": "카카오"}}
+    assert wl._resolve_stock_name(_FakeClient(body=body), "035720") == "카카오"
+
+
+def test_resolve_stock_name_falls_back_to_ticker(monkeypatch):
+    # 마스터 미스 + KIS 조회 실패 → 예외 삼키고 ticker 자체(추가는 성공, 이름은 부가정보).
+    monkeypatch.setattr(wl, "load_stock_master", lambda: {})
+    monkeypatch.setattr(wl, "search_stocks", lambda master, q, limit=5: [])
+    assert wl._resolve_stock_name(_FakeClient(exc=RuntimeError("KIS down")), "035720") == "035720"

@@ -11,7 +11,7 @@
 - [x] IMP-04 (correctness, S) api.js addWatchlist 주석 계약 오류(422→400) 정정 — frontend/src/api.js:85 ✅
 
 ## P1 (명확한 개선)
-- [ ] IMP-05 (correctness, S) stock_name 라이브 폴백 inquire_price→stock_info.search_stock_info(죽은 코드) — api/watchlist.py:85-92
+- [x] IMP-05 (correctness, S) stock_name 라이브 폴백 inquire_price→stock_info.search_stock_info(죽은 코드) — api/watchlist.py ✅ 백411→414
 - [ ] IMP-06 (architecture, M) 국면 매핑·빌더(_REGIME_INPUT_MAP·live_judgement·_build_judgement) → api/deps.py SSOT 추출
 - [ ] IMP-07 (safety, S) 리포트 프롬프트에 국면 결측 표면화 + entry_blocked/과열 서술 게이트 build_prompt와 공유 — chat/report.py:63-87
 - [ ] IMP-08 (product, M) 챗봇 자연어 워치리스트 편집 manage_watchlist(add/remove/set_target) 툴 — chat/tools.py, api/chat.py
