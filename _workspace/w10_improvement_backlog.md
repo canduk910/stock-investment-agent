@@ -21,7 +21,7 @@
 - [x] IMP-21 (ux, M) StockReport 관심종목 버튼 멤버십 인지 토글 + 경량 GET /api/watchlist/{ticker} — api/watchlist·StockReport·api.js ✅ 백431→434
 
 ## P2 (여유 시)
-- [ ] IMP-12 (architecture, S) 리포트 라우트 _get_store() 간접 진입점(watchlist 패턴 통일)
+- [x] IMP-12 (architecture, S) 리포트 라우트 _get_store() 간접 진입점(watchlist 패턴 통일) — api/report.py ✅ 435(무변경)
 - [ ] IMP-13 (architecture, S) JSON-파일 Store 원자적 write 공통 헬퍼 AtomicJsonFile
 - [ ] IMP-14 (safety, S) 면책고지·요약·리스크 min_length 강화 + 과대 주석 정정
 - [ ] IMP-15 (safety, S) AiReportPanel 자족 코드고정 면책 이중화 + regime_block entry_blocked 파생

@@ -34,6 +34,11 @@ router = APIRouter()
 _STORE = JsonFileReportStore()
 
 
+def _get_store():
+    """store 접근 진입점 — watchlist.py 와 동일 규약(IMP-12). 라우트는 항상 이 함수 경유."""
+    return _STORE
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -57,7 +62,7 @@ def create_report(ticker: str) -> dict:
 
     # 검증 통과분만 히스토리에 저장(폴백은 저장하지 않음 — 부분실패 산출을 히스토리에 남기지 않음).
     if not result.get("validation_failed") and result.get("report") is not None:
-        _STORE.append(
+        _get_store().append(
             ticker,
             result["report"],
             regime_at_creation=regime_at_creation,
@@ -79,4 +84,4 @@ def create_report(ticker: str) -> dict:
 def report_history(ticker: str) -> dict:
     """과거 평가 히스토리(created_at 내림차순 — 최신 우선). 과거 대비 비교 데모."""
     assert_valid_ticker(ticker)  # IMP-02
-    return {"ticker": ticker, "history": _STORE.list_history(ticker)}
+    return {"ticker": ticker, "history": _get_store().list_history(ticker)}
