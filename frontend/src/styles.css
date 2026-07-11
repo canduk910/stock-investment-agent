@@ -1796,17 +1796,22 @@ body {
 .app {
   max-width: 1360px;
   margin: 0 auto;
-  padding: 20px 24px 32px;
+  padding: 0 24px 32px; /* 상단 여백은 sticky 헤더가 자체 padding 으로 확보 */
 }
 
-/* 상단 톱바 — 디케이 브랜드(모노그램+워드마크) + 상태 칩 + 목표가 알림 CTA. */
+/* 상단 톱바 — 디케이 브랜드(모노그램+워드마크) + 상태 칩 + 목표가 알림 CTA.
+   틀 고정(sticky): 스크롤해도 헤더가 상단에 머문다(콘텐츠는 헤더 배경 아래로 지나감). */
 .app__topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--c-bg);
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px 16px;
-  padding-bottom: 16px;
+  padding: 16px 0;
   border-bottom: 1px solid var(--c-border);
 }
 
@@ -1946,11 +1951,11 @@ body {
 .app__right {
   min-width: 0; /* grid 자식 오버플로 방지(긴 텍스트·표) */
 }
-/* 좌우 컬럼을 뷰포트 높이에 맞춰 각자 내부 스크롤 — 페이지 전체 스크롤 대신 패널별 스크롤. */
+/* 좌우 컬럼 — 하단 콘텐츠 높이 80vh(뷰포트의 ~80%), 각자 내부 스크롤. 채팅은 고정 헤더 아래에 sticky. */
 .app__left {
   position: sticky;
-  top: 20px;
-  height: calc(100vh - 40px);
+  top: 88px; /* 고정 헤더 높이(≈67px) 아래에 붙도록 */
+  height: 80vh;
 }
 @media (max-width: 1024px) {
   .app__main {
@@ -1975,7 +1980,7 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 40px);
+  max-height: 80vh; /* 하단 콘텐츠 높이 ~80% (내부 스크롤) */
 }
 
 /* 툴바 — 세그먼트 탭(관심종목/시장 국면/내 잔고) + 우측 인라인 종목검색. */
