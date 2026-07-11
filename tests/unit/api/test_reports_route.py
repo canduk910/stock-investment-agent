@@ -44,3 +44,57 @@ def test_status(monkeypatch):
     )
     r = TestClient(_app()).get("/api/reports/status")
     assert r.status_code == 200 and r.json()["chunks"] == 5
+
+
+# ── 네이버 애널리스트 리포트 수집·조회 ──
+def test_fetch_returns_counts(monkeypatch):
+    calls = {}
+
+    def _fake(limit):
+        calls["limit"] = limit
+        return {"fetched": 3, "new": 2, "skipped": 1, "failed": 0}
+
+    monkeypatch.setattr(reports.analyst_service, "fetch_and_summarize", _fake)
+    r = TestClient(_app()).post("/api/reports/fetch?limit=5")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["new"] == 2 and body["fetched"] == 3
+    assert calls["limit"] == 5
+
+
+def test_fetch_clamps_limit(monkeypatch):
+    seen = {}
+
+    def _fake(limit):
+        seen["limit"] = limit
+        return {"fetched": 0, "new": 0, "skipped": 0, "failed": 0}
+
+    monkeypatch.setattr(reports.analyst_service, "fetch_and_summarize", _fake)
+    TestClient(_app()).post("/api/reports/fetch?limit=999")
+    assert seen["limit"] == 50  # 상한 클램프
+
+
+def test_fetch_graceful_on_error(monkeypatch):
+    def _boom(limit):
+        raise Exception("naver down")
+
+    monkeypatch.setattr(reports.analyst_service, "fetch_and_summarize", _boom)
+    r = TestClient(_app()).post("/api/reports/fetch")
+    assert r.status_code == 200 and "error" in r.json()  # graceful
+
+
+def test_analyst_reports_lists_for_ticker(monkeypatch):
+    class _Store:
+        def list_reports(self, ticker):
+            return [{"report_id": "1", "broker": "한화투자증권", "summary": {}}]
+
+    monkeypatch.setattr(reports, "default_store", lambda: _Store())
+    r = TestClient(_app()).get("/api/detail/006360/analyst-reports")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ticker"] == "006360" and len(body["reports"]) == 1
+
+
+def test_analyst_reports_rejects_bad_ticker():
+    r = TestClient(_app()).get("/api/detail/notaticker/analyst-reports")
+    assert r.status_code == 400  # assert_valid_ticker

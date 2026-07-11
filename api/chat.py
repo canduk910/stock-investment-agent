@@ -40,6 +40,12 @@ class ChatRequest(BaseModel):
     message: str
 
 
+class ReportContextRequest(BaseModel):
+    session_id: str
+    ticker: str | None = None
+    report_id: str | None = None  # None → 컨텍스트 해제(상담 종료)
+
+
 @router.post("/api/chat")
 def post_chat(body: ChatRequest) -> dict:
     """{session_id, message} → {text, popups}. 서버가 session_id 별 히스토리 보관."""
@@ -48,6 +54,38 @@ def post_chat(body: ChatRequest) -> dict:
     session = get_session(body.session_id)
     judgement, _indicators_used, _partial_failure = live_judgement()
     return chat(body.message, judgement, session)
+
+
+@router.post("/api/chat/report-context")
+def post_report_context(body: ReportContextRequest) -> dict:
+    """저장된 애널리스트 리포트 요약을 세션 상담 컨텍스트로 핀 고정(또는 해제).
+
+    body {session_id, ticker, report_id}. report_id/ticker 가 없으면 컨텍스트 해제.
+    **요약 본문은 프론트가 보내지 않는다** — 서버가 store 에서 조회한 entry 로 컨텍스트를
+    만든다(환각·조작 차단). 없는 리포트면 404. 데이터 자체는 반환하지 않고 세팅 결과만.
+    """
+    from fastapi import HTTPException
+
+    from chat.analyst_report import format_report_context
+    from chat.analyst_store import default_store
+    from api.deps import assert_valid_ticker
+
+    session = get_session(body.session_id)
+
+    if not body.ticker or not body.report_id:
+        session.clear_report_context()  # 상담 종료(해제)
+        return {"ok": True, "set": False}
+
+    assert_valid_ticker(body.ticker)
+    entry = default_store().get(body.ticker, body.report_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="report not found")
+    session.set_report_context(format_report_context(entry))
+    return {
+        "ok": True,
+        "set": True,
+        "broker": (entry.get("summary") or {}).get("증권사") or entry.get("broker", ""),
+    }
 
 
 def _sse(body: ChatRequest):

@@ -48,6 +48,44 @@ def test_reset_clears_history():
     assert s.history() == []
 
 
+# ── 핀 리포트 컨텍스트(상담 연계, Phase D) ────────────────────────────────────
+
+
+def test_report_context_default_none():
+    assert Session().report_context is None
+
+
+def test_set_and_clear_report_context():
+    s = Session()
+    s.set_report_context("리포트 요약 텍스트")
+    assert s.report_context == "리포트 요약 텍스트"
+    s.clear_report_context()
+    assert s.report_context is None
+
+
+def test_set_report_context_empty_clears():
+    s = Session()
+    s.set_report_context("x")
+    s.set_report_context("")  # 빈 문자열 → 해제
+    assert s.report_context is None
+
+
+def test_report_context_survives_sliding_window():
+    # 핀 컨텍스트는 슬라이딩 윈도우와 별개 — 여러 턴 뒤에도 유지된다.
+    s = Session(window=2)
+    s.set_report_context("리포트")
+    for i in range(5):
+        s.append(f"q{i}", f"a{i}")
+    assert s.report_context == "리포트"
+
+
+def test_reset_clears_report_context():
+    s = Session()
+    s.set_report_context("리포트")
+    s.reset()
+    assert s.report_context is None
+
+
 # ── 서버 세션 스토어 (SESSIONS dict) ─────────────────────────────────────────
 
 

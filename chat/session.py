@@ -12,11 +12,14 @@ from __future__ import annotations
 
 
 class Session:
-    """슬라이딩 윈도우 대화 히스토리(user/assistant 만)."""
+    """슬라이딩 윈도우 대화 히스토리(user/assistant 만) + 핀 리포트 컨텍스트."""
 
     def __init__(self, window: int = 8) -> None:
         self._msgs: list[dict] = []
         self.window = window
+        # 애널리스트 리포트 요약을 '상담 컨텍스트'로 핀 고정 — 슬라이딩 윈도우와 별개로 유지돼
+        # 후속 여러 턴에서 참조된다(사용자가 리포트를 근거로 이어서 자문). None 이면 미설정.
+        self.report_context: str | None = None
 
     def history(self) -> list[dict]:
         """최근 window 개 메시지만 반환(시스템·tool 미포함)."""
@@ -28,8 +31,16 @@ class Session:
             {"role": "assistant", "content": assistant},
         ]
 
+    def set_report_context(self, text: str | None) -> None:
+        """리포트 요약 텍스트를 핀 컨텍스트로 설정(None/빈문자열이면 해제)."""
+        self.report_context = text or None
+
+    def clear_report_context(self) -> None:
+        self.report_context = None
+
     def reset(self) -> None:
         self._msgs = []
+        self.report_context = None
 
 
 # 서버 세션 스토어(인메모리) — session_id → Session.

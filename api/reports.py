@@ -1,13 +1,18 @@
-"""증권사 리포트 PDF RAG 라우터 — 폴더 인덱스 재구축·상태(챗 search_report 의 관리 API).
+"""증권사 리포트 PDF RAG 라우터 + 네이버 애널리스트 리포트 수집·종목별 조회.
 
 POST /api/reports/reindex : reports 폴더 재스캔 → 청킹 → 임베딩 → 인덱스 재구축·영속화.
 GET  /api/reports/status  : 현재 인덱스 요약(리포트 수·청크 수·파일명).
-색인/조회 전용(매매 없음). 임베딩은 요청 시 라이브 호출, 인덱스는 정적 리포트라 .cache 영속.
+POST /api/reports/fetch   : 네이버 최신 리포트 수집→다운로드→요약→store(병렬, graceful).
+GET  /api/detail/{ticker}/analyst-reports : 그 종목의 저장된 애널리스트 요약 리스트.
+색인/조회 전용(매매 없음). 요약은 '리포트 내용 인용'(에이전트 판정 아님)·면책. 인덱스/요약은 정적 문서라 .cache 영속.
 """
 from __future__ import annotations
 
 from fastapi import APIRouter
 
+from api.deps import assert_valid_ticker
+from chat import analyst_service
+from chat.analyst_store import default_store
 from rag import store
 
 router = APIRouter()
@@ -25,3 +30,20 @@ def reindex_reports() -> dict:
 @router.get("/api/reports/status")
 def reports_status() -> dict:
     return store.status()
+
+
+@router.post("/api/reports/fetch")
+def fetch_naver_reports(limit: int = 20) -> dict:
+    """네이버 최신 리포트 수집→요약→저장. 항상 200 + 카운트({fetched,new,skipped,failed})."""
+    limit = max(1, min(limit, 50))  # 예의 크롤링 상한
+    try:
+        return analyst_service.fetch_and_summarize(limit=limit)
+    except Exception as e:  # 수집/요약 실패 — 크래시 대신 안내
+        return {"error": str(e)[:200], "fetched": 0, "new": 0, "skipped": 0, "failed": 0}
+
+
+@router.get("/api/detail/{ticker}/analyst-reports")
+def analyst_reports(ticker: str) -> dict:
+    """종목별 저장된 애널리스트 리포트 요약 리스트(최신순). 없으면 reports=[]."""
+    assert_valid_ticker(ticker)  # 불량 코드 400(공용 SSOT)
+    return {"ticker": ticker, "reports": default_store().list_reports(ticker)}

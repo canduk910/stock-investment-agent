@@ -40,6 +40,24 @@ _FALLBACK_MESSAGE = (
 )
 
 
+# 리포트 상담 컨텍스트 주입 블록(핀 고정). 출처 귀속·판정 금지·면책 유지를 재강조한다 —
+# 필수 6블록·가드레일은 build_prompt 가 이미 강제하고, 이 블록은 '리포트 근거 자문'만 얹는다.
+_REPORT_CONTEXT_HEADER = (
+    "\n\n[사용자가 상담 컨텍스트로 불러온 애널리스트 리포트 요약]\n"
+    "아래는 해당 증권사 애널리스트 리포트의 요약이다. 사용자의 후속 질문에 이 내용을 근거로 "
+    "답하되, 반드시 '리포트에 따르면'처럼 **출처를 귀속**해 인용하고, 네 자신의 매수/매도 "
+    "단정 판정은 하지 말며(리포트의 의견은 인용일 뿐), 면책 고지를 유지하라.\n"
+)
+
+
+def _build_system_prompt(judgement: dict, session: Session) -> str:
+    """필수 블록(build_prompt) + 세션 핀 리포트 컨텍스트(있으면). 단일 출처(양 경로 공유)."""
+    prompt = build_prompt(judgement)
+    if getattr(session, "report_context", None):
+        prompt += _REPORT_CONTEXT_HEADER + session.report_context
+    return prompt
+
+
 def _make_client():
     """기본 OpenAI 클라이언트(키는 환경변수에서만). 테스트는 client 를 주입한다."""
     from openai import OpenAI
@@ -71,7 +89,7 @@ def chat(user_query: str, judgement: dict, session: Session, *, client=None) -> 
     if client is None:
         client = _make_client()
 
-    messages = [{"role": "system", "content": build_prompt(judgement)}]
+    messages = [{"role": "system", "content": _build_system_prompt(judgement, session)}]
     messages += session.history()
     messages.append({"role": "user", "content": user_query})
 
@@ -185,7 +203,7 @@ def chat_stream(user_query: str, judgement: dict, session: Session, *, client=No
     if client is None:
         client = _make_client()
 
-    messages = [{"role": "system", "content": build_prompt(judgement)}]
+    messages = [{"role": "system", "content": _build_system_prompt(judgement, session)}]
     messages += session.history()
     messages.append({"role": "user", "content": user_query})
 
