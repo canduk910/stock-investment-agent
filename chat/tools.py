@@ -1,7 +1,7 @@
 """팝업/관리 도구 function calling 스키마 + 모델 상수 — llm-safety-guide §2.
 
 이 파일의 두 가지가 계약이다:
-1. CHAT_MODEL — 챗봇·데이터 생성 LLM 모델 ID 단일 출처(사용자 결정: gpt-5.4).
+1. CHAT_MODEL — 챗봇·데이터 생성 LLM 모델 ID 단일 출처(사용자 결정: gpt-5.6-luna).
    코드 어디에도 모델 문자열을 다시 타이핑하지 않는다(문자열 산재 = 불일치의 씨앗).
 2. TOOLS — 팝업 3종 스키마. name·enum·required 는 frontend 팝업 라우팅과의 계약
    (QA 경계면 #2·#3). LLM 은 "무엇을 띄울지"만 결정하고, 실데이터는 프론트가 API 로
@@ -13,7 +13,7 @@
 from __future__ import annotations
 
 # 챗봇·데이터 생성 LLM 모델 ID 단일 출처(사용자 결정 오버라이드: gpt-4o 아님).
-CHAT_MODEL = "gpt-5.4"
+CHAT_MODEL = "gpt-5.6-luna"
 
 TOOLS = [
     {

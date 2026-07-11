@@ -1,6 +1,6 @@
 """인텐트 학습 데이터 생성 스크립트 — 계획 §4. (비결정적·유료, LLM 호출)
 
-OpenAI(gpt-5.4, CHAT_MODEL 상수)로 [질문→라벨] 쌍을 라벨별 균형 있게 다량 생성해
+OpenAI(CHAT_MODEL 상수)로 [질문→라벨] 쌍을 라벨별 균형 있게 다량 생성해
 data/intent_dataset.tsv(`질문<TAB>라벨`)로 저장한다. 산출 데이터셋은 커밋, 학습은
 intent_train.py 가 담당(생성/학습 분리 — 생성은 비결정적·유료라 CI 에서 제외).
 

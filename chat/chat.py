@@ -4,7 +4,7 @@
 1. classify(user_query) — 결정적 가드레일 우선 ML 6분류(chat/intent.py).
    risk_guardrail 이면 **LLM 을 호출하지 않고** 코드가 정한 차단 안내를 반환한다
    (popups=[]). 차단은 코드가 결정한다(안전 원칙).
-2. 그 외엔 gpt-5.4(CHAT_MODEL) agent 루프: system=build_prompt(judgement)를 매 호출
+2. 그 외엔 CHAT_MODEL agent 루프: system=build_prompt(judgement)를 매 호출
    최신 주입 → tools=TOOLS, tool_choice="auto" → tool_calls 를 popups 로 추출(팝업 지시,
    데이터 아님) → tool 결과는 {"ok":True} 확인만 되먹이고(실데이터는 프론트가 조회) →
    최종 답변 text.

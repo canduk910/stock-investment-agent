@@ -136,7 +136,7 @@ def test_no_tool_calls_streams_tokens_and_appends_session():
     # 첫 호출은 stream=True, tools 주입
     assert client.calls[0]["stream"] is True
     assert client.calls[0]["tools"]
-    assert client.calls[0]["model"] == "gpt-5.4"
+    assert client.calls[0]["model"] == chatmod.CHAT_MODEL
     # 누적 text 로 세션 append
     assert session.history()[-1]["content"] == "PER은 주가수익비율입니다."
     assert session.history()[-2]["content"] == "설명해줘"

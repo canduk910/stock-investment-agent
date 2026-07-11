@@ -23,9 +23,9 @@ def _enum(name: str, param: str) -> list:
     return _props(name)[param]["enum"]
 
 
-def test_chat_model_is_gpt_5_4__single_source():
-    # 사용자 결정: 모델은 gpt-5.4. 이 상수가 모델 ID 단일 출처(문자열 산재 금지).
-    assert CHAT_MODEL == "gpt-5.4"
+def test_chat_model_single_source():
+    # 사용자 결정: 모델은 gpt-5.6-luna. 이 상수가 모델 ID 단일 출처(문자열 산재 금지).
+    assert CHAT_MODEL == "gpt-5.6-luna"
 
 
 def test_popup_tool_names__frontend_contract():

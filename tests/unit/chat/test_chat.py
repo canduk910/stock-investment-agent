@@ -77,7 +77,7 @@ def test_first_create_passes_tools_and_model():
     client = _FakeClient([_resp(content="답변")])
     chat("질문", _JUDGE, Session(), client=client)
     kwargs = client.calls[0]
-    assert kwargs["model"] == "gpt-5.4"
+    assert kwargs["model"] == chatmod.CHAT_MODEL
     assert kwargs["tool_choice"] == "auto"
     assert kwargs["tools"]  # TOOLS 주입
     # 시스템 프롬프트가 매 호출 최신 judgement 로 주입됐는지(첫 메시지=system).
