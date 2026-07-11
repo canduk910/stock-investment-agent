@@ -80,6 +80,9 @@ def test_first_create_passes_tools_and_model():
     assert kwargs["model"] == chatmod.CHAT_MODEL
     assert kwargs["tool_choice"] == "auto"
     assert kwargs["tools"]  # TOOLS 주입
+    # gpt-5.6-luna(추론형)+function tools 를 chat/completions 에서 쓰려면 reasoning_effort='none'
+    # 이 필요하다(미지정 시 400). CHAT_MODEL_PARAMS 가 매 create 호출에 병합되는지 고정.
+    assert kwargs["reasoning_effort"] == "none"
     # 시스템 프롬프트가 매 호출 최신 judgement 로 주입됐는지(첫 메시지=system).
     assert kwargs["messages"][0]["role"] == "system"
     assert _JUDGE["regime"] in kwargs["messages"][0]["content"]

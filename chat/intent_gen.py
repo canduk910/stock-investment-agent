@@ -53,6 +53,7 @@ def _gen_for_label(client: OpenAI, label: str, n: int) -> list[str]:
         model=CHAT_MODEL,
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"},
+        **CHAT_MODEL_PARAMS,
     )
     data = json.loads(resp.choices[0].message.content)
     questions = data.get("questions", [])

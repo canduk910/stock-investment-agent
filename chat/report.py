@@ -24,7 +24,7 @@ from pydantic import ValidationError
 
 from chat.build_prompt import ENTRY_SIGNAL_RULES, build_criteria_text
 from chat.report_schema import StockReport
-from chat.tools import CHAT_MODEL
+from chat.tools import CHAT_MODEL, CHAT_MODEL_PARAMS
 
 _FALLBACK_MESSAGE = (
     "AI 서술 생성 실패 — 정량 분석 요약만 표시합니다. 아래 수치는 코드가 계산한 값입니다."
@@ -136,6 +136,7 @@ def _request_report(client, prompt: str) -> str:
         model=CHAT_MODEL,
         messages=[{"role": "system", "content": prompt}],
         response_format={"type": "json_object"},
+        **CHAT_MODEL_PARAMS,
     )
     return resp.choices[0].message.content or ""
 

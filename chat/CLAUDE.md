@@ -3,6 +3,7 @@
 이 계층의 존재 이유: **판정·숫자는 코드가 확정하고, LLM은 그 결과를 설명만 한다.** 상세 규칙은 `llm-safety-guide` 스킬.
 
 - **모델은 `CHAT_MODEL` 단일 출처**(`chat/tools.py`, 현재 `"gpt-5.6-luna"`). 코드 어디에도 모델 문자열을 산재시키지 않는다 — 바꿀 땐 이 상수만.
+- **★모델별 필수 파라미터 = `CHAT_MODEL_PARAMS`(단일 출처, 매 `create()`에 병합)**. `gpt-5.6-luna`는 **추론형**이라 chat/completions에서 **function tools를 쓰려면 `reasoning_effort='none'`가 필수**(미지정 시 400 `Function tools with reasoning_effort are not supported`). 또 이 계열은 구형 `max_tokens`/`temperature`를 안 받는다(앱은 안 넘김). `chat.py::_create_with_retry`가 `{**CHAT_MODEL_PARAMS, **kwargs}`로 병합(스트리밍 포함), `report.py`·`intent_gen.py`도 `**CHAT_MODEL_PARAMS` 전달. **비추론형 모델(gpt-4o 등)로 바꾸면 `CHAT_MODEL_PARAMS={}`로 비운다.**
 - **risk_guardrail은 코드가 결정**한다. `intent.py`의 결정적 키워드 정규식(`guardrail_label`)이 ML보다 **먼저** 적용돼 차단하며, 차단 시 **LLM을 호출하지 않는다**(단정예측/내부정보/시세조종/과도위험 4유형 → 거절이 아니라 위험 환기 + 분산 안내로 방향 전환). 스트리밍 경로에서도 동일(라우트가 진입점에서 먼저 걸러 `live_judgement`도 미실행 → FRED 낭비 0).
 - **인텐트 6분류 = ML 사전분류.** `intent_gen.py`가 CHAT_MODEL로 [질문→라벨] 균형 데이터(`data/intent_dataset.tsv`)를 생성 → `intent_train.py`가 `TfidfVectorizer(char_wb,(2,4))+LogisticRegression`으로 학습 → `chat/models/intent_clf.joblib`. 한글은 형태소분석기 없이 char n-gram으로 처리. 재생성/재학습해도 파이프라인 정의는 불변. **ML 정확도는 비결정적** → 단위 테스트는 인터페이스·가드레일만 고정하고 정확도는 단정하지 않는다. 비차단 라벨(general_qa↔stock_analysis 등) 오분류는 안전 무관(LLM이 tool_choice로 팝업 여부 결정).
 - **기준표는 자동 생성**(`build_prompt.py::build_criteria_text`). `THRESHOLDS`·`INDICATOR_LABELS`·`VIX_PANIC`을 import해 만든다 — 임계값 숫자를 프롬프트에 하드코딩하면 3중 일관성이 깨진다. 시스템 프롬프트 필수 6블록(역할·판정출처고정·기준표+judgement·REGIME_PARAMS·설명지침·팝업규칙)과 면책 고지 포함. `judgement`는 매 호출 최신값 주입.

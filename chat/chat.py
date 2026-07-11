@@ -20,7 +20,7 @@ import json
 from chat.build_prompt import build_prompt
 from chat.intent import classify
 from chat.session import Session
-from chat.tools import CHAT_MODEL, TOOLS
+from chat.tools import CHAT_MODEL, CHAT_MODEL_PARAMS, TOOLS
 
 # risk_guardrail 차단 안내(결정적). ③ 과도한 위험은 거절이 아니라 위험 환기 + 분산 안내로
 # 방향 전환(스킬 §3). 단정 예측·내부정보·시세조종 요구도 이 안내로 일괄 차단한다.
@@ -50,11 +50,15 @@ def _make_client():
 
 
 def _create_with_retry(client, **kwargs):
-    """create 1회 재시도. 두 번 다 실패하면 예외를 올려 호출부가 폴백 처리."""
+    """create 1회 재시도. 모델별 필수 파라미터(CHAT_MODEL_PARAMS)를 병합한다.
+
+    두 번 다 실패하면 예외를 올려 호출부가 폴백 처리. 스트리밍(stream=True)도 그대로.
+    """
+    merged = {**CHAT_MODEL_PARAMS, **kwargs}
     try:
-        return client.chat.completions.create(**kwargs)
+        return client.chat.completions.create(**merged)
     except Exception:
-        return client.chat.completions.create(**kwargs)
+        return client.chat.completions.create(**merged)
 
 
 def chat(user_query: str, judgement: dict, session: Session, *, client=None) -> dict:

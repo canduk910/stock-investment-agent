@@ -15,6 +15,14 @@ from __future__ import annotations
 # 챗봇·데이터 생성 LLM 모델 ID 단일 출처(사용자 결정 오버라이드: gpt-4o 아님).
 CHAT_MODEL = "gpt-5.6-luna"
 
+# 모델별 필수 create() 파라미터(단일 출처) — 매 chat.completions.create 호출에 병합한다.
+#   gpt-5.6-luna 는 추론형이라, chat/completions 에서 function tools 를 쓰려면
+#   reasoning_effort='none' 이 필요하다(미지정 시 기본 추론 모드가 tools 와 비호환 → 400
+#   "Function tools with reasoning_effort are not supported ..."). 또 이 계열은 구형
+#   `max_tokens`/`temperature` 를 받지 않으므로 앱은 그 둘을 넘기지 않는다.
+#   모델을 비추론형(예: gpt-4o)으로 바꾸면 이 dict 를 비우면 된다({}).
+CHAT_MODEL_PARAMS = {"reasoning_effort": "none"}
+
 TOOLS = [
     {
         "type": "function",
