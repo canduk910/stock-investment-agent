@@ -153,6 +153,25 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_report",
+            "description": (
+                "사용자가 인덱싱된 증권사/애널리스트 리포트의 내용을 물을 때 호출한다"
+                "(예 '이 리포트 요약해줘', '리포트에서 목표주가 뭐래?', '삼성전자 리포트 핵심'). "
+                "일반 시황·시세·잔고 질문에는 호출하지 않는다(그건 show_* 도구). "
+                "이 도구는 팝업이 아니라 리포트 본문 발췌를 가져와 네가 요약·답변하는 용도다."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "리포트에서 찾을 질문/키워드"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
 ]
 
 
@@ -160,7 +179,25 @@ TOOLS = [
 # 표시 툴(show_*)은 chat.py 가 tool 결과를 {"ok":True}로만 되먹이고 실데이터는 프론트가
 # 조회(환각 차단). 콘텐츠 툴은 서버가 실행해 실제 텍스트를 되먹여 LLM 이 요약한다.
 # 이름 집합 + 실행 레지스트리가 단일 출처 — chat.py(chat·chat_stream)가 이걸로 분기한다.
-CONTENT_TOOLS = frozenset({"summarize_youtube"})
+CONTENT_TOOLS = frozenset({"summarize_youtube", "search_report"})
+
+
+def _impl_search_report(args: dict) -> str:
+    # 지연 import — tools.py 로드가 rag(pdfplumber/numpy) 유무에 묶이지 않게.
+    from rag import store
+
+    query = (args or {}).get("query", "")
+    hits = store.search_reports(query, top_k=3)
+    if not hits:
+        return (
+            "인덱싱된 증권사 리포트가 없거나 관련 내용을 찾지 못했습니다. "
+            "reports 폴더에 PDF를 넣고 재인덱스(POST /api/reports/reindex)했는지 사용자에게 안내하세요."
+        )
+    blocks = [f"[출처: {h.get('source', '?')}]\n{h.get('text', '')}" for h in hits]
+    return (
+        "[아래는 증권사 리포트 발췌다 — '리포트에 따르면'으로 출처를 밝혀 요약/답변하고, "
+        "에이전트 자체 매수/매도 판정으로 제시하지 말 것]\n" + "\n\n".join(blocks)
+    )
 
 
 def _impl_summarize_youtube(args: dict) -> str:
@@ -180,7 +217,10 @@ def _impl_summarize_youtube(args: dict) -> str:
     )
 
 
-_TOOL_IMPL = {"summarize_youtube": _impl_summarize_youtube}
+_TOOL_IMPL = {
+    "summarize_youtube": _impl_summarize_youtube,
+    "search_report": _impl_search_report,
+}
 
 
 def run_content_tool(name: str, args: dict) -> str:

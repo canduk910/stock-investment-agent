@@ -73,6 +73,10 @@ from api.report import router as report_router  # noqa: E402
 app.include_router(report_router)
 
 # 계좌 잔고(포트폴리오) — GET /api/balance (조회 전용, 우측 패널). 단일 사용자 계정은 config.
+from api.reports import router as reports_router  # noqa: E402  # 증권사 리포트 PDF RAG(색인/상태)
+
+app.include_router(reports_router)
+
 from api.balance import router as balance_router  # noqa: E402
 
 app.include_router(balance_router)

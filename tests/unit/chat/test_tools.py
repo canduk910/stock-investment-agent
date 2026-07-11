@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from chat.tools import CHAT_MODEL, CONTENT_TOOLS, TOOLS
+from chat.tools import CHAT_MODEL, CONTENT_TOOLS, TOOLS, run_content_tool
 
 
 def _tool(name: str) -> dict:
@@ -41,11 +41,28 @@ def test_popup_tool_names__frontend_contract():
 
 
 def test_content_tools_defined_in_tools():
-    # 콘텐츠 툴(summarize_youtube 등)은 실제 TOOLS 에 정의되고 CONTENT_TOOLS 로 표시된다
+    # 콘텐츠 툴(summarize_youtube·search_report)은 실제 TOOLS 에 정의되고 CONTENT_TOOLS 로 표시된다
     # — chat.py(chat·chat_stream)가 이 집합으로 되먹임(실행 vs 팝업)을 분기한다.
     names = {t["function"]["name"] for t in TOOLS}
-    assert "summarize_youtube" in CONTENT_TOOLS
+    assert {"summarize_youtube", "search_report"} <= CONTENT_TOOLS
     assert CONTENT_TOOLS <= names  # 콘텐츠 툴은 전부 실제 TOOLS 스키마로 존재
+
+
+def test_run_content_tool_search_report_attributes_source(monkeypatch):
+    """search_report 콘텐츠 툴 → 리포트 발췌를 출처 귀속 프레이밍으로 되먹인다."""
+    monkeypatch.setattr(
+        "rag.store.search_reports",
+        lambda q, top_k=3: [{"text": "삼성전자 목표가 9만원", "source": "삼성_리포트.pdf", "score": 0.9}],
+    )
+    out = run_content_tool("search_report", {"query": "목표가"})
+    assert "삼성_리포트.pdf" in out and "9만원" in out
+    assert "리포트에 따르면" in out  # 출처 귀속·판정 금지 프레이밍
+
+
+def test_run_content_tool_search_report_empty(monkeypatch):
+    monkeypatch.setattr("rag.store.search_reports", lambda q, top_k=3: [])
+    out = run_content_tool("search_report", {"query": "x"})
+    assert "리포트" in out  # 인덱스 없음 안내(지어내지 않음)
 
 
 def test_all_tools_are_openai_function_type():

@@ -6,6 +6,9 @@
 .cache/
 *.token.json
 
+# 증권사 리포트 PDF(RAG 입력) — 사용자 데이터·저작물, 커밋 금지
+reports/
+
 # Python
 __pycache__/
 *.py[cod]
