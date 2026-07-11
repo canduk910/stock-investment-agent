@@ -86,6 +86,55 @@ def test_reset_clears_report_context():
     assert s.report_context is None
 
 
+# ── 핀 뷰 컨텍스트(현재 보고 있는 화면 스냅샷) ────────────────────────────────
+# report_context 와 별개 슬롯 — 사용자가 보는 패널(잔고·관심종목·종목)을 대화에 반영.
+
+
+def test_view_context_default_none():
+    assert Session().view_context is None
+
+
+def test_set_and_clear_view_context():
+    s = Session()
+    s.set_view_context("잔고 스냅샷")
+    assert s.view_context == "잔고 스냅샷"
+    s.clear_view_context()
+    assert s.view_context is None
+
+
+def test_set_view_context_empty_clears():
+    s = Session()
+    s.set_view_context("x")
+    s.set_view_context("")  # 빈 문자열 → 해제
+    assert s.view_context is None
+
+
+def test_view_context_survives_sliding_window():
+    # 핀 컨텍스트는 슬라이딩 윈도우와 별개 — 여러 턴 뒤에도 유지된다.
+    s = Session(window=2)
+    s.set_view_context("잔고")
+    for i in range(5):
+        s.append(f"q{i}", f"a{i}")
+    assert s.view_context == "잔고"
+
+
+def test_view_and_report_context_independent():
+    # 두 핀 슬롯은 서로 간섭하지 않는다(공존).
+    s = Session()
+    s.set_report_context("리포트")
+    s.set_view_context("잔고")
+    assert s.report_context == "리포트" and s.view_context == "잔고"
+    s.clear_view_context()
+    assert s.report_context == "리포트" and s.view_context is None
+
+
+def test_reset_clears_view_context():
+    s = Session()
+    s.set_view_context("잔고")
+    s.reset()
+    assert s.view_context is None
+
+
 # ── 서버 세션 스토어 (SESSIONS dict) ─────────────────────────────────────────
 
 

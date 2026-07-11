@@ -50,11 +50,28 @@ _REPORT_CONTEXT_HEADER = (
 )
 
 
+# 현재 보고 있는 화면 스냅샷 주입 블록(핀 고정). 서버가 조회한 값이라 인용 가능하되, 숫자 날조·
+# 매수/매도 판정을 금지하고 스냅샷 시각(staleness)·면책을 환기한다. report_context 와 별개.
+_VIEW_CONTEXT_HEADER = (
+    "\n\n[사용자가 현재 보고 있는 화면 스냅샷 — 서버가 조회한 값]\n"
+    "아래는 사용자가 지금 화면에서 보고 있는 데이터의 요약 스냅샷이다(조회 시각 포함). 후속 질문에 "
+    "이 값을 근거로 답하되: (1) **여기 적힌 숫자만 인용하고 새 숫자를 지어내지 마라** — 이 스냅샷에 "
+    "없는 종목·수치는 '화면에 표시되지 않음'으로 다뤄라. (2) 스냅샷은 조회 시각 기준이며 실시간과 "
+    "다를 수 있음을 필요 시 환기하라. (3) 매수/매도 단정 판정은 하지 말고(판정은 코드·게이트), "
+    "국면·분산·게이트 관점의 참고 설명만 하며 면책을 유지하라.\n"
+)
+
+
 def _build_system_prompt(judgement: dict, session: Session) -> str:
-    """필수 블록(build_prompt) + 세션 핀 리포트 컨텍스트(있으면). 단일 출처(양 경로 공유)."""
+    """필수 블록(build_prompt) + 세션 핀 컨텍스트(리포트·현재화면, 있으면). 단일 출처(양 경로 공유).
+
+    두 핀 블록은 독립·선택적이며 base → report → view 순으로 덧붙인다.
+    """
     prompt = build_prompt(judgement)
     if getattr(session, "report_context", None):
         prompt += _REPORT_CONTEXT_HEADER + session.report_context
+    if getattr(session, "view_context", None):
+        prompt += _VIEW_CONTEXT_HEADER + session.view_context
     return prompt
 
 

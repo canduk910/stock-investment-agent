@@ -1,0 +1,145 @@
+"""현재 화면 스냅샷 빌더 — kind별 포맷·top-N·기준시각·graceful·비데이터 None(서비스 boundary mock)."""
+from __future__ import annotations
+
+import chat.view_context as vc
+
+
+def _no_kis(monkeypatch):
+    # 클라이언트 조립·판정은 stub(테스트는 포맷 로직만 검증, 실제 KIS/FRED 미호출).
+    monkeypatch.setattr("api.detail._build_kis_client", lambda: object())
+    monkeypatch.setattr(vc, "_safe_judgement", lambda: None)
+
+
+# ── balance ──
+def test_balance_context(monkeypatch):
+    _no_kis(monkeypatch)
+    monkeypatch.setattr("infra.config.kis_account", lambda: ("C", "01"))
+    monkeypatch.setattr(
+        "collectors.kis.balance.inquire_balance",
+        lambda c, cano, prdt: {
+            "holdings": [
+                {"ticker": "005930", "name": "삼성전자", "qty": 10,
+                 "eval_amount": 800000, "pnl_amount": 100000, "pnl_pct": 14.28},
+            ],
+            "summary": {"net_asset": 1900000, "deposit": 500000,
+                        "total_eval": 1400000, "pnl_amount": 50000},
+        },
+    )
+    out = vc.build_view_context("balance", {})
+    assert out is not None
+    assert out.startswith("기준시각:")
+    assert "순자산" in out and "삼성전자" in out and "005930" in out
+
+
+def test_balance_top_n_and_truncation(monkeypatch):
+    _no_kis(monkeypatch)
+    monkeypatch.setattr("infra.config.kis_account", lambda: ("C", "01"))
+    holdings = [
+        {"ticker": f"{i:06d}", "name": f"종목{i}", "qty": i + 1,
+         "eval_amount": (i + 1) * 1000, "pnl_amount": i, "pnl_pct": 1.0}
+        for i in range(20)
+    ]
+    monkeypatch.setattr(
+        "collectors.kis.balance.inquire_balance",
+        lambda c, cano, prdt: {"holdings": holdings, "summary": {"net_asset": 1}},
+    )
+    out = vc.build_view_context("balance", {})
+    assert "…외 12종목" in out  # top-8 만 표시 + 나머지 요약
+    assert len(out) <= 1600  # 전체 길이 상한(안전망)
+
+
+def test_balance_kis_fail_graceful(monkeypatch):
+    monkeypatch.setattr("infra.config.kis_account", lambda: ("C", "01"))
+
+    def _boom():
+        raise Exception("kis down")
+
+    monkeypatch.setattr("api.detail._build_kis_client", _boom)
+    out = vc.build_view_context("balance", {})
+    assert out is not None and "조회 불가" in out  # 크래시 아님, 안내 노트
+
+
+# ── watchlist ──
+def test_watchlist_context(monkeypatch):
+    _no_kis(monkeypatch)
+    monkeypatch.setattr(
+        "watchlist.service.build_watchlist_view",
+        lambda store, uid, client, judgement: {
+            "items": [
+                {"ticker": "005930", "stock_name": "삼성전자", "current_price": 78000,
+                 "change_rate": 1.2, "per": 12.0, "target_price": 90000,
+                 "target_status": "far", "entry_signal": {"entry_allowed": True}},
+            ],
+            "regime": {"regime": "확장", "single_cap": 20, "entry_blocked": False},
+            "partial_failure": [],
+        },
+    )
+    out = vc.build_view_context("watchlist", {})
+    assert "관심종목" in out and "삼성전자" in out
+    assert "국면 확장" in out and "목표가" in out
+
+
+def test_watchlist_empty_note(monkeypatch):
+    _no_kis(monkeypatch)
+    monkeypatch.setattr(
+        "watchlist.service.build_watchlist_view",
+        lambda *a, **k: {"items": [], "regime": None, "partial_failure": []},
+    )
+    out = vc.build_view_context("watchlist", {})
+    assert "비어 있음" in out
+
+
+# ── stock_report ──
+def test_stock_context(monkeypatch):
+    monkeypatch.setattr("api.detail._build_kis_client", lambda: object())
+    monkeypatch.setattr(
+        vc, "_safe_judgement",
+        lambda: {"regime": "확장", "params": {"per_max": 25, "pbr_max": 3, "single_cap": 20}},
+    )
+    monkeypatch.setattr(
+        "collectors.kis.inquire_price.inquire_price",
+        lambda c, t: {"ticker": "005930", "price": 78000, "change_rate": 1.2,
+                      "per": 12.0, "pbr": 1.3, "week52_high": 90000, "week52_low": 60000},
+    )
+
+    class _Store:
+        def list_reports(self, t):
+            return [{"summary": {"증권사": "한화투자증권", "투자의견": "매수",
+                                 "목표주가": "9만원", "요약": "실적 개선 기대"}}]
+
+    monkeypatch.setattr("chat.analyst_store.default_store", lambda: _Store())
+    out = vc.build_view_context("stock_report", {"ticker": "005930", "stock_name": "삼성전자"})
+    assert out is not None
+    assert "삼성전자" in out and "현재가" in out and "PER" in out and "52주위치" in out
+    # 애널리스트 의견은 출처 귀속(판정 아님).
+    assert "한화투자증권" in out and "리포트가 밝힌 의견" in out
+
+
+def test_stock_bad_ticker_none():
+    assert vc.build_view_context("stock_report", {"ticker": "bad"}) is None
+    assert vc.build_view_context("stock_report", {}) is None
+
+
+def test_stock_kis_fail_graceful(monkeypatch):
+    monkeypatch.setattr(vc, "_safe_judgement", lambda: None)
+    monkeypatch.setattr("api.detail._build_kis_client", lambda: object())
+
+    def _boom(c, t):
+        raise Exception("kis down")
+
+    monkeypatch.setattr("collectors.kis.inquire_price.inquire_price", _boom)
+    monkeypatch.setattr("chat.analyst_store.default_store",
+                        lambda: type("S", (), {"list_reports": lambda self, t: []})())
+    out = vc.build_view_context("stock_report", {"ticker": "005930"})
+    assert out is not None and "조회 불가" in out  # 시세 실패해도 노트(크래시 아님)
+
+
+# ── 비데이터 kind / 방어 ──
+def test_non_data_kinds_none():
+    assert vc.build_view_context("macro_dashboard", {}) is None
+    assert vc.build_view_context("manage_watchlist", {}) is None
+    assert vc.build_view_context("unknown", {}) is None
+
+
+def test_data_bearing_kinds_ssot():
+    assert vc.DATA_BEARING_KINDS == frozenset({"balance", "watchlist", "stock_report"})

@@ -20,6 +20,9 @@ class Session:
         # 애널리스트 리포트 요약을 '상담 컨텍스트'로 핀 고정 — 슬라이딩 윈도우와 별개로 유지돼
         # 후속 여러 턴에서 참조된다(사용자가 리포트를 근거로 이어서 자문). None 이면 미설정.
         self.report_context: str | None = None
+        # 사용자가 '현재 보고 있는 화면'(잔고·관심종목·종목상세) 스냅샷 핀 — report_context 와 별개.
+        # 패널을 열면 서버가 조회한 스냅샷을 실어 후속 질문이 그 화면 데이터를 근거로 답하게 한다.
+        self.view_context: str | None = None
 
     def history(self) -> list[dict]:
         """최근 window 개 메시지만 반환(시스템·tool 미포함)."""
@@ -38,9 +41,17 @@ class Session:
     def clear_report_context(self) -> None:
         self.report_context = None
 
+    def set_view_context(self, text: str | None) -> None:
+        """현재 보는 화면 스냅샷을 핀으로 설정(None/빈문자열이면 해제)."""
+        self.view_context = text or None
+
+    def clear_view_context(self) -> None:
+        self.view_context = None
+
     def reset(self) -> None:
         self._msgs = []
         self.report_context = None
+        self.view_context = None
 
 
 # 서버 세션 스토어(인메모리) — session_id → Session.

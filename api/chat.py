@@ -46,6 +46,12 @@ class ReportContextRequest(BaseModel):
     report_id: str | None = None  # None → 컨텍스트 해제(상담 종료)
 
 
+class ViewContextRequest(BaseModel):
+    session_id: str
+    kind: str | None = None  # None/비데이터 kind → 핀 해제
+    args: dict = {}
+
+
 @router.post("/api/chat")
 def post_chat(body: ChatRequest) -> dict:
     """{session_id, message} → {text, popups}. 서버가 session_id 별 히스토리 보관."""
@@ -86,6 +92,30 @@ def post_report_context(body: ReportContextRequest) -> dict:
         "set": True,
         "broker": (entry.get("summary") or {}).get("증권사") or entry.get("broker", ""),
     }
+
+
+@router.post("/api/chat/context")
+def post_view_context(body: ViewContextRequest) -> dict:
+    """사용자가 현재 보고 있는 화면(잔고·관심종목·종목상세)을 세션 핀 컨텍스트로 고정(또는 해제).
+
+    body {session_id, kind, args}. 데이터 보유 kind 만 서버가 재조회해 스냅샷을 세팅한다
+    (**요약 본문은 프론트가 보내지 않음** — 서버가 조회, 환각/조작 차단). 비데이터 kind·조회 불가는
+    이전 핀을 해제. **항상 200**(백그라운드 핀은 게이트키핑 아님, graceful).
+    """
+    from chat.view_context import DATA_BEARING_KINDS, build_view_context
+
+    session = get_session(body.session_id)
+
+    if not body.kind or body.kind not in DATA_BEARING_KINDS:
+        session.clear_view_context()  # 비데이터 화면(국면·관리)으로 전환 → 이전 스냅샷 제거
+        return {"ok": True, "set": False}
+
+    text = build_view_context(body.kind, body.args or {})
+    if text is None:  # 조회 불가·불량 인자 → 해제(graceful)
+        session.clear_view_context()
+        return {"ok": True, "set": False}
+    session.set_view_context(text)
+    return {"ok": True, "set": True, "kind": body.kind}
 
 
 def _sse(body: ChatRequest):
