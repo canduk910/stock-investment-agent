@@ -2,6 +2,7 @@ import KLineChartPanel from './KLineChartPanel.jsx'
 import StatCard from './StatCard.jsx'
 import FinancialTrendTable from './FinancialTrendTable.jsx'
 import AiReportPanel from './AiReportPanel.jsx'
+import AnalystReportsSection from './AnalystReportsSection.jsx'
 import { sectionFailed, isValuationReady } from '../lib/reportLogic.js'
 
 // ── 표시 포맷 헬퍼(순수) — 값·판정은 백엔드 summary 가 확정, 여기선 표시만. 결측은 '—'. ──
@@ -41,7 +42,7 @@ function failed(bundle, section) {
   return sectionFailed(bundle.partial_failure, section) || bundle[section] == null
 }
 
-export default function StockReportView({ bundle }) {
+export default function StockReportView({ bundle, sessionId, onConsult }) {
   if (!bundle) return null
 
   const { ticker, basic, valuation, financials, chart, summary, regime_gate } = bundle
@@ -239,6 +240,9 @@ export default function StockReportView({ bundle }) {
       {/* ── 하단: AI 종합 서술(W10 P2, 요청 시 생성) + 면책고지(코드 고정 상시노출) ── */}
       <h3 className="report__section-label">AI 종합 서술</h3>
       <AiReportPanel ticker={ticker} />
+
+      {/* ── 애널리스트 리포트 요약(네이버 수집) + "이 리포트로 상담하기"(세션 컨텍스트 연계) ── */}
+      <AnalystReportsSection ticker={ticker} sessionId={sessionId} onConsult={onConsult} />
 
       <p className="report__disclaimer" role="note">
         {DISCLAIMER}

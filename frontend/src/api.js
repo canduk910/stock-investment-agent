@@ -168,6 +168,40 @@ export async function fetchBalance() {
   return res.json()
 }
 
+// ── 애널리스트 리포트(네이버 수집 · 종목별 요약 · 챗 상담 연계) ────────────────
+// 요약·자문은 '리포트 내용 인용'(에이전트 자체 매수/매도 판정 아님)이며 출처 귀속·면책 상시.
+// 실데이터(요약)는 프론트가 아래 GET 으로 직접 조회한다(환각 차단) — LLM 응답에서 꺼내지 않는다.
+
+// GET /api/detail/{ticker}/analyst-reports → {ticker, reports:[{report_id, broker, stock_name,
+//   title, date, pdf_url, summary:{증권사,종목,목표주가,투자의견,요약,핵심요지[],리스크요인[],면책고지},
+//   created_at}]}. 저장된 게 없으면 reports:[]. throw 는 네트워크/HTTP 오류만.
+export async function fetchAnalystReports(ticker) {
+  const res = await fetch(`/api/detail/${encodeURIComponent(ticker)}/analyst-reports`)
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
+// POST /api/reports/fetch?limit=N → {fetched, new, skipped, failed}. 네이버 최신 리포트를 서버가
+// 수집·요약·저장(idempotent). 항상 200(수집/요약 실패는 graceful 카운트). 완료 후 fetchAnalystReports 재조회.
+export async function fetchNaverReports(limit = 20) {
+  const res = await fetch(`/api/reports/fetch?limit=${limit}`, { method: 'POST' })
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
+// POST /api/chat/report-context {session_id, ticker, report_id} → {ok, set, broker?}.
+// 저장된 리포트 요약을 세션 상담 컨텍스트로 핀 고정(이후 후속 질문이 그 리포트 근거로 답변).
+// **요약 본문은 보내지 않는다** — 서버가 store 에서 조회(환각·조작 차단). ticker/reportId 가 없으면 해제.
+export async function setReportContext(sessionId, ticker, reportId) {
+  const res = await fetch('/api/chat/report-context', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId, ticker: ticker ?? null, report_id: reportId ?? null }),
+  })
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
 // 종목 자동완성(W08). GET /api/stocks/search?q=&limit= → [{ticker, name, market}].
 // KIS 마스터(코스피+코스닥 전 종목) 기반. 실패 시 빈 배열(프론트는 코드 직접 입력 폴백).
 export async function searchStocks(query, limit = 8) {

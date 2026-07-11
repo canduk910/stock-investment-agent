@@ -21,15 +21,18 @@ const SUGGESTIONS = [
   '카카오 목표가 4만원으로 바꿔줘',
 ]
 
-export default function ChatPanel({ onShowPanel }) {
-  const sessionId = useRef(null)
-  if (sessionId.current === null) {
-    // 마운트 시 1회 생성(구형 브라우저 폴백 포함).
-    sessionId.current =
-      typeof crypto !== 'undefined' && crypto.randomUUID
+export default function ChatPanel({ sessionId: sessionIdProp, onShowPanel, consult, onEndConsult }) {
+  // 세션 id 는 App 이 단일 소유(리포트 상담 컨텍스트와 공유). prop 미전달 시(구 테스트) 자체 생성 폴백.
+  const sessionRef = useRef(null)
+  if (sessionRef.current === null) {
+    sessionRef.current =
+      sessionIdProp ??
+      (typeof crypto !== 'undefined' && crypto.randomUUID
         ? crypto.randomUUID()
-        : `sess-${Date.now()}-${Math.random().toString(16).slice(2)}`
+        : `sess-${Date.now()}-${Math.random().toString(16).slice(2)}`)
   }
+  // prop 이 뒤늦게(또는 바뀌어) 오면 그것을 우선(App 세션과 일치 보장).
+  const sessionId = { current: sessionIdProp ?? sessionRef.current }
 
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -169,6 +172,23 @@ export default function ChatPanel({ onShowPanel }) {
       </header>
 
       <div className="chat__panel">
+        {consult ? (
+          <div className="banner banner--emph chat__consult" role="status">
+            <span className="chat__consult-text">
+              {consult.broker ? `${consult.broker} ` : ''}리포트를 상담 컨텍스트로 불러왔어요 — 이
+              리포트를 근거로 이어서 물어보세요.
+            </span>
+            <button
+              type="button"
+              className="banner__retry"
+              onClick={() => onEndConsult?.()}
+              aria-label="리포트 상담 종료"
+            >
+              상담 종료
+            </button>
+          </div>
+        ) : null}
+
         <div className="chat__messages" ref={listRef} role="log" aria-live="polite">
           {messages.length === 0 ? (
             <div className="chat__empty">

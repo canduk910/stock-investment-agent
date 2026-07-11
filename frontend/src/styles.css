@@ -950,6 +950,175 @@ body {
   }
 }
 
+/* ── 애널리스트 리포트 요약 섹션(네이버 수집 · "이 리포트로 상담하기") ── */
+.analyst {
+  margin-top: 20px;
+}
+.analyst__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.analyst__head .report__section-label {
+  margin: 0;
+}
+.analyst__fetch {
+  flex: none;
+}
+.analyst__fetchmsg {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--c-text-secondary);
+}
+.analyst__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+.analyst__card {
+  border: 1px solid var(--c-border);
+  border-radius: 12px;
+  background: var(--c-surface);
+  padding: 14px 16px;
+}
+.analyst__card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.analyst__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.analyst__broker {
+  font-weight: 800;
+  color: var(--c-navy);
+  font-size: 14px;
+}
+.analyst__date {
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+.analyst__opinion {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+/* 리포트 투자의견 = 출처 귀속(중립 회색). 가격 방향색·주황/빨강 아님(에이전트 판정 아님). */
+.analyst__chip-opinion {
+  background: var(--c-surface-2);
+  color: var(--c-text-secondary);
+  border: 1px solid var(--c-border);
+}
+.analyst__title {
+  margin: 10px 0 0;
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--c-text);
+}
+.analyst__summary {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--c-text-secondary);
+}
+.analyst__list {
+  margin-top: 10px;
+}
+.analyst__list-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-navy);
+}
+.analyst__bullets {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--c-text-secondary);
+}
+.analyst__bullets--risk {
+  color: var(--c-text);
+}
+.analyst__fine {
+  margin: 12px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--c-text-muted);
+}
+.analyst__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.analyst__pdf {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--c-navy);
+  text-decoration: none;
+}
+.analyst__pdf:hover {
+  text-decoration: underline;
+}
+/* 상담 CTA = 주황 강조(확인/핵심 행동). 채움형으로 존재감. */
+.analyst__consult {
+  margin-left: auto;
+  padding: 7px 14px;
+  border: 1px solid var(--c-emph);
+  border-radius: 8px;
+  background: var(--c-emph);
+  color: var(--c-white);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.analyst__consult:disabled {
+  background: var(--c-surface-2);
+  color: var(--c-text-muted);
+  border-color: var(--c-border);
+  cursor: default;
+}
+.analyst__err {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--c-text-secondary);
+}
+.analyst__empty {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px dashed var(--c-border-strong);
+  border-radius: 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--c-text-secondary);
+}
+.analyst__disclaimer {
+  margin: 12px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--c-text-muted);
+}
+/* 좌측 챗 상단 상담 배너(주황) — 리포트 근거 상담 중 표시. */
+.chat__consult {
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.chat__consult-text {
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
 /* ══════════════════════════════════════════════════════════════════
    WEEK 09 — 챗봇 패널 + 팝업 모달 (색은 theme.css 토큰만)
    사용자 버블=옅은 파랑(--c-blue-soft) / 봇 버블=흰 표면(--c-surface).

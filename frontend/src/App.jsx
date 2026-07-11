@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ChatPanel from './components/ChatPanel.jsx'
 import RightPanel from './components/RightPanel.jsx'
-import { fetchWatchlist, fetchMacroRegime } from './api.js'
+import { fetchWatchlist, fetchMacroRegime, setReportContext } from './api.js'
 import { detectTargetAlerts } from './lib/watchlistLogic.js'
 
 // UX 개편 — 좌측 상시 채팅 + 우측 맥락형 동적 패널(모달 폐기). 2컬럼 그리드(.app__main).
@@ -61,8 +61,31 @@ function DkMonogram() {
 }
 
 export default function App() {
+  // 챗 세션 id — App 이 단일 소유(ChatPanel 대화 + 리포트 상담 컨텍스트가 같은 세션을 공유).
+  //   마운트 1회 생성(구형 브라우저 폴백 포함). 좌측 챗과 우측 리포트 "상담하기"가 이 id 를 공유한다.
+  const sessionId = useRef(null)
+  if (sessionId.current === null) {
+    sessionId.current =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `sess-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  }
+
   // 우측 동적 패널 spec — 챗봇(onShowPanel)·퀵버튼(onSelect)이 리프팅. 닫으면 null(빈 상태).
   const [rightPanelSpec, setRightPanelSpec] = useState(LANDING_SPEC)
+
+  // 리포트 상담 컨텍스트 배너 — 우측 리포트에서 "이 리포트로 상담하기"를 누르면 {broker} 세팅.
+  //   좌측 챗 상단에 "○○증권 리포트로 상담 중" 배너를 띄우고, 이후 후속 질문은 그 리포트 근거로 답변.
+  const [consult, setConsult] = useState(null)
+
+  // 상담 시작 — AnalystReportsSection 이 setReportContext(서버 세팅) 성공 후 broker 를 올린다.
+  const startConsult = useCallback((broker) => setConsult({ broker: broker || '' }), [])
+
+  // 상담 종료 — 세션 컨텍스트 해제(서버) + 배너 제거. 실패해도 배너는 내린다(로컬 상태 우선).
+  const endConsult = useCallback(() => {
+    setReportContext(sessionId.current, null, null).catch(() => {})
+    setConsult(null)
+  }, [])
 
   // 톱바 상태 칩용 국면 — App 이 자체 조회(환각 차단). 실패해도 앱은 렌더(칩만 조용히 생략).
   const [regime, setRegime] = useState(null)
@@ -215,13 +238,20 @@ export default function App() {
 
       <main className="app__main">
         <div className="app__left">
-          <ChatPanel onShowPanel={setRightPanelSpec} />
+          <ChatPanel
+            sessionId={sessionId.current}
+            onShowPanel={setRightPanelSpec}
+            consult={consult}
+            onEndConsult={endConsult}
+          />
         </div>
         <div className="app__right">
           <RightPanel
             spec={rightPanelSpec}
             onSelect={setRightPanelSpec}
             onClose={() => setRightPanelSpec(null)}
+            sessionId={sessionId.current}
+            onConsult={startConsult}
           />
         </div>
       </main>

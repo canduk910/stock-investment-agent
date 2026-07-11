@@ -23,6 +23,12 @@
 - 시세 아님(정적 참조) → `.cache/stock_master.json`로 **하루 캐시**(신규상장 때만 변동). 캐시 정책(현재가 금지)과 무관.
 - `search_stocks`: 숫자=코드 prefix, 문자=이름 prefix 우선+부분일치. **랭킹은 이름 길이순** — 정식 종목("SK하이닉스")이 파생상품("KODEX SK하이닉스레버리지")보다 먼저. 소비: `GET /api/stocks/search?q=&limit=`(api/stocks.py, 프로세스 메모리 1회 로드).
 
+## 네이버 애널리스트 리포트 (naver_research.py)
+- 소스 `finance.naver.com/research/company_list.naver` = **SSR HTML**(JS 불필요)·**robots `/research/` 허용**·**EUC-KR(cp949)**(응답 `meta`는 utf-8이라 속으므로 `resp.content.decode("euc-kr")` — stock_master 와 동일 패턴, `resp.text` 금지). 파싱은 bs4 `table.type_1` → 각 `tr`에서 `len(tds)>=6` + 종목링크(`?code=`) + 제목링크(`?nid=`) + 첨부(`.pdf`)를 모두 갖춘 행만. 첨부 없는 행·비종목 행은 제외.
+- 반환 dict: `{stock_name, stock_code, title, nid, broker, pdf_url, date}`. **목록만으로 전 필드 확보**(상세페이지 조회 불필요) — 라이브 검증됨(nid·broker·code·pdf_url 실제 채워짐).
+- `download_pdf(url, dest_dir="reports/naver")`: `stock.pstatic.net`에서 **직접 다운로드**. 비-`.pdf` URL 거부, UA+timeout, 실패 graceful `None`. PDF는 각 증권사 **저작물** → `reports/` gitignore(원문 재배포 금지, 요약만 제공).
+- **예의 크롤링**: UA 지정·페이지 간 지연·top-N 소량. `fetch_company_reports(limit, pages)`는 개별 오류에 graceful(빈 리스트/부분).
+
 ## 지표 수집기 (fred/vix/fear_greed)
 - 공통 반환 계약 **`IndicatorPoint = {key, value, as_of, source, prev_value}`**(`base.py`). 소비자(quant·api)가 이 shape에 의존.
 - **VIX**: 야후 `^VIX` 1차 → 실패 시 FRED `VIXCLS` 폴백. `source`에 성공 소스 기록.

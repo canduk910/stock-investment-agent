@@ -34,6 +34,12 @@
 - **`BalancePanel.jsx`**: `/api/balance` **자체 조회**(환각 차단) → **네이비 히어로 카드**(순자산 큰 값 + 평가손익 pill: 수익=`--c-up-onnavy` 밝은 빨강/손실=`--c-blue-soft` 밝은 파랑) + 보조 카드 4(예수금·매입액·평가액·보유종목) + 보유종목 표. **조회 전용**(주문/매매 없음), 현재가 포함이라 무캐시. `partial_failure:['balance']`(KIS 실패)는 **dashed 카드** "일시 조회 불가"·재시도 graceful, 네트워크/HTTP 오류도 재시도 버튼(무한 스피너 금지). 면책 상시.
 - **손익 색 = 글로벌 팔레트(수익=빨강 `--c-up`/손실=파랑 `--c-down`/보합=회색 `--c-flat`)** — WatchlistView 등락률과 동일 규칙(리디자인 반영). 손실은 파랑이며 빨강 경보(`--c-danger`) 금지(경보는 채움 배너/칩 전용). 색만으로 구분 안 하도록 ▲▼─ 글리프 병기.
 
+## 애널리스트 리포트 요약 + "이 리포트로 상담하기" (네이버 연계)
+- **`AnalystReportsSection.jsx`**: `StockReportView` 하단 섹션. `GET /api/detail/{ticker}/analyst-reports` **자체 조회**(환각 차단)로 그 종목 리포트 요약 카드 렌더 — 증권사·작성일·목표주가·**투자의견(‘리포트 의견 ·’ 접두로 출처 귀속**, 가격 방향색·주황/빨강 아님 = 에이전트 판정 아님)·핵심요지·리스크·면책·원문 PDF 링크. 빈 상태 + **"네이버 최신 리포트 가져오기"**(`POST /api/reports/fetch` → 재조회). 상담 CTA=**주황 채움**(`--c-emph`).
+- **"이 리포트로 상담하기"**(카드별) → `setReportContext(sessionId, ticker, reportId)`(서버가 store 에서 요약 조회해 세션 컨텍스트 세팅) → 성공 시 `onConsult(broker)` → 좌측 챗 상단 **주황 상담 배너**(`chat__consult`) "○○증권 리포트로 이어서 물어보세요" + **[상담 종료]**(App `endConsult`가 서버 컨텍스트 해제). 이후 후속 질문은 그 리포트 근거로 답(출처 귀속·면책, 백엔드 세션 핀).
+- **세션 id 는 `App` 이 단일 소유**(리팩터): 좌측 `ChatPanel`(대화)과 우측 리포트 "상담하기"가 **같은 session_id 를 공유**해야 컨텍스트가 대화에 반영된다 → `App` 이 `useRef`로 생성해 두 패널에 prop 전달. `ChatPanel`은 prop 우선, 미전달 시 자체 생성 폴백(구 테스트 호환). 프롭 경로: `App → RightPanel → RightPanelBody → PopupStockReport → StockReportView → AnalystReportsSection`(sessionId·onConsult).
+- `api.js`: `fetchAnalystReports(ticker)`·`fetchNaverReports(limit)`·`setReportContext(sessionId, ticker, reportId)`. 테스트는 jsdom + api.js mock(빈 상태·수집 재조회·상담 콜백·세션 없음 비활성).
+
 ## 로컬 도커 기동 (대안 실행)
 - `docker compose up --build` → `localhost:5173`(프론트)+`:8000`(백엔드). 시크릿은 `.env` 런타임 주입(`env_file`), 소스 핫리로드. Vite 프록시 대상은 `VITE_PROXY_TARGET`로 재정의(도커=`http://backend:8000`). 상세는 루트 `DOCKER.md`.
 
