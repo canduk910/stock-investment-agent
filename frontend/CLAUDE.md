@@ -40,6 +40,11 @@
 - **세션 id 는 `App` 이 단일 소유**(리팩터): 좌측 `ChatPanel`(대화)과 우측 리포트 "상담하기"가 **같은 session_id 를 공유**해야 컨텍스트가 대화에 반영된다 → `App` 이 `useRef`로 생성해 두 패널에 prop 전달. `ChatPanel`은 prop 우선, 미전달 시 자체 생성 폴백(구 테스트 호환). 프롭 경로: `App → RightPanel → RightPanelBody → PopupStockReport → StockReportView → AnalystReportsSection`(sessionId·onConsult).
 - `api.js`: `fetchAnalystReports(ticker)`·`fetchNaverReports(limit)`·`setReportContext(sessionId, ticker, reportId)`. 테스트는 jsdom + api.js mock(빈 상태·수집 재조회·상담 콜백·세션 없음 비활성).
 
+## 현재 보는 화면 → 챗 세션 컨텍스트 (P1)
+- **`App.jsx`가 `rightPanelSpec` 변경 `useEffect`로 현재 화면을 챗 세션에 핀**한다 — 사용자가 잔고/관심종목/종목상세를 열면 챗봇이 그 데이터를 근거로 대화하게 된다. `setViewContext(sessionId, kind, args)`(`api.js`→`POST /api/chat/context`). **화면 데이터는 보내지 않음** — kind/args만 보내고 서버가 재조회(환각 차단).
+- **데이터 kind만 대상** `VIEW_CONTEXT_KINDS={watchlist,balance,stock_report}`(백엔드 `view_context.DATA_BEARING_KINDS`와 SSOT 일치). macro_dashboard·manage_watchlist 등 비데이터/무효 spec은 `kind=null`로 **이전 핀 해제**(스택난 스냅샷 방지). **400ms 디바운스**(빠른 탭전환 KIS 폭주 방지) + **중복 kind+args 스킵**(`useRef` last-key) + **fire-and-forget**(`.catch`). 랜딩(watchlist) 마운트 1회 발화.
+- 챗이 화면을 여는 그 턴은 백엔드 P2(툴 결과 스냅샷 되먹임)가 같은 턴 즉답을 담당(프론트 무관). `App.test.jsx`는 `./api.js` mock에 `setViewContext` 포함 필수(effect가 마운트 시 호출).
+
 ## 로컬 도커 기동 (대안 실행)
 - `docker compose up --build` → `localhost:5173`(프론트)+`:8000`(백엔드). 시크릿은 `.env` 런타임 주입(`env_file`), 소스 핫리로드. Vite 프록시 대상은 `VITE_PROXY_TARGET`로 재정의(도커=`http://backend:8000`). 상세는 루트 `DOCKER.md`.
 
