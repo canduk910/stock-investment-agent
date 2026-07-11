@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"></link>
+  <style>
+    body { margin: 0; background: #f5f7fb; color: #1e2a44; font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; -webkit-font-smoothing: antialiased; }
+    a { color: #1d4ed8; } a:hover { color: #2563eb; }
+    @keyframes stage-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    @keyframes blink { to { visibility: hidden; } }
+    @keyframes marker-ring { 0% { box-shadow: 0 0 0 0 rgba(37,99,235,0.45); } 100% { box-shadow: 0 0 0 12px rgba(37,99,235,0); } }
+    @keyframes rise-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes shimmer { 0% { background-position: -420px 0; } 100% { background-position: 420px 0; } }
+    @keyframes flash-up { 0% { background-color: rgba(229,50,45,0.2); } 100% { background-color: transparent; } }
+    @keyframes flash-down { 0% { background-color: rgba(37,99,235,0.18); } 100% { background-color: transparent; } }
+    button { font-family: inherit; } input, select { font-family: inherit; }
+    input:focus, select:focus { outline: none; border-color: #2563eb !important; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+    ::selection { background: #e8f0fe; }
+  </style>
+</helmet>
+
+<div data-screen-label="리디자인 A" style="min-height: 100vh;">
+
+  <!-- ═══ 다크 네이비 톱바 ═══ -->
+  <header style="background: #ffffff; border-bottom: 1px solid #e2e8f2;">
+    <div style="max-width: 1440px; margin: 0 auto; padding: {{topbarPad}}; min-height: 64px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <svg width="34" height="34" viewBox="0 0 34 34" role="img" aria-label="DK CI" style="display: block; flex: 0 0 auto;">
+          <rect x="0" y="0" width="34" height="34" rx="9" fill="#16233d"></rect>
+          <rect x="23.2" y="4.6" width="6" height="6" rx="1.6" transform="rotate(45 26.2 7.6)" fill="#e0670f"></rect>
+          <text x="16" y="23" text-anchor="middle" fill="#ffffff" style="font-family: inherit; font-size: 13.5px; font-weight: 900; letter-spacing: -0.04em;">DK</text>
+        </svg>
+        <div style="display: flex; flex-direction: column; gap: 1px;">
+          <span style="font-size: 16px; font-weight: 800; letter-spacing: -0.02em; color: #1d4ed8;">디케이 투자에이전트</span>
+          <span style="font-size: 9.5px; font-weight: 600; letter-spacing: 0.14em; color: #a3adc0;">DK INVESTMENT AGENT</span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; margin-left: 16px;">
+        <span style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; background: #fbe8d6; border: 1px solid #f0c9a2; font-size: 12px; font-weight: 700; color: #b8500a;">현재 국면 · 확장</span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; background: #f0f3f9; border: 1px solid #e2e8f2; font-size: 12px; font-weight: 500; color: #55617a;">권장 현금비중 <strong style="color: #16233d; font-weight: 700;">20%</strong></span>
+        <sc-if value="{{vixPanic}}" hint-placeholder-val="{{false}}"><span style="display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 999px; background: #d92d20; border: 1px solid #b42318; font-size: 12px; font-weight: 700; color: #ffffff;">⚠ VIX 패닉</span></sc-if>
+      </div>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
+        <span style="display: {{capDisplay}}; font-size: 11.5px; color: #a3adc0;">판정·수치는 코드가 결정 · LLM 미개입</span>
+        <button type="button" onClick="{{toggleNotif}}" style="padding: 7px 14px; font-size: 12.5px; font-weight: 600; color: {{notifFg}}; background: {{notifBg}}; border: 1px solid {{notifBd}}; border-radius: 9px; cursor: pointer; transition: all 0.15s;" style-hover="background: #e0670f; color: #ffffff; border-color: #e0670f;">{{notifLabel}}</button>
+      </div>
+    </div>
+  </header>
+
+  <sc-if value="{{alertVisible}}" hint-placeholder-val="{{false}}">
+    <div role="status" style="background: #fbe8d6; border-bottom: 1px solid #f0c9a2;">
+      <div style="max-width: 1440px; margin: 0 auto; padding: 9px {{sidePad}}; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 12.5px;">
+        <span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 2.5px; background: #e0670f; display: inline-block; transform: rotate(45deg); flex: 0 0 auto;"></span>
+        <span style="font-weight: 800; color: #b8500a;">목표가 알림</span>
+        <span style="color: #8a5a2b;">NAVER(도달) · 카카오(근접) — 관심종목을 확인해 보세요.</span>
+        <div style="margin-left: auto; display: flex; gap: 8px;">
+          <button type="button" onClick="{{goWatchlistFromAlert}}" style="font-size: 11.5px; font-weight: 700; padding: 4px 12px; border-radius: 999px; background: #e0670f; color: #ffffff; border: 1px solid #e0670f; cursor: pointer; transition: all 0.15s;" style-hover="background: #b8500a;">관심종목 보기</button>
+          <button type="button" onClick="{{closeAlert}}" aria-label="알림 닫기" style="font-size: 11.5px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: transparent; color: #b8500a; border: 1px solid #f0c9a2; cursor: pointer; transition: all 0.15s;" style-hover="background: #ffffff;">닫기</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ═══ 본문 2컬럼 ═══ -->
+  <main style="max-width: 1440px; margin: 0 auto; padding: {{mainPad}}; display: grid; grid-template-columns: {{mainCols}}; gap: 24px; align-items: start;">
+
+    <!-- ── 좌: 챗 패널 ── -->
+    <section data-screen-label="챗 패널" style="min-width: 0; position: {{chatPos}}; top: 24px; height: {{chatHeight}}; display: flex; flex-direction: column; background: #ffffff; border: 1px solid #e2e8f2; border-radius: 18px; box-shadow: 0 1px 2px rgba(16,35,61,0.05), 0 8px 24px rgba(16,35,61,0.05); overflow: hidden;">
+      <header style="display: flex; align-items: center; gap: 10px; padding: 18px 20px 14px; border-bottom: 1px solid #eef2f8;">
+        <div style="width: 34px; height: 34px; border-radius: 11px; background: #101b30; display: flex; align-items: center; justify-content: center;">
+          <span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 2.5px; background: #e0670f; display: inline-block; transform: rotate(45deg);"></span>
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <h1 style="margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: #16233d;">투자 챗봇</h1>
+          <p style="margin: 2px 0 0; font-size: 11.5px; color: #8a94a8;">자연어로 물어보면 우측 패널이 함께 열립니다</p>
+        </div>
+        <span style="display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: #55617a;"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: #2563eb; display: inline-block;"></span>온라인</span>
+      </header>
+
+      <div style="flex: 1 1 auto; min-height: 260px; max-height: {{msgMax}}; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; background: #f8fafd;">
+        <sc-if value="{{chatEmpty}}" hint-placeholder-val="{{true}}">
+          <div style="margin: auto; text-align: center;">
+            <p style="margin: 0 0 14px; color: #8a94a8; font-size: 13px;">이렇게 물어보세요</p>
+            <div style="display: flex; flex-direction: column; gap: 8px; align-items: center;">
+              <sc-for list="{{suggestions}}" as="sg" hint-placeholder-count="3">
+                <button type="button" onClick="{{sg.onAsk}}" style="padding: 9px 16px; font-size: 13px; font-weight: 500; color: #16233d; background: #ffffff; border: 1px solid #e2e8f2; border-radius: 999px; cursor: pointer; transition: all 0.15s;" style-hover="border-color: #2563eb; color: #1d4ed8; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16,35,61,0.08);">{{sg.q}}</button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+        <sc-for list="{{displayMessages}}" as="m" hint-placeholder-count="0">
+          <div style="display: flex; justify-content: {{m.justify}}; animation: rise-in 0.25s ease;">
+            <div style="max-width: 82%; padding: 11px 15px; font-size: 13.5px; line-height: 1.65; background: {{m.bg}}; color: {{m.fg}}; border: {{m.border}}; border-radius: {{m.radius}}; box-shadow: {{m.shadow}};">
+              <sc-if value="{{m.showStages}}" hint-placeholder-val="{{false}}">
+                <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px;">
+                  <sc-for list="{{m.stages}}" as="s" hint-placeholder-count="0">
+                    <li style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: {{s.color}}; font-weight: {{s.fw}};">
+                      <span aria-hidden="true" style="flex: 0 0 auto; width: 16px; text-align: center; font-size: 11px; animation: {{s.anim}};">{{s.mark}}</span>
+                      <span>{{s.label}}</span>
+                    </li>
+                  </sc-for>
+                </ul>
+              </sc-if>
+              <sc-if value="{{m.showText}}" hint-placeholder-val="{{false}}">
+                <span style="white-space: pre-wrap;">{{m.text}}<sc-if value="{{m.showCursor}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="display: inline-block; width: 2px; height: 1em; margin-left: 1px; vertical-align: text-bottom; background: #2563eb; animation: blink 1s steps(2, start) infinite;"></span></sc-if></span>
+              </sc-if>
+              <sc-if value="{{m.showChips}}" hint-placeholder-val="{{false}}">
+                <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
+                  <sc-for list="{{m.chips}}" as="c" hint-placeholder-count="0">
+                    <button type="button" onClick="{{c.onOpen}}" style="font-size: 12px; font-weight: 600; padding: 6px 13px; border-radius: 999px; background: #e8f0fe; border: 1px solid #bcd3fb; color: #1d4ed8; cursor: pointer; transition: all 0.15s;" style-hover="background: #2563eb; color: #ffffff; border-color: #2563eb;">{{c.label}} ↗</button>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <form onSubmit="{{sendChat}}" autoComplete="off" style="display: flex; gap: 8px; padding: 14px 16px; border-top: 1px solid #eef2f8; background: #ffffff;">
+        <input value="{{chatInput}}" onChange="{{onChatInput}}" placeholder="메시지를 입력하세요" aria-label="챗봇 메시지 입력" disabled="{{chatLoading}}" style="flex: 1; padding: 11px 16px; font-size: 13.5px; color: #1e2a44; background: #f5f7fb; border: 1px solid #e2e8f2; border-radius: 12px; transition: all 0.15s;"></input>
+        <button type="submit" disabled="{{sendDisabled}}" style="flex: 0 0 auto; background: #2563eb; color: #ffffff; border: 1px solid #2563eb; border-radius: 12px; padding: 0 18px; font-size: 13px; font-weight: 700; cursor: pointer; opacity: {{sendOpacity}}; transition: all 0.15s;" style-hover="background: #1d4ed8;">{{sendLabel}}</button>
+      </form>
+      <p role="note" style="margin: 0; padding: 10px 20px 14px; font-size: 10.5px; line-height: 1.6; color: #a3adc0; background: #ffffff;">본 챗봇은 정보 제공 목적이며 투자 자문·매매 권유가 아닙니다. 투자 판단과 그 결과의 책임은 전적으로 본인에게 있습니다.</p>
+    </section>
+
+    <!-- ── 우: 동적 패널 ── -->
+    <section data-screen-label="우측 패널" style="min-width: 0; background: #ffffff; border: 1px solid #e2e8f2; border-radius: 18px; box-shadow: 0 1px 2px rgba(16,35,61,0.05), 0 8px 24px rgba(16,35,61,0.05); overflow: hidden; display: flex; flex-direction: column; max-height: {{panelMax}};">
+
+      <!-- 세그먼트 탭 -->
+      <div role="toolbar" aria-label="빠른 탐색" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #eef2f8; background: #ffffff;">
+        <div style="display: flex; gap: 4px; padding: 4px; background: #f0f3f9; border-radius: 12px;">
+          <sc-for list="{{tabs}}" as="tb" hint-placeholder-count="4">
+            <button type="button" onClick="{{tb.onClick}}" aria-pressed="{{tb.active}}" style="padding: 8px 16px; font-size: 13px; font-weight: {{tb.fw}}; color: {{tb.fg}}; background: {{tb.bg}}; border: none; border-radius: 9px; cursor: pointer; white-space: nowrap; box-shadow: {{tb.shadow}}; transition: all 0.18s;">{{tb.label}}</button>
+          </sc-for>
+        </div>
+        <form onSubmit="{{submitSearch}}" autoComplete="off" style="margin-left: auto; display: flex; gap: 6px; align-items: center;">
+          <input value="{{searchDraft}}" onChange="{{onSearchDraft}}" placeholder="종목코드 6자리" aria-label="종목코드 입력" style="width: 150px; padding: 8px 12px; font-size: 12.5px; color: #1e2a44; background: #f5f7fb; border: 1px solid #e2e8f2; border-radius: 10px; transition: all 0.15s;"></input>
+          <button type="submit" style="padding: 8px 13px; font-size: 12.5px; font-weight: 600; background: #ffffff; color: #16233d; border: 1px solid #d8e0ea; border-radius: 10px; cursor: pointer; transition: all 0.15s;" style-hover="border-color: #2563eb; color: #2563eb;">조회</button>
+        </form>
+      </div>
+      <sc-if value="{{searchError}}" hint-placeholder-val="{{false}}">
+        <p role="alert" style="margin: 0; padding: 8px 20px; font-size: 12px; color: #55617a; background: #f5f7fb; border-bottom: 1px solid #eef2f8;">{{searchError}}</p>
+      </sc-if>
+
+      <div style="flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: {{bodyPad}};">
+
+        <sc-if value="{{panelLoading}}" hint-placeholder-val="{{false}}">
+          <div aria-hidden="true" style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="height: 20px; width: 150px; border-radius: 7px; background: linear-gradient(90deg, #eef2f8 25%, #f7fafd 50%, #eef2f8 75%); background-size: 840px 100%; animation: shimmer 1.1s linear infinite;"></div>
+            <div style="height: 64px; border-radius: 14px; background: linear-gradient(90deg, #eef2f8 25%, #f7fafd 50%, #eef2f8 75%); background-size: 840px 100%; animation: shimmer 1.1s linear infinite;"></div>
+            <div style="height: 64px; border-radius: 14px; background: linear-gradient(90deg, #eef2f8 25%, #f7fafd 50%, #eef2f8 75%); background-size: 840px 100%; animation: shimmer 1.1s linear infinite; animation-delay: 0.08s;"></div>
+            <div style="height: 64px; border-radius: 14px; background: linear-gradient(90deg, #eef2f8 25%, #f7fafd 50%, #eef2f8 75%); background-size: 840px 100%; animation: shimmer 1.1s linear infinite; animation-delay: 0.16s;"></div>
+            <div style="height: 180px; border-radius: 16px; background: linear-gradient(90deg, #eef2f8 25%, #f7fafd 50%, #eef2f8 75%); background-size: 840px 100%; animation: shimmer 1.1s linear infinite; animation-delay: 0.24s;"></div>
+            <p style="margin: 0; font-size: 11.5px; color: #a3adc0; text-align: center;">불러오는 중…</p>
+          </div>
+        </sc-if>
+
+        <!-- ═ 관심종목 ═ -->
+        <sc-if value="{{isWatchlist}}" hint-placeholder-val="{{true}}">
+          <div data-screen-label="관심종목">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+              <div>
+                <h2 style="margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -0.02em; color: #16233d;">관심종목</h2>
+                <p style="margin: 3px 0 0; font-size: 12px; color: #8a94a8;">신규 진입 검토 가능 국면 · 권장 비중 한도 20%</p>
+              </div>
+              <label style="margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: #55617a;">정렬
+                <select value="{{sortBy}}" onChange="{{onSort}}" aria-label="정렬 기준" style="font-size: 12.5px; font-weight: 600; padding: 7px 10px; border: 1px solid #e2e8f2; border-radius: 10px; background: #ffffff; color: #16233d; cursor: pointer;">
+                  <option value="registered">등록순</option>
+                  <option value="change_rate">등락률순</option>
+                  <option value="near_target">목표가 근접순</option>
+                </select>
+              </label>
+            </div>
+
+            <sc-if value="{{partialFailure}}" hint-placeholder-val="{{false}}">
+              <div role="status" style="margin: 0 0 12px; padding: 10px 14px; border-radius: 10px; background: #e8f0fe; border: 1px solid #bcd3fb; font-size: 12px; font-weight: 500; color: #1d4ed8;">일부 종목 시세 일시 조회 불가(035720) · 나머지는 정상 표시</div>
+            </sc-if>
+
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <sc-for list="{{wlRows}}" as="r" hint-placeholder-count="5">
+                <div style="display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; padding: 14px 18px; background: #ffffff; border: 1px solid #e9edf5; border-radius: 14px; transition: all 0.16s;" style-hover="border-color: #d3dcea; box-shadow: 0 6px 18px rgba(16,35,61,0.07); transform: translateY(-1px);">
+                  <div style="flex: 1 1 150px; min-width: 130px;">
+                    <div style="font-size: 14.5px; font-weight: 700; color: #16233d; letter-spacing: -0.01em;">{{r.name}}</div>
+                    <div style="margin-top: 2px; font-size: 11px; font-weight: 500; color: #a3adc0; font-variant-numeric: tabular-nums;">{{r.ticker}}<sc-if value="{{r.reason}}" hint-placeholder-val="{{false}}"><span style="color: #8a94a8;"> · {{r.reason}}</span></sc-if></div>
+                  </div>
+                  <svg viewBox="0 0 90 28" width="90" height="28" aria-hidden="true" style="display: block;">
+                    <path d="{{r.spark}}" style="fill: none; stroke-width: 1.6;" stroke="{{r.chgColor}}"></path>
+                    <circle cx="{{r.sparkEndX}}" cy="{{r.sparkEndY}}" r="2.2" fill="{{r.chgColor}}"></circle>
+                  </svg>
+                  <div style="flex: 0 0 auto; min-width: 96px; text-align: right;">
+                    <div style="display: inline-block; padding: 1px 5px; margin: -1px -5px; border-radius: 6px; font-size: 15px; font-weight: 700; color: {{r.priceColor}}; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; animation: {{r.flashAnim}};">{{r.price}}</div>
+                    <div style="margin-top: 3px; display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; color: {{r.chgColor}}; background: {{r.chgBg}}; font-variant-numeric: tabular-nums;"><span aria-hidden="true">{{r.glyph}}</span>{{r.chg}}</div>
+                  </div>
+                  <div style="flex: 0 0 auto; text-align: right;">
+                    <div style="font-size: 11px; color: #a3adc0;">PER / PBR</div>
+                    <div style="margin-top: 3px; font-size: 13px; font-weight: 600; color: #1e2a44; font-variant-numeric: tabular-nums;">{{r.perPbr}}</div>
+                  </div>
+                  <div style="flex: 1 1 170px; min-width: 150px;">
+                    <sc-if value="{{r.editing}}" hint-placeholder-val="{{false}}">
+                      <form onSubmit="{{r.onEditSave}}" style="display: flex; align-items: center; gap: 6px;">
+                        <input type="number" min="0" step="1" value="{{editDraft}}" onChange="{{onEditDraft}}" aria-label="목표가 입력(원)" style="width: 92px; padding: 5px 8px; font-size: 12px; color: #1e2a44; background: #ffffff; border: 1px solid #e2e8f2; border-radius: 8px;"></input>
+                        <button type="submit" style="font-size: 11px; font-weight: 700; padding: 5px 11px; border: 1px solid #2563eb; border-radius: 8px; background: #2563eb; color: #ffffff; cursor: pointer; transition: all 0.15s;" style-hover="background: #1d4ed8;">저장</button>
+                        <button type="button" onClick="{{onEditCancel}}" style="font-size: 11px; font-weight: 500; padding: 5px 9px; border: 1px solid #e9edf5; border-radius: 8px; background: #ffffff; color: #8a94a8; cursor: pointer;">취소</button>
+                      </form>
+                      <p style="margin: 5px 0 0; font-size: 10px; color: #a3adc0;">비우고 저장하면 목표가 해제</p>
+                    </sc-if>
+                    <sc-if value="{{r.notEditing}}" hint-placeholder-val="{{true}}">
+                      <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #8a94a8;">목표가 <strong style="color: #55617a; font-weight: 600; font-variant-numeric: tabular-nums;">{{r.target}}</strong><sc-if value="{{r.dist}}" hint-placeholder-val="{{false}}"><span style="font-variant-numeric: tabular-nums;">({{r.dist}})</span></sc-if><button type="button" onClick="{{r.onEditStart}}" style="font-size: 10.5px; font-weight: 600; padding: 1px 8px; border: 1px solid #e9edf5; border-radius: 999px; background: #ffffff; color: #8a94a8; cursor: pointer; transition: all 0.15s;" style-hover="border-color: #2563eb; color: #1d4ed8;">{{r.targetBtn}}</button></div>
+                      <div style="margin-top: 6px; height: 4px; border-radius: 999px; background: #eef2f8; overflow: hidden;">
+                        <div style="height: 100%; width: {{r.prox}}; border-radius: 999px; background: {{r.proxColor}}; transition: width 0.4s ease;"></div>
+                      </div>
+                    </sc-if>
+                  </div>
+                  <div style="flex: 0 0 auto; margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+                    <span style="display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; border: 1px solid {{r.entryBd}}; background: {{r.entryBg}}; color: {{r.entryFg}}; white-space: nowrap;">{{r.entry}}</span>
+                    <button type="button" style="font-size: 11px; font-weight: 500; padding: 3px 9px; border: 1px solid #e9edf5; border-radius: 999px; background: #ffffff; color: #a3adc0; cursor: pointer; transition: all 0.15s;" style-hover="border-color: #c2cdda; color: #55617a;">제거</button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <p style="margin: 14px 2px 0; font-size: 11px; color: #a3adc0;">상승 <span style="color: #e5322d; font-weight: 700;">빨강</span> · 하락 <span style="color: #2563eb; font-weight: 700;">파랑</span> — 한국 시장 관습 · 목표가 게이지는 매수 관점 근접도</p>
+          </div>
+        </sc-if>
+
+        <!-- ═ 시장 국면 ═ -->
+        <sc-if value="{{isMacro}}" hint-placeholder-val="{{false}}">
+          <div data-screen-label="시장 국면">
+            <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 18px;">
+              <h2 style="margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -0.02em; color: #16233d;">시장 국면</h2>
+              <span style="font-size: 12px; color: #8a94a8;">규칙 기반 판정 · LLM 미개입</span>
+              <span style="margin-left: auto; font-size: 11px; font-weight: 700; padding: 4px 11px; border-radius: 999px; background: #16233d; color: #ffffff;">신뢰도 높음</span>
+            </div>
+
+            <sc-if value="{{vixPanic}}" hint-placeholder-val="{{false}}">
+              <div role="alert" style="display: flex; align-items: flex-start; gap: 10px; margin: 0 0 14px; padding: 12px 16px; border-radius: 12px; background: #d92d20; border: 1px solid #b42318; color: #ffffff; font-size: 12.5px; line-height: 1.55;">
+                <span aria-hidden="true" style="flex: 0 0 auto;">⚠</span>
+                <span><strong style="font-weight: 800;">역발상 관점</strong>: 급락장 매수 제안 — 손실 위험이 큽니다. 투자 판단은 본인 책임(면허 있는 자문 아님).</span>
+              </div>
+            </sc-if>
+            <sc-if value="{{partialFailure}}" hint-placeholder-val="{{false}}">
+              <div role="status" style="margin: 0 0 14px; padding: 10px 14px; border-radius: 10px; background: #e8f0fe; border: 1px solid #bcd3fb; font-size: 12px; font-weight: 500; color: #1d4ed8;">일부 지표 누락: 달러지수 · 남은 지표로만 판정</div>
+            </sc-if>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; align-items: stretch;">
+              <div style="padding: 20px; background: #f8fafd; border: 1px solid #e9edf5; border-radius: 16px;">
+                <div style="display: flex; justify-content: space-between; padding: 0 6px 8px; font-size: 11px; color: #a3adc0;"><span>공포</span><span style="font-weight: 700; color: #55617a; letter-spacing: 0.06em;">심리</span><span>탐욕</span></div>
+                <div style="position: relative; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px;">
+                  <sc-for list="{{quadCells}}" as="qc" hint-placeholder-count="4">
+                    <div style="min-height: 86px; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: {{qc.bg}}; color: {{qc.fg}}; border: 1px solid {{qc.bd}}; transition: all 0.2s;">
+                      <span style="font-size: 16px; font-weight: {{qc.fw}}; letter-spacing: -0.01em;">{{qc.name}}</span>
+                    </div>
+                  </sc-for>
+                  <div aria-hidden="true" style="position: absolute; left: 65.2%; top: 27.2%; transform: translate(-50%, -50%); z-index: 2; pointer-events: none;">
+                    <span style="display: block; width: 14px; height: 14px; border-radius: 50%; background: #16233d; border: 3px solid #ffffff; animation: marker-ring 1.8s ease-out infinite;"></span>
+                  </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 10px 6px 0; font-size: 12px; color: #55617a;"><span>경기: <strong style="color: #16233d;">양호</strong></span><span>심리: <strong style="color: #16233d;">탐욕</strong></span></div>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="padding: 20px; background: #101b30; border-radius: 16px; color: #ffffff;">
+                  <div style="font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.55); letter-spacing: 0.04em;">권장 현금비중</div>
+                  <div style="margin-top: 6px; font-size: 54px; font-weight: 800; line-height: 1; letter-spacing: -0.04em; color: #f0913c; font-variant-numeric: tabular-nums;">20<span style="font-size: 22px; font-weight: 600; color: rgba(255,255,255,0.5); margin-left: 3px;">%</span></div>
+                  <div style="margin-top: 10px; font-size: 12.5px; color: rgba(255,255,255,0.65); line-height: 1.5;"><strong style="color: #f0913c; font-weight: 700;">확장</strong> · 펀더멘털 양호 — 건강한 성장 국면</div>
+                </div>
+                <div style="padding: 16px 18px; background: #ffffff; border: 1px solid #e9edf5; border-radius: 16px;">
+                  <div style="font-size: 11.5px; font-weight: 700; color: #55617a; margin-bottom: 10px; letter-spacing: 0.03em;">기여 지표</div>
+                  <div style="display: flex; flex-direction: column; gap: 7px;">
+                    <sc-for list="{{drivers}}" as="d" hint-placeholder-count="4">
+                      <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px;">
+                        <span style="width: 34px; font-size: 10.5px; font-weight: 700; color: #a3adc0; letter-spacing: 0.04em;">{{d.axis}}</span>
+                        <span style="flex: 1; color: #1e2a44;">{{d.label}}</span>
+                        <span style="display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; color: {{d.fg}}; background: {{d.bg}};"><span aria-hidden="true">{{d.glyph}}</span>{{d.dir}}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ═ 내 잔고 ═ -->
+        <sc-if value="{{isBalance}}" hint-placeholder-val="{{false}}">
+          <div data-screen-label="내 잔고">
+            <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px;">
+              <h2 style="margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -0.02em; color: #16233d;">내 잔고</h2>
+              <span style="font-size: 12px; color: #8a94a8;">조회 전용 · 현재가 무캐시</span>
+            </div>
+
+            <sc-if value="{{partialFailure}}" hint-placeholder-val="{{false}}">
+              <div role="status" style="padding: 26px 22px; border: 1px dashed #c2cdda; border-radius: 14px; background: #f8fafd; text-align: center;">
+                <p style="margin: 0; font-size: 13.5px; font-weight: 700; color: #55617a;">잔고 일시 조회 불가 (증권사 응답 지연)</p>
+                <p style="margin: 6px 0 14px; font-size: 12px; color: #8a94a8;">잠시 후 다시 시도해 주세요 · 나머지 화면은 정상 동작합니다.</p>
+                <button type="button" onClick="{{onBalanceRetry}}" style="font-size: 12.5px; font-weight: 700; padding: 8px 18px; border-radius: 10px; background: #2563eb; color: #ffffff; border: 1px solid #2563eb; cursor: pointer; transition: all 0.15s;" style-hover="background: #1d4ed8;">↻ 재시도</button>
+              </div>
+              <p role="note" style="margin: 14px 2px 0; font-size: 11px; line-height: 1.6; color: #a3adc0;">본 화면은 정보 제공 목적이며 투자 자문·매매 권유가 아닙니다.</p>
+            </sc-if>
+            <sc-if value="{{balOk}}" hint-placeholder-val="{{true}}">
+            <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+              <div style="padding: 22px; background: #101b30; border-radius: 16px; color: #ffffff; display: flex; flex-direction: column; justify-content: center;">
+                <div style="font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,0.55); letter-spacing: 0.04em;">순자산</div>
+                <div style="margin-top: 8px; font-size: 38px; font-weight: 800; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums;">54,180,000<span style="font-size: 17px; font-weight: 600; color: rgba(255,255,255,0.5); margin-left: 3px;">원</span></div>
+                <div style="margin-top: 12px; display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 999px; background: rgba(229,50,45,0.18); color: #ff7a75; font-variant-numeric: tabular-nums;"><span aria-hidden="true">▲</span>+3,530,000원 (+9.24%)</div>
+                <div style="margin-top: 6px; font-size: 11px; color: rgba(255,255,255,0.4);">평가손익 · 상승=빨강/하락=파랑</div>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+              <sc-for list="{{balSmall}}" as="b" hint-placeholder-count="4">
+                <div style="padding: 14px 16px; background: #ffffff; border: 1px solid #e9edf5; border-radius: 14px; transition: all 0.16s;" style-hover="box-shadow: 0 6px 18px rgba(16,35,61,0.07); transform: translateY(-1px);">
+                  <div style="font-size: 11.5px; color: #8a94a8;">{{b.label}}</div>
+                  <div style="margin-top: 5px; font-size: 17px; font-weight: 700; color: #0b111c; font-variant-numeric: tabular-nums; letter-spacing: -0.01em;">{{b.value}}</div>
+                </div>
+              </sc-for>
+              </div>
+            </div>
+
+            <div style="border: 1px solid #e9edf5; border-radius: 14px; overflow: hidden;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                  <tr style="background: #f8fafd;">
+                    <th scope="col" style="padding: 11px 16px; text-align: left; font-size: 11.5px; font-weight: 600; color: #8a94a8; border-bottom: 1px solid #e9edf5;">종목</th>
+                    <th scope="col" style="padding: 11px 16px; text-align: right; font-size: 11.5px; font-weight: 600; color: #8a94a8; border-bottom: 1px solid #e9edf5;">수량</th>
+                    <th scope="col" style="padding: 11px 16px; text-align: right; font-size: 11.5px; font-weight: 600; color: #8a94a8; border-bottom: 1px solid #e9edf5;">평단가</th>
+                    <th scope="col" style="padding: 11px 16px; text-align: right; font-size: 11.5px; font-weight: 600; color: #8a94a8; border-bottom: 1px solid #e9edf5;">현재가</th>
+                    <th scope="col" style="padding: 11px 16px; text-align: right; font-size: 11.5px; font-weight: 600; color: #8a94a8; border-bottom: 1px solid #e9edf5;">평가금액</th>
+                    <th scope="col" style="padding: 11px 16px; text-align: right; font-size: 11.5px; font-weight: 600; color: #8a94a8; border-bottom: 1px solid #e9edf5;">평가손익</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <sc-for list="{{holdRows}}" as="h" hint-placeholder-count="4">
+                    <tr style="transition: background 0.12s;" style-hover="background: #f8fafd;">
+                      <th scope="row" style="padding: 13px 16px; text-align: left; font-weight: 400; border-bottom: 1px solid #f0f3f9;">
+                        <span style="display: block; font-size: 13.5px; font-weight: 700; color: #16233d;">{{h.name}}</span>
+                        <span style="font-size: 11px; color: #a3adc0; font-variant-numeric: tabular-nums;">{{h.ticker}}</span>
+                      </th>
+                      <td style="padding: 13px 16px; text-align: right; border-bottom: 1px solid #f0f3f9; font-variant-numeric: tabular-nums; color: #55617a;">{{h.qty}}</td>
+                      <td style="padding: 13px 16px; text-align: right; border-bottom: 1px solid #f0f3f9; font-variant-numeric: tabular-nums; color: #55617a;">{{h.avg}}</td>
+                      <td style="padding: 13px 16px; text-align: right; border-bottom: 1px solid #f0f3f9; font-variant-numeric: tabular-nums; font-weight: 600; color: #0b111c;">{{h.cur}}</td>
+                      <td style="padding: 13px 16px; text-align: right; border-bottom: 1px solid #f0f3f9; font-variant-numeric: tabular-nums; font-weight: 600; color: #0b111c;">{{h.eval}}</td>
+                      <td style="padding: 13px 16px; text-align: right; border-bottom: 1px solid #f0f3f9; white-space: nowrap;">
+                        <span style="display: inline-flex; flex-direction: column; align-items: flex-end; gap: 1px;">
+                          <span style="font-size: 13px; font-weight: 700; color: {{h.pnlColor}}; font-variant-numeric: tabular-nums;"><span aria-hidden="true">{{h.glyph}}</span> {{h.pnl}}</span>
+                          <span style="font-size: 11px; font-weight: 600; color: {{h.pnlColor}}; opacity: 0.75; font-variant-numeric: tabular-nums;">{{h.pct}}</span>
+                        </span>
+                      </td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+            <p role="note" style="margin: 14px 2px 0; font-size: 11px; line-height: 1.6; color: #a3adc0;">조회 시점 기준(현재가 포함, 캐시 없음) · 본 화면은 정보 제공 목적이며 투자 자문·매매 권유가 아닙니다.</p>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- ═ 관심종목 관리(챗 확인 카드) ═ -->
+        <sc-if value="{{isManage}}" hint-placeholder-val="{{false}}">
+          <div data-screen-label="관심종목 관리" style="max-width: 560px;">
+            <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px;">
+              <h2 style="margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -0.02em; color: #16233d;">관심종목 관리</h2>
+              <span style="font-size: 12px; color: #8a94a8;">챗봇 자연어 편집 · 확인 후 반영</span>
+            </div>
+            <div style="padding: 22px; background: #ffffff; border: 1px solid #e9edf5; border-radius: 16px;">
+              <sc-if value="{{manageAsk}}" hint-placeholder-val="{{true}}">
+                <p style="margin: 0; font-size: 15px; font-weight: 700; color: #16233d;">‘카카오(035720)’의 목표가를 40,000원으로 설정할까요?</p>
+                <p style="margin: 8px 0 18px; font-size: 12px; line-height: 1.6; color: #8a94a8;">AI는 제안만 합니다 — [확인]을 눌러야 반영됩니다(자동 매매·자동 실행 아님).</p>
+                <div style="display: flex; gap: 8px;">
+                  <button type="button" onClick="{{onManageConfirm}}" style="padding: 9px 20px; font-size: 13px; font-weight: 700; color: #ffffff; background: #e0670f; border: 1px solid #e0670f; border-radius: 10px; cursor: pointer; transition: all 0.15s;" style-hover="background: #b8500a; border-color: #b8500a;">{{manageOkLabel}}</button>
+                  <button type="button" onClick="{{onManageCancel}}" style="padding: 9px 18px; font-size: 13px; font-weight: 600; color: #55617a; background: #f0f3f9; border: 1px solid #e2e8f2; border-radius: 10px; cursor: pointer;">취소</button>
+                </div>
+              </sc-if>
+              <sc-if value="{{manageDone}}" hint-placeholder-val="{{false}}">
+                <p style="margin: 0 0 14px; font-size: 14px; color: #1e2a44;">반영했습니다. 관심종목 화면에서 확인할 수 있어요.</p>
+                <button type="button" onClick="{{onManageClose}}" style="padding: 9px 18px; font-size: 13px; font-weight: 600; color: #16233d; background: #ffffff; border: 1px solid #d8e0ea; border-radius: 10px; cursor: pointer; transition: all 0.15s;" style-hover="border-color: #2563eb; color: #2563eb;">닫기 · 관심종목 보기</button>
+              </sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ═ 종목 리포트 ═ -->
+        <sc-if value="{{isReport}}" hint-placeholder-val="{{false}}">
+          <div data-screen-label="종목 리포트">
+            <header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px;">
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <h2 style="margin: 0; font-size: 23px; font-weight: 800; letter-spacing: -0.02em; color: #16233d;">삼성전자</h2>
+                  <span style="font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #f0f3f9; color: #8a94a8; font-variant-numeric: tabular-nums;">005930</span>
+                  <span style="font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: #e8f0fe; color: #1d4ed8;">반도체</span>
+                </div>
+                <button type="button" style="margin-top: 8px; font-size: 12px; font-weight: 600; padding: 5px 12px; border: 1px solid #e2e8f2; border-radius: 999px; background: #ffffff; color: #55617a; cursor: pointer; transition: all 0.15s;" style-hover="border-color: #e0670f; color: #b8500a; background: #fbe8d6;">☆ 관심종목 추가</button>
+              </div>
+              <div style="text-align: right;">
+                <div style="display: flex; align-items: baseline; gap: 8px; justify-content: flex-end;">
+                  <span style="font-size: {{rptPriceFs}}; font-weight: 800; color: #0b111c; letter-spacing: -0.03em; font-variant-numeric: tabular-nums;">{{rpt.price}}</span>
+                  <span style="font-size: 15px; color: #a3adc0;">원</span>
+                  <span style="display: inline-flex; align-items: center; gap: 3px; font-size: 14px; font-weight: 700; padding: 3px 10px; border-radius: 999px; color: {{rpt.chgColor}}; background: {{rpt.chgBg}}; font-variant-numeric: tabular-nums;"><span aria-hidden="true">{{rpt.glyph}}</span>{{rpt.chg}}</span>
+                </div>
+                <div style="margin-top: 4px; font-size: 11px; color: #a3adc0;">기준 2026-07-03 · 시세는 실시간 직접 조회</div>
+              </div>
+            </header>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 18px;">
+              <sc-for list="{{statCards}}" as="sc" hint-placeholder-count="4">
+                <div style="padding: 15px 16px; background: #ffffff; border: 1px solid #e9edf5; border-radius: 14px; transition: all 0.16s;" style-hover="box-shadow: 0 6px 18px rgba(16,35,61,0.07); transform: translateY(-1px);">
+                  <div style="font-size: 11.5px; font-weight: 500; color: #8a94a8;">{{sc.label}}</div>
+                  <sc-if value="{{sc.isBadge}}" hint-placeholder-val="{{false}}">
+                    <div style="margin-top: 8px;"><span style="display: inline-block; background: #16233d; color: #ffffff; font-size: 14px; font-weight: 700; padding: 5px 13px; border-radius: 999px;">{{sc.badge}}</span></div>
+                  </sc-if>
+                  <sc-if value="{{sc.isValue}}" hint-placeholder-val="{{true}}">
+                    <div style="margin-top: 7px; font-size: 23px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; color: {{sc.valueColor}}; font-variant-numeric: tabular-nums;">{{sc.value}}<span style="font-size: 12.5px; font-weight: 500; color: #a3adc0; margin-left: 2px;">{{sc.unit}}</span></div>
+                  </sc-if>
+                  <div style="margin-top: 8px; font-size: 10.5px; line-height: 1.5; color: #a3adc0;">{{sc.meta}}</div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="background: #ffffff; border: 1px solid #e9edf5; border-radius: 16px; padding: 16px; margin-bottom: 18px;">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                <span style="font-size: 13px; font-weight: 700; color: #16233d;">가격 차트</span>
+                <span style="font-size: 11px; color: #a3adc0;">일봉 6개월 · MA20 · VOL · RSI(14)</span>
+                <span style="margin-left: auto; display: inline-flex; gap: 10px; font-size: 11px; color: #8a94a8;"><span><span aria-hidden="true" style="color: #e5322d;">■</span> 상승</span><span><span aria-hidden="true" style="color: #2563eb;">■</span> 하락</span><span><span aria-hidden="true" style="color: #16233d;">—</span> MA20</span></span>
+              </div>
+              <svg role="img" aria-label="가격 캔들차트" viewBox="0 0 900 440" width="100%" height="{{chartH}}" preserveAspectRatio="none" style="display: block;">
+                <sc-for list="{{chartGrid}}" as="gl" hint-placeholder-count="0"><line x1="{{gl.x1}}" y1="{{gl.y1}}" x2="{{gl.x2}}" y2="{{gl.y2}}" style="stroke: #eef2f8; stroke-width: 1;"></line></sc-for>
+                <sc-for list="{{chartAxis}}" as="ax" hint-placeholder-count="0"><text x="{{ax.x}}" y="{{ax.y}}" style="fill: #a3adc0; font-size: 10px; font-family: inherit;">{{ax.label}}</text></sc-for>
+                <sc-for list="{{chartVols}}" as="v" hint-placeholder-count="0"><rect x="{{v.x}}" y="{{v.y}}" width="{{v.w}}" height="{{v.h}}" fill="{{v.color}}" opacity="0.45"></rect></sc-for>
+                <sc-for list="{{chartCandles}}" as="c" hint-placeholder-count="0"><g><line x1="{{c.cx}}" y1="{{c.wy1}}" x2="{{c.cx}}" y2="{{c.wy2}}" style="stroke-width: 1;" stroke="{{c.color}}"></line><rect x="{{c.x}}" y="{{c.by}}" width="{{c.w}}" height="{{c.bh}}" fill="{{c.color}}"></rect></g></sc-for>
+                <path d="{{maPath}}" style="fill: none; stroke: #16233d; stroke-width: 1.3;"></path>
+                <path d="{{rsiPath}}" style="fill: none; stroke: #16233d; stroke-width: 1.2;"></path>
+                <sc-for list="{{chartHLines}}" as="hl" hint-placeholder-count="0"><g><line x1="8" y1="{{hl.y}}" x2="840" y2="{{hl.y}}" stroke="{{hl.color}}" style="stroke-width: 1;" stroke-dasharray="{{hl.dash}}"></line><rect x="840" y="{{hl.ty}}" width="58" height="15" rx="3" fill="{{hl.color}}"></rect><text x="844" y="{{hl.tty}}" style="fill: #ffffff; font-size: 9.5px; font-family: inherit;">{{hl.label}}</text></g></sc-for>
+              </svg>
+            </div>
+
+            <div style="display: flex; align-items: flex-start; gap: 12px; padding: 16px 18px; background: #fbf4ec; border: 1px solid #f2ddc4; border-radius: 14px; margin-bottom: 18px;">
+              <span aria-hidden="true" style="width: 8px; height: 8px; margin-top: 5px; border-radius: 2.5px; background: #e0670f; display: inline-block; transform: rotate(45deg); flex: 0 0 auto;"></span>
+              <div>
+                <div style="font-size: 13px; font-weight: 700; color: #16233d;">국면 정합성 · 현재 국면 <span style="color: #b8500a;">확장</span></div>
+                <p style="margin: 5px 0 0; font-size: 12.5px; line-height: 1.6; color: #55617a;">확장 국면 기준 이내 — PER 13.2 ≤ 25, PBR 1.42 ≤ 3.0. (사실 서술이며 매매 권유가 아님)</p>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(400px, 100%), 1fr)); gap: 12px; margin-bottom: 18px;">
+              <div style="border: 1px solid #e9edf5; border-radius: 14px; overflow-x: auto; background: #ffffff;">
+                <div style="padding: 13px 16px 9px; font-size: 12.5px; font-weight: 700; color: #16233d;">손익 추이 <span style="font-weight: 400; color: #a3adc0;">(억원, 전기 대비)</span></div>
+                <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
+                  <thead><tr style="background: #f8fafd;">
+                    <th scope="col" style="text-align: left; padding: 8px 16px; font-size: 11px; font-weight: 600; color: #8a94a8; border-bottom: 1px solid #e9edf5;">결산</th>
+                    <th scope="col" style="text-align: right; padding: 8px 16px; font-size: 11px; font-weight: 600; color: #8a94a8; border-bottom: 1px solid #e9edf5;">매출</th>
+                    <th scope="col" style="text-align: right; padding: 8px 16px; font-size: 11px; font-weight: 600; color: #8a94a8; border-bottom: 1px solid #e9edf5;">영업이익</th>
+                    <th scope="col" style="text-align: right; padding: 8px 16px; font-size: 11px; font-weight: 600; color: #8a94a8; border-bottom: 1px solid #e9edf5;">순이익</th>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{incomeRows}}" as="ir" hint-placeholder-count="4">
+                      <tr>
+                        <th scope="row" style="text-align: left; padding: 9px 16px; font-weight: 600; color: #1e2a44; border-bottom: 1px solid #f0f3f9;">{{ir.period}}</th>
+                        <td style="text-align: right; padding: 9px 16px; white-space: nowrap; border-bottom: 1px solid #f0f3f9;"><span style="color: #0b111c; font-variant-numeric: tabular-nums;">{{ir.rev}}</span><sc-if value="{{ir.revYoy}}" hint-placeholder-val="{{false}}"><span style="margin-left: 7px; font-size: 10.5px; font-weight: 700; color: {{ir.revColor}};">{{ir.revGlyph}}{{ir.revYoy}}</span></sc-if></td>
+                        <td style="text-align: right; padding: 9px 16px; white-space: nowrap; border-bottom: 1px solid #f0f3f9;"><span style="color: #0b111c; font-variant-numeric: tabular-nums;">{{ir.op}}</span><sc-if value="{{ir.opYoy}}" hint-placeholder-val="{{false}}"><span style="margin-left: 7px; font-size: 10.5px; font-weight: 700; color: {{ir.opColor}};">{{ir.opGlyph}}{{ir.opYoy}}</span></sc-if></td>
+                        <td style="text-align: right; padding: 9px 16px; white-space: nowrap; border-bottom: 1px solid #f0f3f9;"><span style="color: #0b111c; font-variant-numeric: tabular-nums;">{{ir.net}}</span><sc-if value="{{ir.netYoy}}" hint-placeholder-val="{{false}}"><span style="margin-left: 7px; font-size: 10.5px; font-weight: 700; color: {{ir.netColor}};">{{ir.netGlyph}}{{ir.netYoy}}</span></sc-if></td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+              </div>
+              <div style="border: 1px solid #e9edf5; border-radius: 14px; overflow-x: auto; background: #ffffff;">
+                <div style="padding: 13px 16px 9px; font-size: 12.5px; font-weight: 700; color: #16233d;">주당·수익성 <span style="font-weight: 400; color: #a3adc0;">(원 / %)</span></div>
+                <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
+                  <thead><tr style="background: #f8fafd;">
+                    <th scope="col" style="text-align: left; padding: 8px 16px; font-size: 11px; font-weight: 600; color: #8a94a8; border-bottom: 1px solid #e9edf5;">결산</th>
+                    <th scope="col" style="text-align: right; padding: 8px 16px; font-size: 11px; font-weight: 600; color: #8a94a8; border-bottom: 1px solid #e9edf5;">EPS</th>
+                    <th scope="col" style="text-align: right; padding: 8px 16px; font-size: 11px; font-weight: 600; color: #8a94a8; border-bottom: 1px solid #e9edf5;">BPS</th>
+                    <th scope="col" style="text-align: right; padding: 8px 16px; font-size: 11px; font-weight: 600; color: #8a94a8; border-bottom: 1px solid #e9edf5;">ROE</th>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{ratioRows}}" as="rr" hint-placeholder-count="4">
+                      <tr>
+                        <th scope="row" style="text-align: left; padding: 9px 16px; font-weight: 600; color: #1e2a44; border-bottom: 1px solid #f0f3f9;">{{rr.period}}</th>
+                        <td style="text-align: right; padding: 9px 16px; border-bottom: 1px solid #f0f3f9;"><span style="color: #0b111c; font-variant-numeric: tabular-nums;">{{rr.eps}}</span></td>
+                        <td style="text-align: right; padding: 9px 16px; border-bottom: 1px solid #f0f3f9;"><span style="color: #0b111c; font-variant-numeric: tabular-nums;">{{rr.bps}}</span></td>
+                        <td style="text-align: right; padding: 9px 16px; white-space: nowrap; border-bottom: 1px solid #f0f3f9;"><span style="color: #0b111c; font-variant-numeric: tabular-nums;">{{rr.roe}}</span><sc-if value="{{rr.roeYoy}}" hint-placeholder-val="{{false}}"><span style="margin-left: 7px; font-size: 10.5px; font-weight: 700; color: {{rr.roeColor}};">{{rr.roeGlyph}}{{rr.roeYoy}}</span></sc-if></td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div style="border: 1px solid #e9edf5; border-radius: 16px; background: #ffffff; padding: 18px;">
+              <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+                <span style="font-size: 13px; font-weight: 700; color: #16233d;">AI 종합 서술</span>
+                <span style="font-size: 11px; color: #a3adc0;">판정·수치는 코드가 확정 · AI는 설명만</span>
+                <div style="margin-left: auto; display: flex; gap: 8px;">
+                  <button type="button" onClick="{{onAiGen}}" style="padding: 8px 16px; font-size: 12.5px; font-weight: 700; background: #2563eb; color: #ffffff; border: none; border-radius: 10px; cursor: pointer; opacity: {{aiGenOpacity}}; transition: all 0.15s;" style-hover="background: #1d4ed8;">{{aiGenLabel}}</button>
+                  <button type="button" onClick="{{toggleAiHistory}}" style="padding: 8px 14px; font-size: 12.5px; font-weight: 600; background: #ffffff; color: #55617a; border: 1px solid #e2e8f2; border-radius: 10px; cursor: pointer; transition: all 0.15s;" style-hover="border-color: #2563eb; color: #1d4ed8;">{{aiHistLabel}}</button>
+                </div>
+              </div>
+
+              <sc-if value="{{aiIdle}}" hint-placeholder-val="{{true}}">
+                <p style="margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: #8a94a8;">버튼을 누르면 위 정량 요약·국면을 근거로 AI가 서술 요약을 생성합니다(판정·수치는 코드가 확정, AI는 설명만).</p>
+              </sc-if>
+              <sc-if value="{{aiLoading}}" hint-placeholder-val="{{false}}">
+                <div aria-hidden="true" style="margin-top: 14px; display: flex; flex-direction: column; gap: 8px;">
+                  <div style="height: 14px; width: 55%; border-radius: 6px; background: linear-gradient(90deg, #eef2f8 25%, #f7fafd 50%, #eef2f8 75%); background-size: 840px 100%; animation: shimmer 1.1s linear infinite;"></div>
+                  <div style="height: 14px; width: 92%; border-radius: 6px; background: linear-gradient(90deg, #eef2f8 25%, #f7fafd 50%, #eef2f8 75%); background-size: 840px 100%; animation: shimmer 1.1s linear infinite; animation-delay: 0.1s;"></div>
+                  <div style="height: 14px; width: 76%; border-radius: 6px; background: linear-gradient(90deg, #eef2f8 25%, #f7fafd 50%, #eef2f8 75%); background-size: 840px 100%; animation: shimmer 1.1s linear infinite; animation-delay: 0.2s;"></div>
+                </div>
+              </sc-if>
+              <sc-if value="{{aiDone}}" hint-placeholder-val="{{false}}">
+                <div style="margin-top: 14px; animation: rise-in 0.3s ease;">
+                  <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+                    <span style="display: inline-block; font-size: 13px; font-weight: 700; padding: 5px 14px; border-radius: 999px; background: #e8f0fe; border: 1px solid #bcd3fb; color: #1d4ed8;">종합의견 · 긍정적</span>
+                    <span style="font-size: 11.5px; color: #8a94a8;">생성 시점 국면 · <strong style="color: #b8500a; font-weight: 700;">확장</strong> · 2026-07-03 14:22</span>
+                  </div>
+                  <p style="margin: 12px 0 0; font-size: 13px; line-height: 1.7; color: #1e2a44;">반도체 업황 회복으로 매출이 재성장 구간에 진입했고, 예측 PER(9.2배)이 후행 PER(13.2배)보다 낮아 이익 성장 전망 대비 부담이 완화되는 흐름입니다. 확장 국면 기준(PER ≤ 25 · PBR ≤ 3.0) 이내로 신규 진입 검토가 가능한 종목입니다.</p>
+                  <div style="margin-top: 14px;">
+                    <h4 style="margin: 0 0 6px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.02em; color: #55617a;">투자 포인트</h4>
+                    <ul style="margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.7; color: #1e2a44;">
+                      <li>매출 CAGR +2.5% — 2024년 실적 반등으로 재성장 구간 진입</li>
+                      <li>예측 PER 9.2배(27E) — 직전 13.0배 대비 밸류에이션 부담 완화 전망</li>
+                      <li>52주 밴드 상단(72.5%)에서 MA20 대비 +2.4% — 상승 추세 유지</li>
+                    </ul>
+                  </div>
+                  <div style="margin-top: 12px;">
+                    <h4 style="margin: 0 0 6px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.02em; color: #55617a;">리스크 요인</h4>
+                    <ul style="margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.7; color: #1e2a44;">
+                      <li>영업이익 CAGR -14.0% — 이익 변동성이 크고 회복 지속성 미확인</li>
+                      <li>현재 PER이 4년 평균 대비 +11.9% — 밴드 기준 고평가 구간</li>
+                    </ul>
+                  </div>
+                  <div style="margin-top: 12px;">
+                    <h4 style="margin: 0 0 6px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.02em; color: #55617a;">국면 정합성</h4>
+                    <p style="margin: 0; font-size: 12.5px; line-height: 1.7; color: #1e2a44;">확장 국면에서 PER·PBR 기준을 모두 충족합니다. 다만 권장 현금비중 20%를 고려한 분할 접근이 서술상 제안됩니다(매매 권유 아님).</p>
+                  </div>
+                </div>
+              </sc-if>
+              <sc-if value="{{aiHistOpen}}" hint-placeholder-val="{{false}}">
+                <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #f0f3f9;">
+                  <h4 style="margin: 0 0 8px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.02em; color: #55617a;">과거 평가 (최신순)</h4>
+                  <div style="display: flex; flex-direction: column;">
+                    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #f0f3f9; font-size: 12px;">
+                      <span style="display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; background: #e8f0fe; border: 1px solid #bcd3fb; color: #1d4ed8;">긍정적</span>
+                      <span style="color: #a3adc0;">2026-07-03 · 국면 확장</span>
+                      <span style="font-weight: 700; color: #e0670f;">의견 중립→긍정적 · 국면 회복→확장</span>
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; font-size: 12px;">
+                      <span style="display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; background: #f0f3f9; border: 1px solid #e2e8f2; color: #55617a;">중립</span>
+                      <span style="color: #a3adc0;">2026-05-02 · 국면 회복</span>
+                    </div>
+                  </div>
+                </div>
+              </sc-if>
+
+              <p role="note" style="margin: 12px 0 0; padding-top: 12px; border-top: 1px solid #f0f3f9; font-size: 11px; line-height: 1.6; color: #a3adc0;">이 AI 서술은 참고용이며 면허 있는 투자자문·매매 권유가 아닙니다. 본 리포트는 정보 제공 목적이며, 투자 판단과 그 결과에 대한 책임은 전적으로 본인에게 있습니다.</p>
+            </div>
+          </div>
+        </sc-if>
+
+      </div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1440, &quot;height&quot;: 960}, &quot;landingTab&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;watchlist&quot;, &quot;macro&quot;, &quot;balance&quot;, &quot;report&quot;], &quot;default&quot;: &quot;watchlist&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;동작&quot;}, &quot;showSparklines&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;표시&quot;}, &quot;demoPartialFailure&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: false, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;데모 상태&quot;}, &quot;vixPanic&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: false, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;데모 상태&quot;}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props)
+    this.state = { panel: this.props.landingTab ?? 'watchlist', searchDraft: '', searchError: '', sortBy: 'registered', chatInput: '', messages: [], chatLoading: false, vw: typeof window !== 'undefined' ? window.innerWidth : 1440, notifOn: false, alertVisible: true, editTicker: null, editDraft: '', panelLoading: false, aiState: 'idle', aiHistOpen: false, manageState: 'ask', flash: null }
+    this.timers = []
+    this.buildData()
+  }
+  componentDidMount() {
+    this.onResize = () => this.setState({ vw: window.innerWidth })
+    window.addEventListener('resize', this.onResize)
+    this.tickId = setInterval(() => this.priceTick(), 6000)
+  }
+  componentWillUnmount() {
+    this.timers.forEach(clearTimeout)
+    if (this.onResize) window.removeEventListener('resize', this.onResize)
+    if (this.tickId) clearInterval(this.tickId)
+    if (this.loadTid) clearTimeout(this.loadTid)
+  }
+  // 가격 갱신 플래시 데모 — 6초마다 임의 종목 시세를 소폭 조정하고 빨강/파랑 배경 플래시.
+  priceTick() {
+    const pf = this.props.demoPartialFailure ?? false
+    const pool = this.watchlist.filter(it => !(pf && it.ticker === '035720'))
+    const it = pool[Math.floor(Math.random() * pool.length)]
+    const deltaPct = (Math.random() - 0.5) * 0.8
+    if (Math.abs(deltaPct) < 0.05) return
+    const next = Math.max(100, Math.round(it.cur * (1 + deltaPct / 100)))
+    if (next === it.cur) return
+    const dir = next > it.cur ? 'up' : 'down'
+    it.chg = +(it.chg + ((next - it.cur) / it.cur) * 100).toFixed(2)
+    it.cur = next
+    this.setState({ flash: { ticker: it.ticker, dir } })
+    this.t(() => this.setState({ flash: null }), 900)
+  }
+  // 패널 전환 공통 경로 — 짧은 스켈레톤 로딩 후 본문 표시.
+  setPanel(kind) {
+    if (this.loadTid) clearTimeout(this.loadTid)
+    this.setState({ panel: kind, panelLoading: true })
+    this.loadTid = setTimeout(() => this.setState({ panelLoading: false }), 450)
+  }
+  t(fn, ms) { this.timers.push(setTimeout(fn, ms)) }
+
+  buildData() {
+    const rng = (seed) => { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 0xffffffff } }
+    const r = rng(20260703)
+    const dates = []
+    const d = new Date(Date.UTC(2026, 6, 3))
+    while (dates.length < 130) { const day = d.getUTCDay(); if (day !== 0 && day !== 6) dates.push(new Date(d)); d.setUTCDate(d.getUTCDate() - 1) }
+    dates.reverse()
+    const candles = []
+    let prevClose = 68000
+    for (const dt of dates) {
+      const drift = (r() - 0.48) * 0.028
+      const open = Math.round(prevClose * (1 + (r() - 0.5) * 0.006))
+      const close = Math.max(1000, Math.round(open * (1 + drift)))
+      const high = Math.round(Math.max(open, close) * (1 + r() * 0.012))
+      const low = Math.round(Math.min(open, close) * (1 - r() * 0.012))
+      const volume = Math.round(8000000 + r() * 14000000)
+      candles.push({ dt, open, high, low, close, volume })
+      prevClose = close
+    }
+    this.candles = candles
+    this.price = candles[129].close
+    this.chgRate = ((candles[129].close - candles[128].close) / candles[128].close) * 100
+    this.high52 = Math.max(...candles.map(c => c.high))
+    this.low52 = Math.min(...candles.map(c => c.low))
+    this.buildChart()
+    this.watchlist = [
+      { name: '삼성전자', ticker: '005930', reason: '반도체 대장주', cur: this.price, chg: +Number(this.chgRate.toFixed(2)), per: 13.2, pbr: 1.42, entry: 'ok', target: 68000, status: 'far', added: 1, seed: 11 },
+      { name: 'SK하이닉스', ticker: '000660', reason: 'HBM 성장', cur: 189300, chg: -1.36, per: 8.4, pbr: 1.85, entry: 'valuation', target: 180000, status: 'far', added: 2, seed: 22 },
+      { name: 'NAVER', ticker: '035420', reason: '', cur: 233500, chg: 2.87, per: 18.9, pbr: 1.21, entry: 'ok', target: 235000, status: 'reached', added: 3, seed: 33 },
+      { name: '현대차', ticker: '005380', reason: '저PBR', cur: 251000, chg: 0.0, per: 5.8, pbr: 0.64, entry: 'ok', target: null, status: 'none', added: 4, seed: 44 },
+      { name: '카카오', ticker: '035720', reason: '', cur: 41850, chg: -3.12, per: 32.1, pbr: 1.35, entry: 'valuation', target: 40000, status: 'near', added: 5, seed: 55 },
+    ]
+    // 스파크라인 (30pt, 등락 방향 편향 랜덤워크)
+    this.watchlist.forEach(it => {
+      const rr = rng(it.seed * 7919)
+      const pts = []
+      let v = 50
+      for (let i = 0; i < 30; i++) { v += (rr() - (it.chg >= 0 ? 0.42 : 0.58)) * 9; v = Math.max(6, Math.min(94, v)); pts.push(v) }
+      const min = Math.min(...pts), max = Math.max(...pts), span = Math.max(1e-6, max - min)
+      const xy = pts.map((p, i) => [2 + (i / 29) * 86, 24 - ((p - min) / span) * 20])
+      it.spark = xy.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ')
+      it.sparkEnd = xy[29]
+    })
+    this.holdings = [
+      { name: '삼성전자', ticker: '005930', qty: 120, avg: 68400, cur: this.price },
+      { name: 'SK하이닉스', ticker: '000660', qty: 15, avg: 198000, cur: 189300 },
+      { name: 'NAVER', ticker: '035420', qty: 22, avg: 215000, cur: 233500 },
+      { name: '현대차', ticker: '005380', qty: 30, avg: 242000, cur: 251000 },
+    ]
+    this.income = [
+      { period: '202112', rev: 2796000, op: 516000, net: 399000, eps: 5777, bps: 43611, roe: 13.9 },
+      { period: '202212', rev: 3022000, op: 433000, net: 556000, eps: 8057, bps: 50817, roe: 17.1 },
+      { period: '202312', rev: 2589000, op: 65000, net: 154000, eps: 2131, bps: 52002, roe: 4.1 },
+      { period: '202412', rev: 3008000, op: 329000, net: 341000, eps: 4950, bps: 55800, roe: 9.2 },
+    ]
+  }
+
+  buildChart() {
+    const cs = this.candles, n = cs.length
+    const X0 = 8, X1 = 840, W = X1 - X0
+    const step = W / n, bw = Math.max(2.5, step * 0.62)
+    const UP = '#e5322d', DOWN = '#2563eb'
+    const minL = Math.min(...cs.map(c => c.low)), maxH = Math.max(...cs.map(c => c.high))
+    const mTop = 12, mBot = 252
+    const my = v => mTop + ((maxH - v) / (maxH - minL)) * (mBot - mTop)
+    const volMax = Math.max(...cs.map(c => c.volume))
+    const vTop = 272, vBot = 338
+    const rTop = 358, rBot = 428
+    const ry = v => rBot - (v / 100) * (rBot - rTop)
+    this.chartCandles = cs.map((c, i) => {
+      const x = X0 + i * step
+      const up = c.close >= c.open
+      return { cx: (x + bw / 2).toFixed(1), wy1: my(c.high).toFixed(1), wy2: my(c.low).toFixed(1), x: x.toFixed(1), by: my(Math.max(c.open, c.close)).toFixed(1), w: bw.toFixed(1), bh: Math.max(1, Math.abs(my(c.open) - my(c.close))).toFixed(1), color: up ? UP : DOWN }
+    })
+    this.chartVols = cs.map((c, i) => {
+      const x = X0 + i * step
+      const h = Math.max(1, (c.volume / volMax) * (vBot - vTop))
+      return { x: x.toFixed(1), y: (vBot - h).toFixed(1), w: bw.toFixed(1), h: h.toFixed(1), color: c.close >= c.open ? UP : DOWN }
+    })
+    let pts = []
+    for (let i = 19; i < n; i++) { let s = 0; for (let j = i - 19; j <= i; j++) s += cs[j].close; pts.push([(X0 + i * step + bw / 2), my(s / 20)]) }
+    this.maPath = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ')
+    const rsis = []
+    let g = 0, l = 0
+    for (let i = 1; i < n; i++) {
+      const ch = cs[i].close - cs[i - 1].close
+      if (i <= 14) { if (ch > 0) g += ch; else l -= ch; if (i === 14) rsis.push([i, 100 - 100 / (1 + (g / 14) / Math.max(1e-9, l / 14))]) }
+      else { g = (g * 13 + Math.max(0, ch)) / 14; l = (l * 13 + Math.max(0, -ch)) / 14; rsis.push([i, 100 - 100 / (1 + g / Math.max(1e-9, l))]) }
+    }
+    this.rsiPath = rsis.map((p, i) => (i ? 'L' : 'M') + (X0 + p[0] * step + bw / 2).toFixed(1) + ' ' + ry(p[1]).toFixed(1)).join(' ')
+    const grid = [], axis = []
+    for (let k = 0; k <= 4; k++) {
+      const v = minL + (k / 4) * (maxH - minL)
+      const y = my(v)
+      grid.push({ x1: X0, y1: y.toFixed(1), x2: X1, y2: y.toFixed(1) })
+      axis.push({ x: 845, y: (y + 3).toFixed(1), label: Math.round(v).toLocaleString() })
+    }
+    ;[30, 70].forEach(v => { grid.push({ x1: X0, y1: ry(v).toFixed(1), x2: X1, y2: ry(v).toFixed(1) }); axis.push({ x: 845, y: (ry(v) + 3).toFixed(1), label: String(v) }) })
+    ;[0, 32, 64, 96, 129].forEach(i => { const c = cs[i]; axis.push({ x: (X0 + i * step - 8).toFixed(1), y: 266, label: (c.dt.getUTCMonth() + 1) + '/' + c.dt.getUTCDate() }) })
+    axis.push({ x: X0, y: vTop - 4, label: 'VOL' })
+    axis.push({ x: X0, y: rTop - 4, label: 'RSI(14)' })
+    this.chartGrid = grid
+    this.chartAxis = axis
+    const mk = (v, color, dash, label) => { const y = my(v); return { y: y.toFixed(1), color, dash, label, ty: (y - 7.5).toFixed(1), tty: (y + 3.5).toFixed(1) } }
+    this.chartHLines = [
+      mk(this.high52, '#c2cdda', '4 4', this.high52.toLocaleString()),
+      mk(this.low52, '#c2cdda', '4 4', this.low52.toLocaleString()),
+      mk(this.price, '#16233d', '0', this.price.toLocaleString()),
+    ]
+  }
+
+  ask(q) {
+    if (this.state.chatLoading) return
+    // 캔드 라우팅 — 목표가 편집 요청은 확인 카드(manage), 잔고는 balance, 그 외는 종목 리포트.
+    const isManage = /목표가/.test(q) && /(설정|변경|바꿔|해줘)/.test(q)
+    const isBalance = !isManage && /잔고/.test(q)
+    const route = isManage ? 'manage' : isBalance ? 'balance' : 'report'
+    const full = isManage
+      ? '카카오(035720)의 목표가를 40,000원으로 설정하도록 준비했어요. 우측 패널에서 [확인]을 눌러야 실제로 반영됩니다(자동 실행 아님).'
+      : isBalance
+        ? '내 잔고를 우측 패널에 열었습니다. 예수금·평가금액·평가손익은 조회 시점 기준이며, 판정·수치는 코드가 산출합니다.'
+        : '삼성전자(005930)의 종합 리포트를 우측 패널에 열었습니다. 현재 시장은 확장 국면으로 신규 진입 검토가 가능한 상태이며, 상세 수치·판정은 리포트를 참고하세요.'
+    const chipLabel = isManage ? '관심종목 관리 열기' : isBalance ? '내 잔고 열기' : '종목 리포트 열기'
+    const msgs = [...this.state.messages, { role: 'user', text: q }, { role: 'bot', text: '', streaming: true, stage: 'analyze', chips: [] }]
+    this.setState({ messages: msgs, chatInput: '', chatLoading: true })
+    const patch = (p) => this.setState(s => {
+      const m = [...s.messages]; const last = m[m.length - 1]
+      if (!last || last.role !== 'bot' || !last.streaming) return null
+      m[m.length - 1] = { ...last, ...(typeof p === 'function' ? p(last) : p) }
+      return { messages: m }
+    })
+    this.t(() => patch({ stage: 'regime' }), 700)
+    this.t(() => patch({ stage: 'generate' }), 1400)
+    let i = 0
+    const type = () => {
+      i += 3
+      patch({ text: full.slice(0, i) })
+      if (i < full.length) this.t(type, 45)
+      else {
+        patch({ streaming: false, chips: [{ label: chipLabel, kind: route }] })
+        this.setState({ chatLoading: false, manageState: isManage ? 'ask' : this.state.manageState })
+        this.setPanel(route)
+      }
+    }
+    this.t(type, 2100)
+  }
+  sendChat(e) { e.preventDefault(); const q = this.state.chatInput.trim(); if (q) this.ask(q) }
+
+  renderVals() {
+    const s = this.state
+    const showSpark = this.props.showSparklines ?? true
+    const fmt = v => v.toLocaleString()
+    const won = v => v.toLocaleString() + '원'
+    const signedPct = (v, d = 2) => (v > 0 ? '+' : '') + v.toFixed(d) + '%'
+    const UPC = '#e5322d', DOWNC = '#2563eb', FLATC = '#8a94a8' // 한국 관습: 상승=빨강 / 하락=파랑
+    const UPBG = 'rgba(229,50,45,0.08)', DOWNBG = '#e8f0fe', FLATBG = '#f0f3f9'
+    const dirOf = v => (v > 0 ? 'up' : v < 0 ? 'down' : 'flat')
+    const glyphOf = d => (d === 'up' ? '▲' : d === 'down' ? '▼' : '─')
+    const colorOf = d => (d === 'up' ? UPC : d === 'down' ? DOWNC : FLATC)
+    const bgOf = d => (d === 'up' ? UPBG : d === 'down' ? DOWNBG : FLATBG)
+
+    const STAGES = [
+      { key: 'analyze', label: '질문 분석' }, { key: 'regime', label: '시장 국면 조회' },
+      { key: 'generate', label: '답변 작성 중' }, { key: 'summarize', label: '정리 중' },
+    ]
+    const checklist = (cur) => {
+      let idx = STAGES.findIndex(x => x.key === cur); if (idx < 0) idx = 0
+      return STAGES.map((x, i) => {
+        const st = i < idx ? 'done' : i === idx ? 'active' : 'pending'
+        return { label: x.label, mark: st === 'done' ? '✓' : st === 'active' ? '●' : '○', color: st === 'done' ? '#1d4ed8' : st === 'active' ? '#2563eb' : '#a3adc0', fw: st === 'active' ? '700' : '400', anim: st === 'active' ? 'stage-pulse 1s ease-in-out infinite' : 'none' }
+      })
+    }
+    const displayMessages = s.messages.map(m => {
+      const isUser = m.role === 'user'
+      const showStages = !isUser && m.streaming && !m.text
+      return {
+        justify: isUser ? 'flex-end' : 'flex-start',
+        bg: isUser ? '#101b30' : '#ffffff', fg: isUser ? '#ffffff' : '#1e2a44',
+        border: isUser ? 'none' : '1px solid #e9edf5',
+        radius: isUser ? '16px 16px 5px 16px' : '16px 16px 16px 5px',
+        shadow: isUser ? '0 4px 12px rgba(16,27,48,0.18)' : '0 1px 2px rgba(16,35,61,0.04)',
+        showStages, stages: showStages ? checklist(m.stage) : [],
+        showText: !!m.text, text: m.text, showCursor: !isUser && !!m.streaming && !!m.text,
+        showChips: !isUser && (m.chips || []).length > 0,
+        chips: (m.chips || []).map(c => ({ label: c.label, onOpen: () => this.setPanel(c.kind || 'report') })),
+      }
+    })
+    const suggestions = ['지금 시장 어때?', '삼성전자 어때?', '내 잔고 보여줘', '카카오 목표가 4만원으로 바꿔줘'].map(q => ({ q, onAsk: () => this.ask(q) }))
+
+    const tabs = [
+      { kind: 'watchlist', label: '관심종목' }, { kind: 'macro', label: '시장 국면' },
+      { kind: 'balance', label: '내 잔고' }, { kind: 'report', label: '종목 리포트' },
+    ].map(tb => {
+      const active = s.panel === tb.kind
+      return { label: tb.label, active: String(active), fw: active ? '700' : '500', fg: active ? '#ffffff' : '#55617a', bg: active ? '#16233d' : 'transparent', shadow: active ? '0 2px 8px rgba(22,35,61,0.25)' : 'none', onClick: () => this.setPanel(tb.kind) }
+    })
+
+    const cmp = {
+      registered: (a, b) => a.added - b.added,
+      change_rate: (a, b) => b.chg - a.chg,
+      near_target: (a, b) => {
+        const av = a.target != null ? (a.cur - a.target) / a.target : null
+        const bv = b.target != null ? (b.cur - b.target) / b.target : null
+        if (av === null && bv === null) return 0
+        if (av === null) return 1; if (bv === null) return -1
+        return av - bv
+      },
+    }
+    const ENTRY = {
+      ok: { text: '진입 검토 가능', fg: '#b8500a', bg: '#fbe8d6', bd: '#f0c9a2' },
+      valuation: { text: '밸류에이션 부담', fg: '#55617a', bg: '#f0f3f9', bd: '#e2e8f2' },
+    }
+    const pf = this.props.demoPartialFailure ?? false
+    // 목표가 상태는 현재가·목표가로 동적 재계산(인라인 편집 반영). 매수 관점: current≤target=도달.
+    const statusOf = it => {
+      if (it.target == null) return 'none'
+      if (it.cur <= it.target) return 'reached'
+      return ((it.cur - it.target) / it.target) * 100 <= 5 ? 'near' : 'far'
+    }
+    const wlRows = [...this.watchlist].sort(cmp[s.sortBy] || cmp.registered).map(it => {
+      const failed = pf && it.ticker === '035720'
+      const d = failed ? 'flat' : dirOf(it.chg)
+      const e = ENTRY[it.entry]
+      const st = statusOf(it)
+      const distV = !failed && it.target != null ? ((it.cur - it.target) / it.target) * 100 : null
+      const prox = distV === null ? 0 : Math.max(6, Math.min(100, 100 - Math.abs(distV) * 9))
+      const editing = s.editTicker === it.ticker
+      const flashing = s.flash && s.flash.ticker === it.ticker
+      return {
+        name: it.name, ticker: it.ticker, reason: it.reason,
+        price: failed ? '조회 불가' : won(it.cur),
+        priceColor: failed ? '#a3adc0' : '#0b111c',
+        flashAnim: flashing ? (s.flash.dir === 'up' ? 'flash-up 0.9s ease-out' : 'flash-down 0.9s ease-out') : 'none',
+        chg: failed ? '—' : signedPct(it.chg), glyph: failed ? '─' : glyphOf(d), chgColor: colorOf(d), chgBg: bgOf(d),
+        perPbr: it.per.toFixed(1) + ' / ' + it.pbr.toFixed(2),
+        entry: e.text, entryFg: e.fg, entryBg: e.bg, entryBd: e.bd,
+        target: it.target != null ? won(it.target) : '미설정',
+        targetBtn: it.target != null ? '변경' : '설정',
+        dist: distV !== null ? signedPct(distV, 1) : '',
+        prox: prox + '%', proxColor: st === 'reached' || st === 'near' ? '#e0670f' : '#c2cdda',
+        spark: showSpark ? it.spark : '', sparkEndX: it.sparkEnd[0].toFixed(1), sparkEndY: it.sparkEnd[1].toFixed(1),
+        editing, notEditing: !editing,
+        onEditStart: () => this.setState({ editTicker: it.ticker, editDraft: it.target != null ? String(it.target) : '' }),
+        onEditSave: (ev) => {
+          ev.preventDefault()
+          const raw = this.state.editDraft.trim()
+          const val = raw === '' ? null : Number(raw)
+          if (raw !== '' && (!Number.isFinite(val) || val < 0)) return
+          it.target = val
+          this.setState({ editTicker: null, editDraft: '' })
+        },
+      }
+    })
+
+    const quadCells = ['회복', '확장', '수축', '과열'].map(nm => {
+      const active = nm === '확장'
+      return { name: nm, bg: active ? '#2563eb' : '#ffffff', fg: active ? '#ffffff' : '#8a94a8', bd: active ? '#1d4ed8' : '#e9edf5', fw: active ? '800' : '600' }
+    })
+    const drivers = [
+      { axis: '경기', label: '장단기 금리차', dir: '양호', pos: true },
+      { axis: '경기', label: 'HY 신용스프레드', dir: '양호', pos: true },
+      { axis: '심리', label: '공포탐욕지수', dir: '탐욕', pos: true },
+      { axis: '심리', label: 'VIX', dir: '공포', pos: false },
+    ].map(d => ({ ...d, glyph: d.pos ? '▲' : '▼', fg: d.pos ? '#1d4ed8' : '#55617a', bg: d.pos ? '#e8f0fe' : '#f0f3f9' }))
+
+    const balSmall = [
+      { label: '예수금', value: won(12450000) }, { label: '매입금액', value: won(38200000) },
+      { label: '평가금액', value: won(41730000) }, { label: '보유 종목', value: '4종목' },
+    ]
+    const holdRows = this.holdings.map(h => {
+      const evalAmt = h.qty * h.cur
+      const pnl = evalAmt - h.qty * h.avg
+      const pct = (pnl / (h.qty * h.avg)) * 100
+      const d = dirOf(pnl)
+      return { name: h.name, ticker: h.ticker, qty: fmt(h.qty), avg: won(h.avg), cur: won(h.cur), eval: won(evalAmt), pnl: (pnl > 0 ? '+' : '') + fmt(pnl) + '원', pct: signedPct(pct), glyph: glyphOf(d), pnlColor: colorOf(d) }
+    })
+
+    const chgDir = dirOf(this.chgRate)
+    const rpt = { price: fmt(this.price), chg: signedPct(this.chgRate), glyph: glyphOf(chgDir), chgColor: colorOf(chgDir), chgBg: bgOf(chgDir), high52: fmt(this.high52), low52: fmt(this.low52) }
+    const statCards = [
+      { label: '매출 CAGR (4년)', value: '+2.5', unit: '%', valueColor: UPC, meta: '4개년 연평균 성장' },
+      { label: '영업이익 CAGR (4년)', value: '-14.0', unit: '%', valueColor: DOWNC, meta: '4개년 연평균' },
+      { label: 'PER vs 4년평균', value: '+11.9', unit: '%', valueColor: '#0b111c', meta: '현재 13.2 · 평균 11.8' },
+      { label: '밸류에이션', isBadge: true, badge: '고평가', meta: '±10% 밴드 기준' },
+      { label: '예측 PER', value: '9.2', unit: '배', valueColor: '#0b111c', meta: '직전 13.0 → 26E 10.9 → 27E 9.2 · 출처 김한국' },
+      { label: 'RSI (14)', value: '58.3', unit: '', valueColor: '#0b111c', meta: 'MA20 대비 +2.4%' },
+      { label: '52주 위치', value: '72.5', unit: '%', valueColor: '#0b111c', meta: fmt(this.low52) + ' ~ ' + fmt(this.high52) + '원' },
+      { label: '시가총액', value: '429.1', unit: '조원', valueColor: '#0b111c', meta: '상장주식수 5,969,782,550주' },
+    ].map(c => ({ ...c, isBadge: !!c.isBadge, isValue: !c.isBadge }))
+
+    const yoy = (cur, prev) => (prev == null || prev <= 0 || cur == null) ? null : ((cur - prev) / prev) * 100
+    const fmtP = p => p.slice(2, 4) + '.' + p.slice(4, 6)
+    const mkYoy = (cur, prev) => {
+      const v = yoy(cur, prev)
+      if (v === null) return { txt: '', glyph: '', color: '' }
+      const d = dirOf(v)
+      return { txt: Math.abs(v).toFixed(1) + '%', glyph: glyphOf(d), color: colorOf(d) }
+    }
+    const incomeRows = this.income.map((r0, i) => {
+      const prev = i > 0 ? this.income[i - 1] : {}
+      const rv = mkYoy(r0.rev, prev.rev), op = mkYoy(r0.op, prev.op), nt = mkYoy(r0.net, prev.net)
+      return { period: fmtP(r0.period), rev: fmt(r0.rev), revYoy: rv.txt, revGlyph: rv.glyph, revColor: rv.color, op: fmt(r0.op), opYoy: op.txt, opGlyph: op.glyph, opColor: op.color, net: fmt(r0.net), netYoy: nt.txt, netGlyph: nt.glyph, netColor: nt.color }
+    })
+    const ratioRows = this.income.map((r0, i) => {
+      const prev = i > 0 ? this.income[i - 1] : {}
+      const ro = mkYoy(r0.roe, prev.roe)
+      return { period: fmtP(r0.period), eps: fmt(r0.eps), bps: fmt(r0.bps), roe: r0.roe.toFixed(1), roeYoy: ro.txt, roeGlyph: ro.glyph, roeColor: ro.color }
+    })
+
+    const narrow = s.vw < 1100
+    const mobile = s.vw < 640
+    return {
+      mainCols: narrow ? '1fr' : 'minmax(340px, 420px) 1fr',
+      chatPos: narrow ? 'static' : 'sticky',
+      chatHeight: narrow ? 'auto' : 'calc(100vh - 112px)',
+      msgMax: narrow ? '420px' : 'none',
+      panelMax: narrow ? 'none' : 'calc(100vh - 112px)',
+      topbarPad: mobile ? '10px 14px' : '10px 28px',
+      mainPad: mobile ? '16px 14px 32px' : '24px 28px 40px',
+      bodyPad: mobile ? '14px' : '22px',
+      sidePad: mobile ? '14px' : '28px',
+      capDisplay: mobile ? 'none' : 'inline',
+      rptPriceFs: mobile ? '28px' : '36px',
+      chartH: mobile ? '340' : '440',
+      vixPanic: this.props.vixPanic ?? false,
+      partialFailure: pf, balOk: !pf,
+      panelLoading: s.panelLoading,
+      notifLabel: s.notifOn ? '✓ 알림 켜짐' : '목표가 알림 켜기',
+      notifFg: s.notifOn ? '#ffffff' : '#b8500a',
+      notifBg: s.notifOn ? '#e0670f' : '#fbe8d6',
+      notifBd: s.notifOn ? '#e0670f' : '#f0c9a2',
+      toggleNotif: () => this.setState({ notifOn: !s.notifOn, alertVisible: s.notifOn ? s.alertVisible : true }),
+      alertVisible: s.alertVisible,
+      closeAlert: () => this.setState({ alertVisible: false }),
+      goWatchlistFromAlert: () => this.setPanel('watchlist'),
+      onBalanceRetry: () => this.setPanel('balance'),
+      editDraft: s.editDraft,
+      onEditDraft: e => this.setState({ editDraft: e.target.value }),
+      onEditCancel: () => this.setState({ editTicker: null, editDraft: '' }),
+      isManage: s.panel === 'manage' && !s.panelLoading,
+      manageAsk: s.manageState === 'ask' || s.manageState === 'saving',
+      manageDone: s.manageState === 'done',
+      manageOkLabel: s.manageState === 'saving' ? '반영 중…' : '확인',
+      onManageConfirm: () => {
+        if (this.state.manageState === 'saving') return
+        this.setState({ manageState: 'saving' })
+        this.t(() => {
+          const kk = this.watchlist.find(w => w.ticker === '035720')
+          if (kk) kk.target = 40000
+          this.setState({ manageState: 'done' })
+        }, 700)
+      },
+      onManageCancel: () => { this.setState({ manageState: 'ask' }); this.setPanel('watchlist') },
+      onManageClose: () => { this.setState({ manageState: 'ask' }); this.setPanel('watchlist') },
+      aiIdle: s.aiState === 'idle', aiLoading: s.aiState === 'loading', aiDone: s.aiState === 'done',
+      aiGenLabel: s.aiState === 'loading' ? 'AI 리포트 생성 중…' : s.aiState === 'done' ? '다시 생성' : 'AI 리포트 생성',
+      aiGenOpacity: s.aiState === 'loading' ? '0.6' : '1',
+      onAiGen: () => {
+        if (this.state.aiState === 'loading') return
+        this.setState({ aiState: 'loading' })
+        this.t(() => this.setState({ aiState: 'done' }), 1600)
+      },
+      aiHistOpen: s.aiHistOpen,
+      aiHistLabel: s.aiHistOpen ? '과거 평가 숨기기' : '과거 평가 보기',
+      toggleAiHistory: () => this.setState({ aiHistOpen: !s.aiHistOpen }),
+      chatEmpty: s.messages.length === 0, displayMessages, suggestions,
+      chatInput: s.chatInput, onChatInput: e => this.setState({ chatInput: e.target.value }),
+      sendChat: this.sendChat.bind(this), chatLoading: s.chatLoading,
+      sendDisabled: s.chatLoading || !s.chatInput.trim(),
+      sendOpacity: (s.chatLoading || !s.chatInput.trim()) ? '0.55' : '1',
+      sendLabel: s.chatLoading ? '전송 중' : '전송',
+      tabs,
+      searchDraft: s.searchDraft, searchError: s.searchError,
+      onSearchDraft: e => this.setState({ searchDraft: e.target.value, searchError: '' }),
+      submitSearch: e => {
+        e.preventDefault()
+        const t0 = s.searchDraft.trim()
+        if (!/^[0-9A-Za-z]{6}$/.test(t0)) { this.setState({ searchError: '종목코드는 숫자·영문 6자리입니다 (예: 005930).' }); return }
+        this.setState({ searchDraft: '' })
+        this.setPanel('report')
+      },
+      isWatchlist: s.panel === 'watchlist' && !s.panelLoading, isMacro: s.panel === 'macro' && !s.panelLoading,
+      isBalance: s.panel === 'balance' && !s.panelLoading, isReport: s.panel === 'report' && !s.panelLoading,
+      sortBy: s.sortBy, onSort: e => this.setState({ sortBy: e.target.value }),
+      wlRows, quadCells, drivers, balSmall, holdRows, rpt, statCards, incomeRows, ratioRows,
+      chartCandles: this.chartCandles, chartVols: this.chartVols, chartGrid: this.chartGrid,
+      chartAxis: this.chartAxis, chartHLines: this.chartHLines, maPath: this.maPath, rsiPath: this.rsiPath,
+    }
+  }
+}
+</script>
+</body>
+</html>

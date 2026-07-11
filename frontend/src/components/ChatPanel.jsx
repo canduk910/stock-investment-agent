@@ -13,6 +13,14 @@ const DISCLAIMER =
   '본 챗봇은 정보 제공 목적이며 투자 자문·매매 권유가 아닙니다. 판정·수치는 코드가 결정하고 ' +
   '설명만 AI 가 돕습니다. 투자 판단과 그 결과의 책임은 전적으로 본인에게 있습니다(면허 있는 투자자문 아님).'
 
+// 빈 상태 제안 칩 — 클릭 시 그대로 전송(온보딩). 국면/종목/잔고/워치리스트 편집을 한 번씩 예시.
+const SUGGESTIONS = [
+  '지금 시장 어때?',
+  '삼성전자 어때?',
+  '내 잔고 보여줘',
+  '카카오 목표가 4만원으로 바꿔줘',
+]
+
 export default function ChatPanel({ onShowPanel }) {
   const sessionId = useRef(null)
   if (sessionId.current === null) {
@@ -124,14 +132,19 @@ export default function ChatPanel({ onShowPanel }) {
     })
   }
 
+  // 사용자 질의 전송 공통 경로 — 폼 제출·제안 칩이 공유. 사용자 버블 push 후 runChat.
+  function submitQuery(q) {
+    const query = q.trim()
+    if (!query || loading) return
+    setMessages((m) => [...m, { role: 'user', text: query }])
+    setInput('')
+    lastQueryRef.current = query
+    runChat(query)
+  }
+
   function send(e) {
     e.preventDefault()
-    const q = input.trim()
-    if (!q || loading) return
-    setMessages((m) => [...m, { role: 'user', text: q }])
-    setInput('')
-    lastQueryRef.current = q
-    runChat(q)
+    submitQuery(input)
   }
 
   function retry() {
@@ -153,7 +166,20 @@ export default function ChatPanel({ onShowPanel }) {
         <div className="chat__messages" ref={listRef} role="log" aria-live="polite">
           {messages.length === 0 ? (
             <div className="chat__empty">
-              예: “지금 시장 어때?” · “삼성전자 어때?” · “PER이 뭐야?”
+              <p className="chat__empty-title">이렇게 물어보세요</p>
+              <div className="chat__suggest">
+                {SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className="chat__suggest-chip"
+                    onClick={() => submitQuery(s)}
+                    disabled={loading}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
           ) : (
             messages.map((msg, i) => (

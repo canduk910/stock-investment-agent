@@ -20,5 +20,10 @@
 - **`WATCHLIST_MAX_ITEMS=30`**: POST에서 **신규** 종목이 상한 도달이면 409(`watchlist full`)로 거부·미저장. 기존 ticker 갱신(upsert)은 개수를 안 늘리므로 허용(`existing is None`일 때만 상한 검사). KIS 레이트리밋·저장 폭주 방어.
 - **`target_status`는 매수(진입가) 관점**: `current ≤ target`→`reached`(도달), `≤ target*(1+NEAR_TARGET_THRESHOLD_PCT%)`→`near`(근접), 그 외 `far`, target 없으면 `none`. `distance_to_target=(current-target)/target*100`. 프론트 `classifyTargetStatus`가 이 semantics를 복제한다(sell 관점으로 뒤집지 말 것).
 
+## 스파크라인 시계열 (Phase D — `spark:number[]|null`)
+- 각 item에 `spark` = 종목별 일봉 종가 시계열(최근 `WATCHLIST_SPARK_POINTS=20`개, **date 오름차순**). 프론트 미니차트 원천.
+- 원천은 기존 일봉 어댑터 `chart.inquire_daily_itemchartprice`(FHKST03010100) 재사용 — **현재가 캐시 신설 금지(원칙1)**, 요청 시점 라이브 조회(캐시 배선 없음). 수정주가(`adj_price="0"`, 액면분할 갭 제거 → 추세 연속성). 룩백 `WATCHLIST_SPARK_LOOKBACK_DAYS=40`일(주말·공휴일 감안 20pt 확보).
+- **선택적 시각화**: 시세(주 데이터)와 **독립 병렬** 조회(`_fetch_sparks_parallel`, 동시성 상한 공유). spark 실패·빈 candles·전량 종가결측 → `spark=None`(빈 리스트 아님). **spark 실패는 `partial_failure`를 오염시키지 않는다**(시세 실패 semantics 보존) — 시세 실패 종목도 spark는 독립 성공 가능. 종가 결측 candle은 제외(None 섞이면 프론트 스케일 깨짐).
+
 ## 서비스 반환 계약 (api/watchlist.py·프론트 WatchlistView 소비)
-- `build_watchlist_view` → `{items:[{...저장필드, current_price, change_rate, per, pbr, distance_to_target, target_status, entry_signal:{entry_blocked, per_over, pbr_over, single_cap, entry_allowed, note}}], regime:{regime, single_cap, entry_blocked}, partial_failure:[ticker…/"regime"]}`.
+- `build_watchlist_view` → `{items:[{...저장필드, current_price, change_rate, per, pbr, distance_to_target, target_status, entry_signal:{entry_blocked, per_over, pbr_over, single_cap, entry_allowed, note}, spark:number[]|null}], regime:{regime, single_cap, entry_blocked}, partial_failure:[ticker…/"regime"]}`.

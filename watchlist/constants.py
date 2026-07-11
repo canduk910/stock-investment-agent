@@ -23,5 +23,11 @@ WATCHLIST_FETCH_CONCURRENCY = 6
 # 목표가 근접 판정 임계(%). |distance_to_target| <= 이 값이면 'near'.
 NEAR_TARGET_THRESHOLD_PCT = 3.0
 
+# 스파크라인(미니차트) 종가 포인트 수 — 최근 N개만 노출(과밀 방지). date 오름차순.
+WATCHLIST_SPARK_POINTS = 20
+
+# 스파크라인 일봉 조회 룩백(일). 주말·공휴일 감안해 N포인트 확보 여유(달력일 기준).
+WATCHLIST_SPARK_LOOKBACK_DAYS = 40
+
 # durable 사용자 상태 저장 경로(캐시 아님 — .cache/ 는 로컬 스탠드인 관례 공유).
 WATCHLIST_STORE_PATH = ".cache/watchlist.json"

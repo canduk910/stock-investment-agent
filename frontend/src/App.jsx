@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ChatPanel from './components/ChatPanel.jsx'
 import RightPanel from './components/RightPanel.jsx'
-import { fetchWatchlist } from './api.js'
+import { fetchWatchlist, fetchMacroRegime } from './api.js'
 import { detectTargetAlerts } from './lib/watchlistLogic.js'
 
 // UX 개편 — 좌측 상시 채팅 + 우측 맥락형 동적 패널(모달 폐기). 2컬럼 그리드(.app__main).
@@ -23,9 +23,49 @@ function alertMessage(alerts) {
 // 랜딩(기본) 우측 패널 = 관심종목(사용자 확정). valid:true(watchlist 는 항상 유효).
 const LANDING_SPEC = { kind: 'watchlist', args: {}, valid: true }
 
+// DK 모노그램 CI — 남색 스퀘어(rx) + 우상단 주황 다이아몬드 + 중앙 흰 "DK". 색은 theme.css 토큰.
+function DkMonogram() {
+  return (
+    <svg
+      className="app__monogram"
+      width="34"
+      height="34"
+      viewBox="0 0 34 34"
+      role="img"
+      aria-label="디케이 투자에이전트 로고"
+    >
+      <rect x="0" y="0" width="34" height="34" rx="9" fill="var(--c-navy)" />
+      <rect
+        x="24.5"
+        y="3.5"
+        width="6"
+        height="6"
+        rx="1"
+        fill="var(--c-emph)"
+        transform="rotate(45 27.5 6.5)"
+      />
+      <text
+        x="17"
+        y="17"
+        textAnchor="middle"
+        dominantBaseline="central"
+        fill="var(--c-white)"
+        fontSize="13.5"
+        fontWeight="900"
+        letterSpacing="0.5"
+      >
+        DK
+      </text>
+    </svg>
+  )
+}
+
 export default function App() {
   // 우측 동적 패널 spec — 챗봇(onShowPanel)·퀵버튼(onSelect)이 리프팅. 닫으면 null(빈 상태).
   const [rightPanelSpec, setRightPanelSpec] = useState(LANDING_SPEC)
+
+  // 톱바 상태 칩용 국면 — App 이 자체 조회(환각 차단). 실패해도 앱은 렌더(칩만 조용히 생략).
+  const [regime, setRegime] = useState(null)
 
   // 앱레벨 능동 알림 배너(주황). 목표가 far→near/reached 전이 시에만 표시.
   const [alertBanner, setAlertBanner] = useState(null)
@@ -88,39 +128,88 @@ export default function App() {
     }
   }, [checkTargetAlerts])
 
+  // 톱바 상태 칩용 국면 — 마운트 1회 자체 조회(RegimeGauge 와 동일 패턴). 실패는 조용히 무시(칩만 생략).
+  useEffect(() => {
+    let cancelled = false
+    fetchMacroRegime()
+      .then((view) => {
+        if (!cancelled) setRegime(view)
+      })
+      .catch(() => {
+        /* 국면 조회 실패 — 톱바 칩만 생략하고 앱은 정상 렌더(전체 에러 화면 금지) */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   return (
     <div className="app">
       <header className="app__topbar">
-        <div>
-          <h1 className="app__title">투자 분석 에이전트</h1>
-          <p className="app__subtitle">
-            좌측 채팅으로 물어보고 · 우측 패널에서 국면·관심종목·잔고·종목을 살펴보세요 · 판정·수치는
-            코드가 결정(LLM 미개입)
-          </p>
+        <div className="app__brand">
+          <DkMonogram />
+          <div className="app__brand-text">
+            <h1 className="app__title">디케이 투자에이전트</h1>
+            <p className="app__caption">DK INVESTMENT AGENT</p>
+          </div>
         </div>
-        {notifPerm === 'default' ? (
-          <button
-            type="button"
-            className="app__notif-cta"
-            onClick={enableNotifications}
-            title="목표가 도달·근접 시 브라우저 알림을 받습니다(주황 배너는 권한과 무관하게 항상 표시)."
-          >
-            목표가 알림 켜기
-          </button>
-        ) : null}
+
+        <div className="app__status">
+          {regime ? (
+            <>
+              <span className="app__chip app__chip--regime">
+                현재 국면 · {regime.regime}
+              </span>
+              {regime.recommended_cash_ratio != null ? (
+                <span className="app__chip app__chip--cash">
+                  권장 현금비중 <b>{regime.recommended_cash_ratio}%</b>
+                </span>
+              ) : null}
+              {regime.vix_panic ? (
+                <span className="app__chip app__chip--panic">⚠ VIX 패닉</span>
+              ) : null}
+            </>
+          ) : null}
+          {notifPerm === 'granted' ? (
+            <span className="app__notif-cta app__notif-cta--on" role="status">
+              ✓ 알림 켜짐
+            </span>
+          ) : notifPerm === 'default' ? (
+            <button
+              type="button"
+              className="app__notif-cta"
+              onClick={enableNotifications}
+              title="목표가 도달·근접 시 브라우저 알림을 받습니다(주황 배너는 권한과 무관하게 항상 표시)."
+            >
+              목표가 알림 켜기
+            </button>
+          ) : null}
+        </div>
       </header>
 
       {alertBanner && (
         <div className="banner banner--emph app__alert" role="status">
-          {alertBanner}
-          <button
-            type="button"
-            className="banner__retry"
-            onClick={() => setAlertBanner(null)}
-            aria-label="알림 닫기"
-          >
-            닫기
-          </button>
+          <span className="app__alert-text">{alertBanner}</span>
+          <span className="app__alert-actions">
+            <button
+              type="button"
+              className="app__alert-view"
+              onClick={() => {
+                setRightPanelSpec(LANDING_SPEC)
+                setAlertBanner(null)
+              }}
+            >
+              관심종목 보기
+            </button>
+            <button
+              type="button"
+              className="banner__retry"
+              onClick={() => setAlertBanner(null)}
+              aria-label="알림 닫기"
+            >
+              닫기
+            </button>
+          </span>
         </div>
       )}
 

@@ -46,6 +46,17 @@ def client(monkeypatch):
         wl.service.inquire_price, "inquire_price",
         lambda client, ticker, market="J": _valuation(),
     )
+    # 스파크라인 일봉도 service 안에서 호출 → 기본 2pt 종가 stub(실 KIS 회피).
+    monkeypatch.setattr(
+        wl.service.chart, "inquire_daily_itemchartprice",
+        lambda client, ticker, start_date, end_date, period="D", adj_price="1", market="J": {
+            "ticker": ticker,
+            "candles": [
+                {"date": "20260101", "close": 100.0},
+                {"date": "20260102", "close": 110.0},
+            ],
+        },
+    )
     # stock_name 해석(POST) — 마스터/시세 실 호출 회피.
     monkeypatch.setattr(wl, "_resolve_stock_name", lambda client, ticker: f"종목{ticker}")
 
@@ -77,6 +88,27 @@ def test_get_returns_enriched_items(client):
     assert it["ticker"] == "005930"
     assert it["current_price"] == 80000
     assert it["entry_signal"]["entry_allowed"] is True
+
+
+def test_get_item_includes_spark(client):
+    # Phase D: 각 item 에 spark:number[]|null(일봉 종가 시계열, 프론트 미니차트 원천).
+    client.post("/api/watchlist", json={"ticker": "005930", "stock_name": "삼성전자"})
+    it = client.get("/api/watchlist").json()["items"][0]
+    assert it["spark"] == [100.0, 110.0]
+
+
+def test_get_item_spark_null_on_chart_failure(client, monkeypatch):
+    # 일봉 실패 → spark=null(graceful). 시세·나머지 필드는 정상, partial_failure 미오염.
+    def _boom(*a, **k):
+        raise RuntimeError("chart down")
+
+    monkeypatch.setattr(wl.service.chart, "inquire_daily_itemchartprice", _boom)
+    client.post("/api/watchlist", json={"ticker": "005930", "stock_name": "삼성전자"})
+    body = client.get("/api/watchlist").json()
+    it = body["items"][0]
+    assert it["spark"] is None
+    assert it["current_price"] == 80000
+    assert body["partial_failure"] == []
 
 
 def test_get_echoes_sort_by(client):

@@ -1,4 +1,11 @@
-/* 컴포넌트 스타일 — 색은 theme.css 토큰(var())만 참조한다(팔레트 SSOT). */
+/* 컴포넌트 스타일 — 색은 theme.css 토큰(var())만 참조한다(팔레트 SSOT).
+ *
+ * 색 규칙(리디자인, 사용자 확정): 모든 주식 수치 상승·수익 = 빨강(--c-up) / 하락·손실 = 파랑(--c-down) /
+ *   보합 = 회색(--c-flat). 항상 ▲▼─ 글리프 병기(색만으로 구분 금지). 주황(--c-emph) = 강조(국면명·
+ *   현금비중·목표가 상태·진입 검토·알림·확인 CTA). 빨강 경보(--c-danger) = 위험 전용(VIX 패닉 칩·손실경고
+ *   배너) — 상승 빨강과 형태로 구분(채움 배너/칩 + ⚠). 캔들차트만 --c-chart-* 별도 토큰(값 동일, 경로 보존).
+ * 전문: .claude/skills/ui-design-system/SKILL.md
+ */
 
 * {
   box-sizing: border-box;
@@ -8,8 +15,9 @@ body {
   margin: 0;
   background: var(--c-bg);
   color: var(--c-text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Apple SD Gothic Neo',
-    'Malgun Gothic', sans-serif;
+  font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
+    'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -232,6 +240,7 @@ body {
   transition: left 0.35s ease, top 0.35s ease;
 }
 .quadrant__marker-dot {
+  position: relative;
   display: block;
   width: 15px;
   height: 15px;
@@ -239,6 +248,14 @@ body {
   background: var(--c-navy);
   border: 3px solid var(--c-white);
   box-shadow: 0 0 0 1.5px var(--c-navy), var(--shadow-raise);
+}
+/* 현재 위치 강조 — 파랑 링 확산 펄스(marker-ring). */
+.quadrant__marker-dot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  animation: marker-ring 1.8s ease-out infinite;
 }
 
 /* 현재 위치 요약 — "경기: 악화 · 심리: 탐욕" */
@@ -286,47 +303,44 @@ body {
 }
 
 .gauge__body {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
   align-items: stretch;
-  gap: 20px;
-  flex-wrap: wrap;
 }
 
-/* ② 권장 현금비중 큰 숫자 */
+/* ② 권장 현금비중 — 네이비 히어로 카드, 값은 주황(네이비 위). 대시보드 핵심 출력. */
 .cash-ratio {
-  flex: 0 0 auto;
-  min-width: 130px;
-  padding: 14px 18px;
-  background: var(--c-surface-2);
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius-sm);
+  padding: 18px 20px;
+  background: var(--c-navy-deep);
+  border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
 .cash-ratio__value {
-  font-size: 44px;
-  font-weight: 700;
+  font-size: 54px;
+  font-weight: 800;
   line-height: 1;
   letter-spacing: -0.03em;
-  color: var(--c-emph); /* 강조 — 대시보드 핵심 출력(권장 현금비중) */
+  color: var(--c-emph-onnavy); /* 네이비 위 강조 주황 — 핵심 값 */
+  font-variant-numeric: tabular-nums;
 }
 .cash-ratio__unit {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
-  color: var(--c-text-muted);
+  color: var(--c-text-faint);
   margin-left: 2px;
 }
 .cash-ratio__label {
   margin-top: 8px;
   font-size: 12px;
   font-weight: 500;
-  color: var(--c-text-secondary);
+  color: var(--c-text-faint);
 }
 
 /* ④ 기여 지표(key_drivers) — 경기/심리 축별로 묶음 */
 .drivers {
-  flex: 1 1 220px;
   min-width: 0;
 }
 .drivers__label {
@@ -483,11 +497,12 @@ body {
 }
 
 .card__value {
-  font-size: 28px;
-  font-weight: 700;
+  font-size: 23px;
+  font-weight: 800;
   letter-spacing: -0.02em;
-  line-height: 1;
+  line-height: 1.1;
   color: var(--c-black);
+  font-variant-numeric: tabular-nums;
 }
 .card__value--muted {
   font-size: 15px;
@@ -538,8 +553,8 @@ body {
 
 /* ══════════════════════════════════════════════════════════════════
    WEEK 08 — 종목 종합리포트 (색은 theme.css 토큰만)
-   상승=파랑(--c-up) / 하락·중립=회색(--c-down) / 강조=주황(--c-emph).
-   난색(주황·빨강)은 가격 방향·장식에 금지.
+   상승·수익=빨강(--c-up) / 하락·손실=파랑(--c-down) / 보합=회색(--c-flat) / 강조=주황(--c-emph).
+   위험 빨강(--c-danger)은 채움 배너/칩에만 — 방향 빨강과 형태로 구분.
    ══════════════════════════════════════════════════════════════════ */
 
 /* 리포트 페이지 구획 — 매크로 대시보드 아래 이어지는 두 번째 .dashboard 섹션 */
@@ -670,27 +685,34 @@ body {
   flex-wrap: wrap;
 }
 .report__price-val {
-  font-size: 26px;
-  font-weight: 700;
+  font-size: 34px;
+  font-weight: 800;
   color: var(--c-black);
   letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 .report__price-unit {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--c-text-muted);
 }
-/* 등락률 — 상승=파랑 / 하락=회색 (난색 금지). 글리프 병기로 색 독립. */
+/* 등락 칩 — 소프트 배경 pill(상승=빨강 --c-up / 하락=파랑 --c-down / 보합=회색). 글리프 병기로 색 독립. */
 .report__change {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--c-text-secondary);
+  padding: 3px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  color: var(--c-flat);
+  background: var(--c-flat-soft);
+  font-variant-numeric: tabular-nums;
 }
-/* 등락률 방향색 — 캔들차트와 동일하게 한국 관습(상승=빨강/하락=파랑). 종목 가격방향 한정 예외. */
+/* 등락률 방향색 = 전역 방향 토큰(--c-up/--c-down). 차트 전용 토큰 중복 예외 제거(값은 동일). */
 .report__change.up {
-  color: var(--c-chart-up);
+  color: var(--c-up);
+  background: var(--c-up-soft);
 }
 .report__change.down {
-  color: var(--c-chart-down);
+  color: var(--c-down);
+  background: var(--c-down-soft);
 }
 .report__asof {
   font-size: 11px;
@@ -769,12 +791,12 @@ body {
   color: var(--c-down);
 }
 
-/* ── 국면 정합성 패널 ── */
+/* ── 국면 정합성 패널 — 주황 소프트 카드(현재 국면 강조, "여기를 보라"). ── */
 .regime-fit {
   margin-top: 14px;
   padding: 14px 16px;
-  background: var(--c-blue-soft);
-  border: 1px solid var(--c-border);
+  background: var(--c-emph-soft);
+  border: 1px solid var(--c-emph-border);
   border-radius: var(--radius);
 }
 .regime-fit__head {
@@ -871,7 +893,7 @@ body {
   color: var(--c-black);
   font-variant-numeric: tabular-nums;
 }
-/* YoY 방향 — 증가=파랑 / 감소=회색 (난색 금지) + ▲▼ 글리프 */
+/* YoY 방향 — 증가=빨강(--c-up) / 감소=파랑(--c-down) / 보합=회색 + ▲▼ 글리프 */
 .ftable__yoy {
   display: inline-flex;
   align-items: center;
@@ -973,6 +995,39 @@ body {
   font-size: 13px;
   line-height: 1.7;
 }
+.chat__empty-title {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--c-text-secondary);
+}
+/* 빈 상태 제안 칩 — 흰 pill, hover 시 파랑 테두리 + 살짝 부상. */
+.chat__suggest {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.chat__suggest-chip {
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--c-text);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.chat__suggest-chip:hover:not(:disabled) {
+  border-color: var(--c-blue);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-raise);
+}
+.chat__suggest-chip:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
 
 /* 말풍선 행 — 사용자=우측 정렬 / 봇=좌측 정렬 */
 .chat__row {
@@ -988,22 +1043,23 @@ body {
 .chat__bubble {
   max-width: 78%;
   padding: 10px 14px;
-  border-radius: var(--radius);
-  font-size: 14px;
-  line-height: 1.6;
+  border-radius: var(--radius-lg);
+  font-size: 13.5px;
+  line-height: 1.65;
+  box-shadow: var(--shadow-card);
+  animation: rise-in 0.25s ease-out;
 }
-/* 사용자 = 옅은 파랑 표면 + 남색 텍스트 */
+/* 사용자 = 네이비 채움 + 흰 텍스트(radius 비대칭). */
 .chat__bubble--user {
-  background: var(--c-blue-soft);
-  color: var(--c-navy);
-  border: 1px solid var(--c-border);
+  background: var(--c-navy-deep);
+  color: var(--c-white);
   border-bottom-right-radius: var(--radius-sm);
 }
-/* 봇 = 흰 표면 + 회색 테두리 */
+/* 봇 = 흰 표면 + 회색 테두리. */
 .chat__bubble--bot {
   background: var(--c-surface);
   color: var(--c-text);
-  border: 1px solid var(--c-border);
+  border: 1px solid var(--c-border-soft);
   border-bottom-left-radius: var(--radius-sm);
 }
 .chat__bubble--typing {
@@ -1164,8 +1220,8 @@ body {
 
 /* ══════════════════════════════════════════════════════════════════════════
  * 워치리스트(W10) — 팝업·독립패널 공유. 색은 토큰만.
- *   상승=파랑(--c-up)/하락=회색(--c-down)  [차트 예외 아님 — 카드/표는 전역 규칙]
- *   진입 검토가능·목표가 도달/근접 = 강조 주황(--c-emph)  [빨강 금지 — 위험 전용]
+ *   상승=빨강(--c-up)/하락=파랑(--c-down)/보합=회색  [전역 방향 규칙 — 한국 관습]
+ *   진입 검토가능·목표가 도달/근접 = 강조 주황(--c-emph)  [위험 빨강(--c-danger)은 채움 배너/칩만]
  * ═════════════════════════════════════════════════════════════════════════ */
 
 /* 범용 배지(진입신호·목표가 상태). tone: emph(주황=강조) / muted(회색=중립·억제). */
@@ -1339,97 +1395,173 @@ body {
 }
 
 /* 목록 표 */
-.wl__table-wrap {
-  overflow-x: auto;
+/* ── 카드 로우 목록(테이블 대체) ── */
+.wl__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-.wl__table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
+.wl__row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--radius);
+  transition: transform 0.16s, box-shadow 0.16s, border-color 0.16s;
 }
-.wl__table th,
-.wl__table td {
-  padding: 10px 12px;
-  text-align: left;
-  border-bottom: 1px solid var(--c-border);
-  vertical-align: top;
+.wl__row:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-raise);
+  border-color: var(--c-border-strong);
 }
-.wl__table thead th {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--c-text-secondary);
-  border-bottom: 1px solid var(--c-border-strong);
-  white-space: nowrap;
+.wl__row-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-.wl__num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.wl__name-cell {
-  font-weight: 400;
+.wl__row-id {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 .wl__name {
-  display: block;
+  font-size: 14.5px;
   font-weight: 700;
   color: var(--c-navy);
 }
-.wl__ticker {
+.wl__meta {
   font-size: 11px;
-  color: var(--c-text-muted);
+  color: var(--c-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.wl__reason {
+.wl__spark {
+  flex: 0 0 auto;
   display: block;
-  margin-top: 3px;
-  font-size: 12px;
-  color: var(--c-text-secondary);
 }
+.wl__row-price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex: 0 0 auto;
+  text-align: right;
+}
+.wl__price {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--c-black);
+  font-variant-numeric: tabular-nums;
+}
+/* 등락 칩 — 소프트 배경 pill(상승 빨강/하락 파랑/보합 회색). 글리프 병기(색만으로 구분 안 함). */
 .wl__change {
-  font-weight: 600;
-  color: var(--c-text-secondary);
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  color: var(--c-flat);
+  background: var(--c-flat-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-/* 워치리스트 등락률 — 전역 규칙(상승=파랑/하락=회색). 차트 예외 아님. */
 .wl__change.up {
   color: var(--c-up);
+  background: var(--c-up-soft);
 }
 .wl__change.down {
   color: var(--c-down);
-}
-.wl__ratio {
-  color: var(--c-text);
+  background: var(--c-down-soft);
 }
 .wl__fail {
+  font-size: 13px;
   color: var(--c-text-muted);
 }
 
-/* 목표가 셀 + 인라인 편집(브라우저 prompt 금지 규칙 준수) */
-.wl__target {
+/* 하단 지표행 — PER/PBR · 진입 배지 · 목표가(게이지) · 제거. */
+.wl__row-bottom {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  gap: 8px 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--c-hairline);
+}
+.wl__ratio {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 목표가 + 근접 게이지 + 인라인 편집(브라우저 prompt 금지 규칙 준수). */
+.wl__target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.wl__target-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.wl__target-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
 }
 .wl__target-val {
+  font-size: 12px;
+  color: var(--c-text-secondary);
   font-variant-numeric: tabular-nums;
-  color: var(--c-text);
 }
 .wl__target-dist {
   font-size: 11px;
   color: var(--c-text-muted);
 }
 .wl__target-none {
+  flex: 1 1 auto;
+  font-size: 12px;
   color: var(--c-text-muted);
 }
+/* 근접 게이지 — 4px 트랙, 채움=도달/근접(주황) / 여유(회색). 폭으로도 근접도 표현(색만 아님). */
+.wl__gauge {
+  margin-top: 5px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--c-hairline);
+  overflow: hidden;
+}
+.wl__gauge-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--c-border-strong);
+  transition: width 0.4s ease;
+}
+.wl__gauge-fill.is-near {
+  background: var(--c-emph);
+}
+
 .wl__target-edit-btn,
 .wl__target-save,
 .wl__target-cancel,
 .wl__remove {
   font-size: 12px;
-  padding: 4px 8px;
+  padding: 4px 10px;
   border: 1px solid var(--c-border);
   border-radius: var(--radius-sm);
   background: var(--c-white);
   color: var(--c-text-secondary);
   cursor: pointer;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 .wl__target-edit-btn:hover,
 .wl__target-save:hover,
@@ -1441,6 +1573,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: 1 1 auto;
 }
 .wl__target-input {
   width: 96px;
@@ -1451,9 +1584,13 @@ body {
   background: var(--c-white);
   color: var(--c-text);
 }
-.wl__actions {
-  text-align: right;
-  white-space: nowrap;
+
+/* 하단 캡션 — 색 관습 + 게이지 의미. */
+.wl__legend {
+  margin: 14px 0 0;
+  font-size: 11px;
+  color: var(--c-text-muted);
+  line-height: 1.6;
 }
 
 /* 종목 리포트 → 관심종목 담기 툴바 */
@@ -1662,50 +1799,139 @@ body {
   padding: 20px 24px 32px;
 }
 
-/* 상단 타이틀 바 — 앱 제목 + 목표가 알림 켜기 CTA(사용자 제스처 권한요청). */
+/* 상단 톱바 — 디케이 브랜드(모노그램+워드마크) + 상태 칩 + 목표가 알림 CTA. */
 .app__topbar {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 12px 16px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--c-border);
 }
+
+/* 브랜드 — DK 모노그램 + 워드마크. */
+.app__brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.app__monogram {
+  flex: 0 0 auto;
+  display: block;
+}
+.app__brand-text {
+  display: flex;
+  flex-direction: column;
+}
 .app__title {
   margin: 0;
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 800;
   letter-spacing: -0.02em;
-  color: var(--c-navy);
+  color: var(--c-brand);
 }
-.app__subtitle {
-  margin: 6px 0 0;
-  color: var(--c-text-secondary);
-  font-size: 13px;
-  max-width: 720px;
+.app__caption {
+  margin: 2px 0 0;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--c-text-faint);
 }
 
-/* 목표가 알림 켜기 CTA — 강조 주황(테두리), 위험 빨강 아님(IMP-11). */
-.app__notif-cta {
-  align-self: center;
-  padding: 7px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--c-emph-strong);
-  background: var(--c-emph-soft);
-  border: 1px solid var(--c-emph);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
+/* 상태 칩 영역 — 국면·현금비중·(VIX 패닉) + 알림 CTA. */
+.app__status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.app__chip {
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
   white-space: nowrap;
 }
-.app__notif-cta:hover {
-  background: var(--c-emph);
+/* 현재 국면 = 강조 주황 소프트(핵심 값). */
+.app__chip--regime {
+  background: var(--c-emph-soft);
+  border: 1px solid var(--c-emph-border);
+  color: var(--c-emph-strong);
+}
+/* 권장 현금비중 = 중립 회색 칩(값만 남색 강조). */
+.app__chip--cash {
+  background: var(--c-flat-soft);
+  border: 1px solid var(--c-border);
+  color: var(--c-text-secondary);
+  font-weight: 600;
+}
+.app__chip--cash b {
+  color: var(--c-navy);
+  font-weight: 700;
+}
+/* VIX 패닉 = 위험 경보(채움 빨강 + ⚠) — 상승 빨강과 형태로 구분. */
+.app__chip--panic {
+  background: var(--c-danger);
+  border: 1px solid var(--c-danger-strong);
   color: var(--c-white);
 }
 
-/* 앱레벨 능동 알림 배너 — 강조 주황(패널 무관, 목표가 전이 시). */
+/* 목표가 알림 CTA — 강조 주황(테두리), 위험 빨강 아님(IMP-11). */
+.app__notif-cta {
+  padding: 6px 13px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-emph-strong);
+  background: var(--c-emph-soft);
+  border: 1px solid var(--c-emph-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.app__notif-cta:hover {
+  background: var(--c-emph);
+  border-color: var(--c-emph);
+  color: var(--c-white);
+}
+/* 켜짐 상태 = 주황 채움(정적 표시). */
+.app__notif-cta--on {
+  background: var(--c-emph);
+  border-color: var(--c-emph);
+  color: var(--c-white);
+  cursor: default;
+}
+
+/* 앱레벨 능동 알림 배너 — 강조 주황(패널 무관, 목표가 전이 시). 텍스트 + 우측 액션. */
 .app__alert {
   margin: 14px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.app__alert-text {
+  min-width: 0;
+}
+.app__alert-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+/* [관심종목 보기] = 주황 채움 pill(강조 CTA). */
+.app__alert-view {
+  padding: 5px 13px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-white);
+  background: var(--c-emph);
+  border: 1px solid var(--c-emph);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 /* 2컬럼 그리드 — 좌 채팅(고정폭 근사) / 우 동적 패널(가변). 반응형: ~1024px 이하 세로 스택. */
@@ -1752,44 +1978,53 @@ body {
   max-height: calc(100vh - 40px);
 }
 
-/* 퀵버튼 툴바 — 대화 없이 국면/관심종목/잔고/종목검색 직접 탐색. 활성=강조 주황. */
+/* 툴바 — 세그먼트 탭(관심종목/시장 국면/내 잔고) + 우측 인라인 종목검색. */
 .right-panel__toolbar {
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--c-border);
   background: var(--c-surface-2);
 }
-.right-panel__quick {
-  padding: 7px 14px;
+/* 세그먼트 탭 트랙 — 회색 트랙 안에서 활성 탭만 남색 채움. */
+.right-panel__tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--c-flat-soft);
+  border-radius: var(--radius);
+}
+.right-panel__tab {
+  padding: 6px 13px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--c-navy);
-  background: var(--c-surface);
-  border: 1px solid var(--c-border-strong);
+  color: var(--c-text-secondary);
+  background: transparent;
+  border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  white-space: nowrap;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
 }
-.right-panel__quick:hover {
-  border-color: var(--c-blue);
-  color: var(--c-blue);
+.right-panel__tab:hover {
+  color: var(--c-navy);
 }
-/* 활성(현재 위치)·종목검색 펼침 = 강조 주황(사용자에게 "여기를 보라"). */
-.right-panel__quick[aria-pressed='true'] {
-  background: var(--c-emph-soft);
-  border-color: var(--c-emph);
-  color: var(--c-emph-strong);
+/* 활성(현재 위치) = 남색 채움 + 흰 글씨. */
+.right-panel__tab[aria-pressed='true'] {
+  background: var(--c-navy);
+  color: var(--c-white);
+  font-weight: 700;
+  box-shadow: var(--shadow-card);
 }
 
-/* 종목검색 인라인 폼(브라우저 prompt 금지 규칙). */
+/* 종목검색 인라인 폼 — 툴바 우측(브라우저 prompt 금지 규칙). 형식 오류 시 회색 힌트. */
 .right-panel__search {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--c-border);
+  gap: 4px;
 }
 .right-panel__search-row {
   display: flex;
@@ -1802,10 +2037,11 @@ body {
   color: var(--c-text-secondary);
 }
 .right-panel__search-input {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  width: 150px;
   min-width: 0;
-  padding: 8px 12px;
-  font-size: 14px;
+  padding: 7px 12px;
+  font-size: 13px;
   color: var(--c-text);
   background: var(--c-surface);
   border: 1px solid var(--c-border-strong);
@@ -1861,7 +2097,7 @@ body {
   padding: 16px;
 }
 
-/* 빈 상태(닫힘) — 퀵버튼으로 탐색 유도(에러·스피너 아님). */
+/* 빈 상태(닫힘) — 세그먼트 탭으로 탐색 유도(에러·스피너 아님). */
 .right-panel__empty {
   padding: 40px 24px;
   text-align: center;
@@ -1870,8 +2106,35 @@ body {
   line-height: 1.7;
 }
 
+/* 패널 전환 스켈레톤 — kind 전환 시 짧게(450ms) shimmer(무한 스피너 대체). */
+.right-panel__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.right-panel__skel-title {
+  width: 150px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+}
+.right-panel__skel-row {
+  height: 64px;
+  border-radius: var(--radius);
+}
+.right-panel__skel-block {
+  height: 180px;
+  border-radius: var(--radius);
+}
+/* 순차 shimmer 지연 — 로우가 물결처럼 밝아지도록. */
+.right-panel__skel-row:nth-child(3) {
+  animation-delay: 0.08s;
+}
+.right-panel__skel-row:nth-child(4) {
+  animation-delay: 0.16s;
+}
+
 /* ── 잔고(포트폴리오) 패널 ────────────────────────────────────────
-   손익 색 = 글로벌 팔레트(상승=파랑 --c-up / 하락=회색 --c-down). 차트 예외 아님(빨강 금지).
+   손익 색 = 글로벌 방향 규칙(수익=빨강 --c-up / 손실=파랑 --c-down / 보합=회색). 위험 빨강(--c-danger) 아님.
    조회 전용(주문/매매 없음) · 현재가 무캐시 · 면책 상시. 색은 theme 토큰만. */
 .balance__state {
   display: flex;
@@ -1886,10 +2149,74 @@ body {
   margin: 0 0 14px;
 }
 
-/* 요약 카드 그리드 — 예수금·매입액·평가액·손익·순자산. */
+/* 부분실패 dashed 카드 — "일시 조회 불가" + 재시도(전체 에러 화면 아님, 면책 유지). */
+.balance__partial-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 20px;
+  margin-bottom: 14px;
+  background: var(--c-surface-3);
+  border: 1px dashed var(--c-border-strong);
+  border-radius: var(--radius);
+}
+.balance__partial-text {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--c-text-secondary);
+}
+
+/* 네이비 히어로 카드 — 순자산(큰 흰 값) + 평가손익 pill(수익=밝은 빨강/손실=밝은 파랑). */
+.balance__hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  background: var(--c-navy-deep);
+  border-radius: var(--radius-lg);
+}
+.balance__hero-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.balance__hero-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-faint);
+}
+.balance__hero-value {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--c-white);
+  font-variant-numeric: tabular-nums;
+}
+.balance__hero-pnl {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  background: var(--c-navy);
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.balance__hero-pnl.up {
+  color: var(--c-up-onnavy);
+} /* 네이비 위 수익 = 밝은 빨강 */
+.balance__hero-pnl.down {
+  color: var(--c-blue-soft);
+} /* 네이비 위 손실 = 밝은 파랑 */
+
+/* 보조 카드 그리드 — 예수금·매입액·평가액·보유종목. */
 .balance__summary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
   margin-bottom: 18px;
 }
@@ -1910,6 +2237,7 @@ body {
   font-size: 17px;
   font-weight: 700;
   color: var(--c-black);
+  font-variant-numeric: tabular-nums;
 }
 /* 순자산 = 강조(주황) — 가장 주목할 핵심 값. 가격 방향 아님(위험 빨강 아님). */
 .balance__card--emph {
@@ -1924,7 +2252,7 @@ body {
   font-size: 15px;
 }
 
-/* 손익 표기 — 상승=파랑/하락=회색(글리프 병기, 색만으로 구분 안 함). 빨강 금지. */
+/* 손익 표기 — 수익=빨강(--c-up)/손실=파랑(--c-down)(글리프 병기, 색만으로 구분 안 함). 위험 빨강 아님. */
 .balance__pnl {
   font-weight: 600;
   color: var(--c-text-secondary);
@@ -1960,10 +2288,12 @@ body {
   font-weight: 600;
   color: var(--c-text-secondary);
   white-space: nowrap;
+  background: var(--c-surface-3);
 }
 .balance__num {
   text-align: right;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .balance__name-cell {
   display: flex;
@@ -1996,4 +2326,63 @@ body {
   font-size: 11.5px;
   line-height: 1.6;
   color: var(--c-text-muted);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * 리디자인 키프레임 + 스켈레톤 유틸(Phase 0). stage-pulse·blink 는 위 챗 영역에 이미 존재.
+ * ═════════════════════════════════════════════════════════════════════════ */
+@keyframes marker-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgba(37, 99, 235, 0);
+  }
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes shimmer {
+  0% {
+    background-position: -420px 0;
+  }
+  100% {
+    background-position: 420px 0;
+  }
+}
+/* 시세 플래시 — 60s 갱신 시 변경 종목에 1회. 상승=빨강 소프트 / 하락=파랑 소프트(방향 규칙 준수). */
+@keyframes flash-up {
+  0% {
+    background-color: rgba(229, 50, 45, 0.2);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+@keyframes flash-down {
+  0% {
+    background-color: rgba(37, 99, 235, 0.18);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+/* 스켈레톤 공통 — 패널 전환·AI 로딩 자리표시(무한 스피너 대체). */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--c-surface-2) 25%,
+    var(--c-surface-3) 50%,
+    var(--c-surface-2) 75%
+  );
+  background-size: 840px 100%;
+  animation: shimmer 1.1s linear infinite;
+  border-radius: var(--radius-sm);
 }

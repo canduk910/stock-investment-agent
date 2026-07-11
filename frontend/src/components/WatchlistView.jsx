@@ -202,34 +202,68 @@ export default function WatchlistView({ initialSortBy, refreshKey, onView }) {
           관심종목이 없습니다. 종목 리포트에서 “관심종목 추가”로 담아보세요.
         </div>
       ) : (
-        <div className="wl__table-wrap">
-          <table className="wl__table">
-            <thead>
-              <tr>
-                <th scope="col">종목</th>
-                <th scope="col" className="wl__num">현재가</th>
-                <th scope="col" className="wl__num">등락률</th>
-                <th scope="col" className="wl__num">PER / PBR</th>
-                <th scope="col">진입 신호</th>
-                <th scope="col">목표가</th>
-                <th scope="col" aria-label="관리" />
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((it) => (
-                <WatchlistRow
-                  key={it.ticker}
-                  item={it}
-                  onRemove={() => onRemove(it.ticker)}
-                  onSetTarget={(v) => onSetTarget(it.ticker, v)}
-                />
-              ))}
-            </tbody>
-          </table>
+        <div className="wl__list">
+          {items.map((it) => (
+            <WatchlistRow
+              key={it.ticker}
+              item={it}
+              onRemove={() => onRemove(it.ticker)}
+              onSetTarget={(v) => onSetTarget(it.ticker, v)}
+            />
+          ))}
         </div>
       )}
+
+      <p className="wl__legend" role="note">
+        상승 빨강 · 하락 파랑 — 한국 시장 관습 · 목표가 게이지는 매수 관점 근접도
+      </p>
     </div>
   )
+}
+
+// 미니 스파크라인 — watchlist 응답의 spark(종가 시계열, 과거→현재)를 90×28 SVG 로 렌더.
+//   선색 = 방향색(상승 --c-up 빨강 / 하락 --c-down 파랑 / 보합 --c-flat). spark 결측·2점 미만이면
+//   렌더하지 않는다(백엔드 per-item graceful → 조용히 생략). 데이터는 백엔드가 조회(환각 차단).
+function Sparkline({ points, dir }) {
+  if (!Array.isArray(points)) return null
+  const nums = points.filter((p) => Number.isFinite(Number(p))).map(Number)
+  if (nums.length < 2) return null
+  const w = 90
+  const h = 28
+  const pad = 3
+  const min = Math.min(...nums)
+  const max = Math.max(...nums)
+  const range = max - min || 1
+  const stepX = (w - pad * 2) / (nums.length - 1)
+  const coords = nums.map((p, i) => [
+    pad + i * stepX,
+    pad + (h - pad * 2) * (1 - (p - min) / range),
+  ])
+  const d = coords
+    .map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`)
+    .join(' ')
+  const [ex, ey] = coords[coords.length - 1]
+  const stroke =
+    dir === 'up' ? 'var(--c-up)' : dir === 'down' ? 'var(--c-down)' : 'var(--c-flat)'
+  return (
+    <svg className="wl__spark" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+      <path
+        d={d}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx={ex} cy={ey} r="2.2" fill={stroke} />
+    </svg>
+  )
+}
+
+// 목표가 근접 게이지 폭(%) — 매수 관점 근접도. |거리%|가 작을수록(가까울수록) 채움이 크다.
+function gaugeWidth(distance) {
+  if (!Number.isFinite(Number(distance))) return 6
+  return Math.max(6, Math.min(100, 100 - Math.abs(Number(distance)) * 9))
 }
 
 function WatchlistRow({ item, onRemove, onSetTarget }) {
@@ -239,49 +273,50 @@ function WatchlistRow({ item, onRemove, onSetTarget }) {
   const targetBadge = TARGET_BADGE[item.target_status] ?? null
 
   return (
-    <tr>
-      <th scope="row" className="wl__name-cell">
-        <span className="wl__name">{item.stock_name ?? item.ticker}</span>
-        <span className="wl__ticker">{item.ticker}</span>
-        {item.reason ? <span className="wl__reason">{item.reason}</span> : null}
-      </th>
-      <td className="wl__num">
-        {priceFailed ? <span className="wl__fail">조회 불가</span> : `${num(item.current_price)}원`}
-      </td>
-      <td className="wl__num">
-        {priceFailed ? (
-          '—'
-        ) : (
-          <span className={`wl__change ${dir ?? ''}`}>
-            <span aria-hidden="true">
-              {dir === 'up' ? '▲' : dir === 'down' ? '▼' : '─'}
-            </span>{' '}
-            {signedPct(item.change_rate)}%
+    <div className="wl__row">
+      <div className="wl__row-top">
+        <div className="wl__row-id">
+          <span className="wl__name">{item.stock_name ?? item.ticker}</span>
+          <span className="wl__meta">
+            {item.ticker}
+            {item.reason ? ` · ${item.reason}` : ''}
           </span>
-        )}
-      </td>
-      <td className="wl__num wl__ratio">
-        {item.per == null ? '—' : `${Number(item.per).toFixed(1)}`}
-        {' / '}
-        {item.pbr == null ? '—' : `${Number(item.pbr).toFixed(2)}`}
-      </td>
-      <td>
+        </div>
+        <Sparkline points={item.spark} dir={dir} />
+        <div className="wl__row-price">
+          {priceFailed ? (
+            <span className="wl__fail">조회 불가</span>
+          ) : (
+            <>
+              <span className="wl__price">{num(item.current_price)}원</span>
+              <span className={`wl__change ${dir ?? ''}`}>
+                <span aria-hidden="true">
+                  {dir === 'up' ? '▲' : dir === 'down' ? '▼' : '─'}
+                </span>{' '}
+                {signedPct(item.change_rate)}%
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="wl__row-bottom">
+        <span className="wl__ratio">
+          PER {item.per == null ? '—' : Number(item.per).toFixed(1)} · PBR{' '}
+          {item.pbr == null ? '—' : Number(item.pbr).toFixed(2)}
+        </span>
         <span className={`badge badge--${entry.tone}`}>{entry.text}</span>
-      </td>
-      <td>
         <TargetCell
           targetPrice={item.target_price}
           distance={item.distance_to_target}
           badge={targetBadge}
           onSetTarget={onSetTarget}
         />
-      </td>
-      <td className="wl__actions">
         <button type="button" className="wl__remove" onClick={onRemove} aria-label="관심종목 제거">
           제거
         </button>
-      </td>
-    </tr>
+      </div>
+    </div>
   )
 }
 
@@ -330,15 +365,24 @@ function TargetCell({ targetPrice, distance, badge, onSetTarget }) {
   return (
     <div className="wl__target">
       {targetPrice != null ? (
-        <>
-          <span className="wl__target-val">{num(targetPrice)}원</span>
-          {badge ? <span className={`badge badge--${badge.tone}`}>{badge.text}</span> : null}
-          {Number.isFinite(distance) ? (
-            <span className="wl__target-dist">({signedPct(distance, 1)}%)</span>
-          ) : null}
-        </>
+        <div className="wl__target-body">
+          <div className="wl__target-head">
+            <span className="wl__target-val">목표가 {num(targetPrice)}원</span>
+            {Number.isFinite(distance) ? (
+              <span className="wl__target-dist">({signedPct(distance, 1)}%)</span>
+            ) : null}
+            {badge ? <span className={`badge badge--${badge.tone}`}>{badge.text}</span> : null}
+          </div>
+          {/* 근접 게이지 — 도달/근접(주황) vs 여유(회색). 매수 관점 근접도(색만 아닌 폭으로도 표현). */}
+          <div className="wl__gauge" aria-hidden="true">
+            <span
+              className={`wl__gauge-fill ${badge?.tone === 'emph' ? 'is-near' : ''}`}
+              style={{ width: `${gaugeWidth(distance)}%` }}
+            />
+          </div>
+        </div>
       ) : (
-        <span className="wl__target-none">미설정</span>
+        <span className="wl__target-none">목표가 미설정</span>
       )}
       <button type="button" className="wl__target-edit-btn" onClick={() => setEditing(true)}>
         {targetPrice != null ? '변경' : '설정'}

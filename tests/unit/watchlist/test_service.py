@@ -65,6 +65,51 @@ def patch_prices(monkeypatch):
     return _apply
 
 
+def _chart(closes, start_date="20260101"):
+    """normalize_daily_chart 반환 계약: {ticker, candles:[{date, close, ...}]}.
+
+    closes 를 date 오름차순으로 candle 화(스파크라인 종가 시계열 원천). 서비스가
+    date 로 정렬하는지 확인하려고 일부 테스트는 역순 입력을 준다.
+    """
+    candles = []
+    for i, close in enumerate(closes):
+        candles.append({
+            "date": f"2026010{i}" if i < 10 else f"202601{i}",
+            "open": None, "high": None, "low": None,
+            "close": close, "volume": None,
+        })
+    return {"ticker": None, "candles": candles}
+
+
+@pytest.fixture
+def patch_charts(monkeypatch):
+    """{ticker: chart dict 또는 Exception} 매핑으로 chart.inquire_daily_itemchartprice 대체."""
+
+    def _apply(mapping):
+        def _fake(client, ticker, start_date, end_date, period="D", adj_price="1", market="J"):
+            result = mapping[ticker]
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        monkeypatch.setattr(svc.chart, "inquire_daily_itemchartprice", _fake)
+
+    return _apply
+
+
+@pytest.fixture(autouse=True)
+def _default_no_chart(monkeypatch):
+    """spark 를 명시 설정하지 않은 기존 테스트에서 chart 호출이 실 KIS 를 타지 않게 기본 무력화.
+
+    기본은 예외 → 서비스가 graceful 하게 spark=None 으로 처리(기존 테스트 assertion 불변).
+    patch_charts 를 쓰는 테스트는 이 기본을 덮어쓴다.
+    """
+    def _boom(*a, **k):
+        raise RuntimeError("chart not stubbed")
+
+    monkeypatch.setattr(svc.chart, "inquire_daily_itemchartprice", _boom)
+
+
 def _store_with(*items) -> InMemoryWatchlistStore:
     store = InMemoryWatchlistStore()
     for it in items:
@@ -300,3 +345,114 @@ def test_worker_count_capped_at_concurrency_limit():
     assert svc._worker_count(30) == CAP   # 종목 많아도 상한으로 캡(폭주 방지)
     assert svc._worker_count(CAP) == CAP
     assert svc._worker_count(0) == 1      # 방어(빈 목록은 호출 전 early return)
+
+
+# ── 스파크라인 시계열(Phase D — spark:number[]|null) ─────────────────────────
+
+def test_spark_is_close_series(patch_prices, patch_charts):
+    # 일봉 종가를 date 오름차순 number[] 로 노출(프론트 미니차트 원천).
+    patch_prices({"005930": _valuation(80000, 1.0, 10.0, 1.0)})
+    patch_charts({"005930": _chart([100.0, 110.0, 105.0, 120.0])})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00"))
+    it = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
+    assert it["spark"] == [100.0, 110.0, 105.0, 120.0]
+
+
+def test_spark_sorted_by_date_ascending(patch_prices, patch_charts):
+    # KIS 가 최신순(내림차순)으로 줄 수 있어 서비스가 date 오름차순 정렬(부호/추세 뒤집힘 방지).
+    patch_prices({"005930": _valuation(80000, 1.0, 10.0, 1.0)})
+    reversed_chart = {"ticker": None, "candles": [
+        {"date": "20260103", "close": 120.0},
+        {"date": "20260101", "close": 100.0},
+        {"date": "20260102", "close": 110.0},
+    ]}
+    patch_charts({"005930": reversed_chart})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00"))
+    it = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
+    assert it["spark"] == [100.0, 110.0, 120.0]  # date 오름차순
+
+
+def test_spark_limited_to_recent_points(patch_prices, patch_charts):
+    from watchlist.constants import WATCHLIST_SPARK_POINTS as N
+    # N개보다 많으면 최근 N개(꼬리)만 — 미니차트 과밀 방지.
+    closes = [float(i) for i in range(N + 10)]
+    patch_prices({"005930": _valuation(80000, 1.0, 10.0, 1.0)})
+    patch_charts({"005930": _chart(closes)})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00"))
+    it = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
+    assert len(it["spark"]) == N
+    assert it["spark"] == closes[-N:]  # 최근 N개(가장 최신이 끝)
+
+
+def test_spark_none_on_chart_failure(patch_prices, patch_charts):
+    # 일봉 조회 실패 → spark=None(graceful). 전체를 죽이지 않고 시세·진입신호는 정상.
+    patch_prices({"005930": _valuation(80000, 1.0, 10.0, 1.0)})
+    patch_charts({"005930": RuntimeError("chart timeout")})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00"))
+    it = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
+    assert it["spark"] is None
+    assert it["current_price"] == 80000  # 시세는 정상
+    assert it["entry_signal"]["entry_allowed"] is True
+
+
+def test_spark_none_on_empty_candles(patch_prices, patch_charts):
+    # 캔들 없음(신규상장·데이터 없음) → spark=None(빈 리스트 아님 — 프론트 렌더 분기 단순화).
+    patch_prices({"005930": _valuation(80000, 1.0, 10.0, 1.0)})
+    patch_charts({"005930": {"ticker": None, "candles": []}})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00"))
+    it = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
+    assert it["spark"] is None
+
+
+def test_spark_drops_none_closes(patch_prices, patch_charts):
+    # 종가 결측 candle 은 제외(None 이 시계열에 섞이면 프론트 스케일 계산이 깨진다).
+    patch_prices({"005930": _valuation(80000, 1.0, 10.0, 1.0)})
+    mixed = {"ticker": None, "candles": [
+        {"date": "20260101", "close": 100.0},
+        {"date": "20260102", "close": None},
+        {"date": "20260103", "close": 120.0},
+    ]}
+    patch_charts({"005930": mixed})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00"))
+    it = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
+    assert it["spark"] == [100.0, 120.0]
+
+
+def test_spark_per_item_independent(patch_prices, patch_charts):
+    # 한 종목 spark 실패가 다른 종목 spark 를 죽이지 않는다(per-item graceful).
+    patch_prices({
+        "005930": _valuation(80000, 1.0, 10.0, 1.0),
+        "000660": _valuation(200000, 2.0, 12.0, 1.3),
+    })
+    patch_charts({
+        "005930": _chart([100.0, 110.0]),
+        "000660": RuntimeError("chart fail"),
+    })
+    store = _store_with(
+        _item("005930", "2026-01-01T00:00:00+00:00"),
+        _item("000660", "2026-02-01T00:00:00+00:00", stock_name="SK하이닉스"),
+    )
+    items = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))
+    assert items["005930"]["spark"] == [100.0, 110.0]
+    assert items["000660"]["spark"] is None
+
+
+def test_spark_failure_not_in_partial_failure(patch_prices, patch_charts):
+    # 스파크라인은 선택적 시각화 — spark 실패는 partial_failure 를 오염시키지 않는다(시세 실패 semantics 보존).
+    patch_prices({"005930": _valuation(80000, 1.0, 10.0, 1.0)})
+    patch_charts({"005930": RuntimeError("chart fail")})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00"))
+    view = svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION)
+    assert "005930" not in view["partial_failure"]  # 시세는 성공했으므로
+
+
+def test_price_failure_still_attempts_spark(patch_prices, patch_charts):
+    # 시세 실패 종목도 spark 는 독립 조회(시세 None 이어도 미니차트는 보여줄 수 있다).
+    patch_prices({"005930": RuntimeError("price fail")})
+    patch_charts({"005930": _chart([100.0, 110.0])})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00"))
+    view = svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION)
+    it = _by_ticker(view)["005930"]
+    assert it["current_price"] is None
+    assert "005930" in view["partial_failure"]  # 시세 실패는 여전히 기록
+    assert it["spark"] == [100.0, 110.0]         # spark 는 독립 성공

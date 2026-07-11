@@ -16,14 +16,22 @@ judgement 있으면 {regime, single_cap, entry_blocked}(대표값), 없으면 No
 """
 from __future__ import annotations
 
+import datetime as dt
 from concurrent.futures import ThreadPoolExecutor
 
-from collectors.kis import inquire_price
+from collectors.kis import chart, inquire_price
 from stock.summary import regime_entry_blocked, regime_gate
-from watchlist.constants import NEAR_TARGET_THRESHOLD_PCT, WATCHLIST_FETCH_CONCURRENCY
+from watchlist.constants import (
+    NEAR_TARGET_THRESHOLD_PCT,
+    WATCHLIST_FETCH_CONCURRENCY,
+    WATCHLIST_SPARK_LOOKBACK_DAYS,
+    WATCHLIST_SPARK_POINTS,
+)
 from watchlist.models import WatchlistItem
 
 _FETCH_TIMEOUT = 15
+# 일봉은 수정주가(액면분할 인위 갭 제거 → 스파크라인 추세 연속성). api/detail 일봉과 동일.
+_SPARK_ADJ_PRICE = "0"
 
 
 # ── 목표가 상태 ──────────────────────────────────────────────────────────────
@@ -77,8 +85,8 @@ def _entry_signal(valuation, judgement):
 
 # ── per-item enrich ──────────────────────────────────────────────────────────
 
-def _enrich_item(item: WatchlistItem, valuation, judgement) -> dict:
-    """저장 필드 + 라이브 시세 + 목표가 상태 + 진입신호. valuation None(시세 실패)이면 값 None."""
+def _enrich_item(item: WatchlistItem, valuation, judgement, spark) -> dict:
+    """저장 필드 + 라이브 시세 + 목표가 상태 + 진입신호 + 스파크라인. valuation None(시세 실패)이면 값 None."""
     valuation = valuation or {}
     current = valuation.get("price")
     target = item.target_price
@@ -97,6 +105,8 @@ def _enrich_item(item: WatchlistItem, valuation, judgement) -> dict:
         "target_status": _target_status(current, target, NEAR_TARGET_THRESHOLD_PCT),
         # 시세 실패(valuation 없음)면 게이트 불가 → entry_signal None.
         "entry_signal": _entry_signal(valuation, judgement) if valuation else None,
+        # 스파크라인 종가 시계열(선택적) — 시세와 독립 조회, 실패·부재는 None.
+        "spark": spark,
     }
 
 
@@ -125,6 +135,55 @@ def _fetch_prices_parallel(kis_client, tickers: list[str]) -> tuple[dict, list[s
     return valuations, partial_failure
 
 
+# ── 스파크라인(미니차트 종가 시계열) ─────────────────────────────────────────
+
+def _spark_from_chart(chart_result) -> list[float] | None:
+    """일봉 candles → date 오름차순 종가 최근 N개(number[]). 비거나 전량 결측이면 None.
+
+    KIS 가 최신순으로 줄 수 있어 date 오름차순 정렬(추세 뒤집힘 방지). 종가 결측 candle 은
+    제외(None 이 섞이면 프론트 스케일 계산이 깨진다). 스파크라인은 선택적 시각화라
+    실패·부재는 None(빈 리스트 아님 — 프론트 렌더 분기 단순화).
+    """
+    candles = (chart_result or {}).get("candles") or []
+    rows = [(c.get("date"), c.get("close")) for c in candles]
+    rows = [(d, v) for (d, v) in rows if d is not None and v is not None]
+    rows.sort(key=lambda x: x[0])  # date 오름차순
+    closes = [float(v) for (_, v) in rows]
+    if not closes:
+        return None
+    return closes[-WATCHLIST_SPARK_POINTS:]  # 최근 N개(가장 최신이 끝)
+
+
+def _fetch_one_spark(kis_client, ticker: str) -> list[float] | None:
+    """종목 1개 일봉 조회 → 스파크라인. 실패는 None(per-item graceful — 전체 안 죽임)."""
+    today = dt.date.today()
+    start = (today - dt.timedelta(days=WATCHLIST_SPARK_LOOKBACK_DAYS)).strftime("%Y%m%d")
+    end = today.strftime("%Y%m%d")
+    try:
+        # 현재가 캐시 신설 금지(원칙1) — 요청 시점 라이브 조회(캐시 배선 없음).
+        result = chart.inquire_daily_itemchartprice(
+            kis_client, ticker, start, end, period="D", adj_price=_SPARK_ADJ_PRICE,
+        )
+        return _spark_from_chart(result)
+    except Exception:
+        return None  # 스파크라인은 선택적 — 실패는 조용히 None(partial_failure 미오염)
+
+
+def _fetch_sparks_parallel(kis_client, tickers: list[str]) -> dict:
+    """종목별 일봉 병렬 → {ticker: spark|None}. 시세 병렬과 동형(동시성 상한 공유)."""
+    sparks: dict = {}
+    if not tickers:
+        return sparks
+    with ThreadPoolExecutor(max_workers=_worker_count(len(tickers))) as ex:
+        futures = {t: ex.submit(_fetch_one_spark, kis_client, t) for t in tickers}
+        for ticker, fut in futures.items():
+            try:
+                sparks[ticker] = fut.result(timeout=_FETCH_TIMEOUT)
+            except Exception:
+                sparks[ticker] = None
+    return sparks
+
+
 # ── 오케스트레이터 ───────────────────────────────────────────────────────────
 
 def build_watchlist_view(store, user_id: str, kis_client, judgement) -> dict:
@@ -132,8 +191,13 @@ def build_watchlist_view(store, user_id: str, kis_client, judgement) -> dict:
     items = store.list_items(user_id)  # added_at 오름차순(registered)
     tickers = [it.ticker for it in items]
     valuations, partial_failure = _fetch_prices_parallel(kis_client, tickers)
+    # 스파크라인 일봉은 시세와 독립 병렬(실패는 spark=None, partial_failure 미오염).
+    sparks = _fetch_sparks_parallel(kis_client, tickers)
 
-    enriched = [_enrich_item(it, valuations.get(it.ticker), judgement) for it in items]
+    enriched = [
+        _enrich_item(it, valuations.get(it.ticker), judgement, sparks.get(it.ticker))
+        for it in items
+    ]
 
     if judgement is None:
         regime_block = None
