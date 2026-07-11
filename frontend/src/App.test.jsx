@@ -40,8 +40,14 @@ vi.mock('./components/RightPanel.jsx', () => ({
 
 // 목표가 폴링(App 레벨 이관) — fetchWatchlist mock 으로 전이 감지 경로만 태운다.
 // 톱바 상태 칩(리브랜딩) — App 이 fetchMacroRegime 를 자체 조회(환각 차단)해 국면·현금비중·VIX 칩을 그린다.
-vi.mock('./api.js', () => ({ fetchWatchlist: vi.fn(), fetchMacroRegime: vi.fn() }))
-import { fetchWatchlist, fetchMacroRegime } from './api.js'
+// setViewContext — App 이 우측 패널 변경 시 현재 화면을 챗 세션 핀 컨텍스트로 고정(P1).
+vi.mock('./api.js', () => ({
+  fetchWatchlist: vi.fn(),
+  fetchMacroRegime: vi.fn(),
+  setViewContext: vi.fn(),
+  setReportContext: vi.fn(),
+}))
+import { fetchWatchlist, fetchMacroRegime, setViewContext } from './api.js'
 
 const regimeView = (over = {}) => ({
   regime: '확장',
@@ -71,6 +77,8 @@ beforeEach(() => {
   fetchWatchlist.mockResolvedValue(wlView('far'))
   fetchMacroRegime.mockReset()
   fetchMacroRegime.mockResolvedValue(regimeView())
+  setViewContext.mockReset()
+  setViewContext.mockResolvedValue({ ok: true, set: true })
 })
 afterEach(() => {
   vi.runOnlyPendingTimers()
@@ -94,6 +102,41 @@ describe('App 2컬럼 레이아웃(모달 폐기 · 우측 동적 패널)', () =
     render(<App />)
     fireEvent.click(screen.getByText('quick-balance'))
     expect(screen.getByTestId('right-kind')).toHaveTextContent('balance')
+  })
+})
+
+describe('현재 화면 → 챗 세션 핀 컨텍스트(P1, 패널 변경 시)', () => {
+  it('패널을 잔고로 전환 → 디바운스 후 setViewContext(balance) 발화', async () => {
+    render(<App />)
+    await act(async () => {}) // 랜딩(watchlist) 마운트 발화 소진
+    setViewContext.mockClear()
+    fireEvent.click(screen.getByText('quick-balance'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400) // 디바운스 경과
+    })
+    expect(setViewContext).toHaveBeenCalledTimes(1)
+    expect(setViewContext.mock.calls[0][1]).toBe('balance') // 두번째 인자 = kind
+  })
+
+  it('비데이터 화면(macro_dashboard) 전환 → kind=null 로 이전 핀 해제', async () => {
+    render(<App />)
+    await act(async () => {})
+    setViewContext.mockClear()
+    fireEvent.click(screen.getByText('chat-open-macro')) // onShowPanel(macro_dashboard)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400)
+    })
+    expect(setViewContext).toHaveBeenCalledTimes(1)
+    expect(setViewContext.mock.calls[0][1]).toBe(null) // 비데이터 → 해제
+  })
+
+  it('랜딩(watchlist) 마운트 시 1회 발화(현재 보는 화면 = 관심종목)', async () => {
+    render(<App />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400)
+    })
+    expect(setViewContext).toHaveBeenCalled()
+    expect(setViewContext.mock.calls[0][1]).toBe('watchlist')
   })
 })
 

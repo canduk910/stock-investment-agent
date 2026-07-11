@@ -202,6 +202,19 @@ export async function setReportContext(sessionId, ticker, reportId) {
   return res.json()
 }
 
+// POST /api/chat/context {session_id, kind, args} → {ok, set, kind?}. 사용자가 현재 보고 있는 화면
+// (잔고·관심종목·종목상세)을 세션 핀 컨텍스트로 고정 → 이후 챗 질문이 그 데이터를 근거로 답변.
+// **화면 데이터는 보내지 않는다** — 서버가 kind/args 로 재조회(환각·조작 차단). 비데이터 kind/조회불가는 해제.
+export async function setViewContext(sessionId, kind, args = {}) {
+  const res = await fetch('/api/chat/context', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId, kind: kind ?? null, args: args ?? {} }),
+  })
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
 // 종목 자동완성(W08). GET /api/stocks/search?q=&limit= → [{ticker, name, market}].
 // KIS 마스터(코스피+코스닥 전 종목) 기반. 실패 시 빈 배열(프론트는 코드 직접 입력 폴백).
 export async function searchStocks(query, limit = 8) {

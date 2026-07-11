@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ChatPanel from './components/ChatPanel.jsx'
 import RightPanel from './components/RightPanel.jsx'
-import { fetchWatchlist, fetchMacroRegime, setReportContext } from './api.js'
+import { fetchWatchlist, fetchMacroRegime, setReportContext, setViewContext } from './api.js'
 import { detectTargetAlerts } from './lib/watchlistLogic.js'
 
 // UX 개편 — 좌측 상시 채팅 + 우측 맥락형 동적 패널(모달 폐기). 2컬럼 그리드(.app__main).
@@ -22,6 +22,12 @@ function alertMessage(alerts) {
 
 // 랜딩(기본) 우측 패널 = 관심종목(사용자 확정). valid:true(watchlist 는 항상 유효).
 const LANDING_SPEC = { kind: 'watchlist', args: {}, valid: true }
+
+// 데이터 보유 패널 kind — 챗 세션 핀 컨텍스트 대상(백엔드 view_context.DATA_BEARING_KINDS 와 SSOT 일치).
+// macro_dashboard(국면은 이미 프롬프트)·manage_watchlist(제안 액션)는 제외 → 전환 시 kind=null 로 해제.
+const VIEW_CONTEXT_KINDS = new Set(['watchlist', 'balance', 'stock_report'])
+// 패널 변경 → 컨텍스트 핀 디바운스(ms) — 빠른 탭 전환 시 KIS 재조회 폭주 방지.
+const VIEW_CONTEXT_DEBOUNCE_MS = 400
 
 // DK 모노그램 CI — 남색 스퀘어(rx) + 우상단 주황 다이아몬드 + 중앙 흰 "DK". 색은 theme.css 토큰.
 function DkMonogram() {
@@ -150,6 +156,24 @@ export default function App() {
       clearInterval(id) // 언마운트 시 정리(무한 타이머·중복 방지)
     }
   }, [checkTargetAlerts])
+
+  // 현재 보고 있는 우측 패널 → 챗 세션 핀 컨텍스트(P1). 패널 변경 시 서버가 그 화면을 재조회해 스냅샷 고정
+  //   → 이후 챗 질문이 그 데이터를 근거로 답한다. 데이터 kind 만 대상, 비데이터/무효는 kind=null 로 해제.
+  //   디바운스(빠른 탭전환 KIS 폭주 방지) + 중복 kind+args 스킵(불필요 재조회 방지) + fire-and-forget.
+  const lastViewCtxRef = useRef(null)
+  useEffect(() => {
+    const spec = rightPanelSpec
+    const kind =
+      spec && spec.valid !== false && VIEW_CONTEXT_KINDS.has(spec.kind) ? spec.kind : null
+    const key = kind ? `${kind}:${JSON.stringify(spec.args || {})}` : 'none'
+    if (lastViewCtxRef.current === key) return // 동일 화면 재핀 방지(무관 리렌더·중복)
+    lastViewCtxRef.current = key
+    const id = setTimeout(() => {
+      // 핀 실패는 UI 를 막지 않는다(부가 기능) — endConsult 와 동일 fire-and-forget.
+      setViewContext(sessionId.current, kind, spec?.args || {}).catch(() => {})
+    }, VIEW_CONTEXT_DEBOUNCE_MS)
+    return () => clearTimeout(id)
+  }, [rightPanelSpec])
 
   // 톱바 상태 칩용 국면 — 마운트 1회 자체 조회(RegimeGauge 와 동일 패턴). 실패는 조용히 무시(칩만 생략).
   useEffect(() => {
