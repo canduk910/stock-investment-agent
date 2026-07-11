@@ -62,7 +62,8 @@ export default function ChatPanel({ onShowPanel }) {
     })
   }
 
-  // 스트림 done — 최종 popups 확정 → 라우팅해 우측 패널에 인라인 렌더. text 가 비면 폴백 문구.
+  // 스트림 done — 봇 메시지 확정(streaming 종료). 우측 패널 전환은 이미 onPopups 에서(설명보다 먼저)
+  //   처리했으므로 여기선 다시 띄우지 않는다 — 끝에서 재전환하면 스트리밍 중 사용자가 옮긴 탭을 되돌린다.
   function finishStream(popups) {
     const specs = routePopups(popups)
     setMessages((m) => {
@@ -74,7 +75,6 @@ export default function ChatPanel({ onShowPanel }) {
         (specs.length ? '요청하신 내용을 우측 패널에 열었습니다.' : '')
       return [...m.slice(0, -1), { ...last, text, popups, streaming: false }]
     })
-    showPanel(specs) // 첫 spec 을 우측 패널로 리프팅(모달 아님)
     setLoading(false)
   }
 
@@ -121,7 +121,13 @@ export default function ChatPanel({ onShowPanel }) {
     await postChatStream(sessionId.current, query, {
       onStage: (stage) => patchLastBot({ stage }),
       onToken: (t) => patchLastBot((last) => ({ text: last.text + t })), // 라이브 타이핑 누적
-      onPopups: (popups) => patchLastBot({ popups }),
+      onPopups: (popups) => {
+        // 팝업 지시(tool_call)는 설명 narration 토큰보다 먼저 도착한다(백엔드 chat_stream 순서:
+        //   popups → summarize → token…). 도착 즉시 우측 패널을 전환해 "패널 먼저, 설명은 이어서"
+        //   흐름을 만든다(전엔 onDone 에서만 전환해 응답이 끝난 뒤 패널이 바뀌었다).
+        patchLastBot({ popups })
+        showPanel(routePopups(popups))
+      },
       onDone: (popups) => finishStream(popups),
       onError: () => {
         // 스트림 실패 → 논스트림 폴백 1회(무한 스피너 금지). 중복 폴백 방지.
