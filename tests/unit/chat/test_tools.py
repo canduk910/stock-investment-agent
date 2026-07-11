@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from chat.tools import CHAT_MODEL, TOOLS
+from chat.tools import CHAT_MODEL, CONTENT_TOOLS, TOOLS
 
 
 def _tool(name: str) -> dict:
@@ -29,14 +29,23 @@ def test_chat_model_single_source():
 
 
 def test_popup_tool_names__frontend_contract():
-    names = {t["function"]["name"] for t in TOOLS}
-    assert names == {
+    # 표시(팝업) 툴 = 전체 TOOLS − 콘텐츠 툴. 이 집합이 프론트 POPUP_KIND 계약과 일치한다.
+    display_names = {t["function"]["name"] for t in TOOLS} - CONTENT_TOOLS
+    assert display_names == {
         "show_macro_dashboard",
         "show_stock_report",
         "show_watchlist",
         "manage_watchlist",  # IMP-08: 자연어 워치리스트 편집(추가/제거/목표가)
         "show_balance",  # UX3: 계좌 잔고·평가액·보유종목 현황(파라미터 없음)
     }
+
+
+def test_content_tools_defined_in_tools():
+    # 콘텐츠 툴(summarize_youtube 등)은 실제 TOOLS 에 정의되고 CONTENT_TOOLS 로 표시된다
+    # — chat.py(chat·chat_stream)가 이 집합으로 되먹임(실행 vs 팝업)을 분기한다.
+    names = {t["function"]["name"] for t in TOOLS}
+    assert "summarize_youtube" in CONTENT_TOOLS
+    assert CONTENT_TOOLS <= names  # 콘텐츠 툴은 전부 실제 TOOLS 스키마로 존재
 
 
 def test_all_tools_are_openai_function_type():

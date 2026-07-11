@@ -133,4 +133,62 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "summarize_youtube",
+            "description": (
+                "사용자가 특정 YouTube 영상 내용을 요약·정리해 달라거나 '이 영상 뭐래?'처럼 "
+                "URL과 함께 물을 때 호출한다(예 '이 영상 요약해줘 https://youtu.be/…'). "
+                "URL 없이 일반 시황·종목을 물을 때는 호출하지 않는다. "
+                "영상 자막은 화자의 의견이므로 '영상에 따르면'으로 출처를 밝혀 요약하고, "
+                "매수/매도 판정으로 제시하지 않는다(설명만)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "video_url": {"type": "string", "description": "YouTube 영상 URL"},
+                },
+                "required": ["video_url"],
+            },
+        },
+    },
 ]
+
+
+# ── 콘텐츠 툴(표시 팝업이 아니라, LLM 이 결과 텍스트를 소비·요약) ────────────────
+# 표시 툴(show_*)은 chat.py 가 tool 결과를 {"ok":True}로만 되먹이고 실데이터는 프론트가
+# 조회(환각 차단). 콘텐츠 툴은 서버가 실행해 실제 텍스트를 되먹여 LLM 이 요약한다.
+# 이름 집합 + 실행 레지스트리가 단일 출처 — chat.py(chat·chat_stream)가 이걸로 분기한다.
+CONTENT_TOOLS = frozenset({"summarize_youtube"})
+
+
+def _impl_summarize_youtube(args: dict) -> str:
+    # 지연 import — tools.py 로드가 youtube_transcript_api 유무에 묶이지 않게.
+    from collectors.youtube import fetch_transcript
+
+    url = (args or {}).get("video_url", "")
+    transcript = fetch_transcript(url)
+    if not transcript:
+        return (
+            "자막을 가져오지 못했습니다(비공개·자막 없음·불량 URL 가능). "
+            "사용자에게 다른 영상이나 URL 확인을 안내하세요."
+        )
+    return (
+        "[아래는 해당 YouTube 영상 화자의 발언 자막이다 — 3자 의견이므로 '영상에 따르면'으로 "
+        "출처를 밝혀 요약하고, 매수/매도 판정으로 제시하지 말 것]\n" + transcript
+    )
+
+
+_TOOL_IMPL = {"summarize_youtube": _impl_summarize_youtube}
+
+
+def run_content_tool(name: str, args: dict) -> str:
+    """콘텐츠 툴 실행 → LLM 되먹임용 문자열. 미등록·예외는 안전 메시지(챗 안 죽임)."""
+    impl = _TOOL_IMPL.get(name)
+    if impl is None:
+        return "요청을 처리할 수 없습니다."
+    try:
+        return impl(args or {})
+    except Exception:
+        return "콘텐츠를 불러오는 중 문제가 발생했습니다."

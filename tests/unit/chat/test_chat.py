@@ -73,6 +73,34 @@ def test_no_tool_calls_returns_empty_popups():
     assert len(client.calls) == 1
 
 
+def test_content_tool_feeds_transcript_not_popup(monkeypatch):
+    """summarize_youtube(콘텐츠 툴) → 자막을 서버가 실행·되먹임(팝업 아님), LLM 이 요약.
+
+    표시 툴({ok:True}+팝업)과 달리 콘텐츠 툴은 실제 텍스트를 2번째 호출 컨텍스트로 되먹인다.
+    """
+    monkeypatch.setattr("collectors.youtube.fetch_transcript", lambda url, **k: "영상 자막 내용")
+    client = _FakeClient(
+        [
+            _resp(
+                tool_calls=[_tool_call("summarize_youtube", {"video_url": "https://youtu.be/x"})],
+                finish_reason="tool_calls",
+            ),
+            _resp(content="영상에 따르면 이런 내용입니다."),
+        ]
+    )
+    out = chat("이 영상 요약해줘 https://youtu.be/x", _JUDGE, Session(), client=client)
+
+    assert out["popups"] == []  # 콘텐츠 툴은 팝업 아님
+    assert out["text"] == "영상에 따르면 이런 내용입니다."
+    # 2번째 create 의 tool 메시지에 실제 자막이 되먹여졌는지({ok:True} 확인신호가 아니라).
+    tool_msgs = [
+        m for m in client.calls[1]["messages"]
+        if isinstance(m, dict) and m.get("role") == "tool"
+    ]
+    assert tool_msgs and "영상 자막 내용" in tool_msgs[0]["content"]
+    assert '"ok"' not in tool_msgs[0]["content"]
+
+
 def test_first_create_passes_tools_and_model():
     client = _FakeClient([_resp(content="답변")])
     chat("질문", _JUDGE, Session(), client=client)

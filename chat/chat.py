@@ -20,7 +20,7 @@ import json
 from chat.build_prompt import build_prompt
 from chat.intent import classify
 from chat.session import Session
-from chat.tools import CHAT_MODEL, CHAT_MODEL_PARAMS, TOOLS
+from chat.tools import CHAT_MODEL, CHAT_MODEL_PARAMS, CONTENT_TOOLS, TOOLS, run_content_tool
 
 # risk_guardrail 차단 안내(결정적). ③ 과도한 위험은 거절이 아니라 위험 환기 + 분산 안내로
 # 방향 전환(스킬 §3). 단정 예측·내부정보·시세조종 요구도 이 안내로 일괄 차단한다.
@@ -89,18 +89,24 @@ def chat(user_query: str, judgement: dict, session: Session, *, client=None) -> 
         if choice.finish_reason == "tool_calls":
             messages.append(choice.message)  # assistant(tool_calls) 그대로 누적
             for tc in choice.message.tool_calls:
+                name = tc.function.name
                 try:
                     args = json.loads(tc.function.arguments or "{}")
                 except (json.JSONDecodeError, TypeError):
                     args = {}
-                popups.append({"name": tc.function.name, "args": args})
-                # 팝업 도구는 "무엇을 띄울지"만 → tool 결과는 확인 신호(실데이터는 프론트 조회).
+                if name in CONTENT_TOOLS:
+                    # 콘텐츠 툴: 서버가 실행해 실제 텍스트를 되먹인다(LLM 이 요약). 팝업 아님.
+                    content = run_content_tool(name, args)
+                else:
+                    # 표시 툴: "무엇을 띄울지"만 팝업으로 리프팅 + 확인 신호(실데이터는 프론트 조회).
+                    popups.append({"name": name, "args": args})
+                    content = json.dumps({"ok": True})
                 messages.append(
                     {
                         "role": "tool",
                         "tool_call_id": tc.id,
-                        "name": tc.function.name,
-                        "content": json.dumps({"ok": True}),
+                        "name": name,
+                        "content": content,
                     }
                 )
             resp = _create_with_retry(client, model=CHAT_MODEL, messages=messages)
@@ -210,17 +216,24 @@ def chat_stream(user_query: str, judgement: dict, session: Session, *, client=No
                 yield {"type": "token", "text": content}
 
         if saw_tool_calls:
-            popups = _accumulate_tool_calls(tool_deltas)
+            all_calls = _accumulate_tool_calls(tool_deltas)
+            # 콘텐츠 툴(summarize_youtube 등)은 팝업이 아니라 요약 소스 → 표시 popups 에서 제외.
+            #   done 이벤트도 이 표시 팝업을 싣도록 외부 popups 에 배정한다.
+            popups = [c for c in all_calls if c["name"] not in CONTENT_TOOLS]
             yield {"type": "popups", "popups": popups}
-            # 팝업 지시를 assistant/tool 메시지로 되먹여 narration 을 이어 스트리밍한다.
-            messages.append(_assistant_tool_calls_message(popups))
-            for i, p in enumerate(popups):
+            # assistant(tool_calls)는 전부 되먹여야 tool 메시지와 짝이 맞는다(call_{i} 일치).
+            messages.append(_assistant_tool_calls_message(all_calls))
+            for i, c in enumerate(all_calls):
+                if c["name"] in CONTENT_TOOLS:
+                    content = run_content_tool(c["name"], c["args"])  # 실제 텍스트 되먹임
+                else:
+                    content = json.dumps({"ok": True})  # 표시 툴 확인 신호
                 messages.append(
                     {
                         "role": "tool",
                         "tool_call_id": f"call_{i}",
-                        "name": p["name"],
-                        "content": json.dumps({"ok": True}),
+                        "name": c["name"],
+                        "content": content,
                     }
                 )
             yield {"type": "stage", "stage": "summarize"}
