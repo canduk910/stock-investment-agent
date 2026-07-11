@@ -61,6 +61,13 @@ def _no_guardrail(monkeypatch):
     monkeypatch.setattr(chatmod, "classify", lambda t: "stock_analysis")
 
 
+@pytest.fixture(autouse=True)
+def _stub_view_context(monkeypatch):
+    # P2 스냅샷 되먹임 기본값 = 없음(실 build_view_context→FRED/KIS·requests_cache 전역설치로
+    # fred/vix 테스트 오염 방지). 스냅샷 검증 테스트는 개별 재설정한다.
+    monkeypatch.setattr(chatmod, "build_view_context", lambda kind, args: None)
+
+
 def _collect(gen):
     return list(gen)
 
@@ -176,6 +183,27 @@ def test_tool_calls_stream_emits_popups_then_narration():
     assert client.calls[1]["stream"] is True
     # 세션엔 narration 누적
     assert session.history()[-1]["content"] == "삼성전자 리포트를 띄웠습니다."
+
+
+def test_view_context_tool_stream_feeds_summary_and_keeps_popup(monkeypatch):
+    # P2 스트리밍: show_balance 는 popups 유지 + tool 결과에 스냅샷 요약(call_{i} 페어링 정상).
+    monkeypatch.setattr(chatmod, "build_view_context", lambda kind, args: "기준시각: T\n순자산 1,900만원")
+    call1 = [
+        _tool_chunk([_tool_delta(0, tc_id="c0", name="show_balance", args="")]),
+        _tool_chunk([_tool_delta(0, args="{}")], finish_reason="tool_calls"),
+    ]
+    call2 = [_content_chunk("순자산 1,900만원입니다.", finish_reason="stop")]
+    client = _FakeStreamClient([call1, call2])
+
+    events = _collect(chat_stream("내 잔고 어때", _JUDGE, Session(), client=client))
+
+    # 팝업은 유지(프론트 패널 표시).
+    assert events[-1]["popups"] == [{"name": "show_balance", "args": {}}]
+    # 2차 호출 메시지의 tool 결과에 스냅샷 요약이 실림 + call_{i} 페어링.
+    msgs = client.calls[1]["messages"]
+    tool_msgs = [m for m in msgs if isinstance(m, dict) and m.get("role") == "tool"]
+    assert tool_msgs and tool_msgs[0]["tool_call_id"] == "call_0"
+    assert "순자산 1,900만원" in (tool_msgs[0].get("content") or "")
 
 
 def test_generate_stage_emitted_before_tokens():

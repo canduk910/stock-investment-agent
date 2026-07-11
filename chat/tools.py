@@ -232,3 +232,23 @@ def run_content_tool(name: str, args: dict) -> str:
         return impl(args or {})
     except Exception:
         return "콘텐츠를 불러오는 중 문제가 발생했습니다."
+
+
+# ── 뷰 컨텍스트 툴(표시 팝업 + 현재 화면 데이터 즉답 겸용, P2) ──────────────────
+# show_balance/show_watchlist/show_stock_report 는 여전히 popups(프론트가 패널 표시)로 가되,
+# chat.py 가 tool 결과에 서버 조회 스냅샷 요약을 함께 실어 같은 턴에 LLM 이 즉답하게 한다.
+# CONTENT_TOOLS 와 별개(콘텐츠 툴은 popups 제외, 뷰 툴은 popups 유지).
+VIEW_CONTEXT_TOOLS = frozenset({"show_balance", "show_watchlist", "show_stock_report"})
+
+
+def view_context_kind_args(name: str, args: dict) -> tuple[str, dict] | None:
+    """뷰 컨텍스트 툴명+args → build_view_context(kind, args) 입력. 대상 아니면 None."""
+    if name not in VIEW_CONTEXT_TOOLS:
+        return None
+    args = args or {}
+    if name == "show_balance":
+        return ("balance", {})
+    if name == "show_watchlist":
+        return ("watchlist", {})
+    # show_stock_report → ticker/종목명 전달(경량 시세 + 애널리스트 스냅샷).
+    return ("stock_report", {"ticker": args.get("ticker"), "stock_name": args.get("stock_name")})

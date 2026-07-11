@@ -49,6 +49,14 @@ def _no_guardrail(monkeypatch):
     monkeypatch.setattr(chatmod, "classify", lambda t: "stock_analysis")
 
 
+@pytest.fixture(autouse=True)
+def _stub_view_context(monkeypatch):
+    # 표시 툴 P2 스냅샷 되먹임의 기본값 = 없음(=> tool 결과 {"ok":True}만). 이렇게 해야 표시 툴을
+    # 부르는 기존 테스트가 실제 build_view_context(→build_judgement→FRED/KIS, requests_cache 전역
+    # 설치로 fred/vix 테스트 오염)를 타지 않는다. 스냅샷 검증 테스트는 개별적으로 재설정한다.
+    monkeypatch.setattr(chatmod, "build_view_context", lambda kind, args: None)
+
+
 def test_tool_calls_response_splits_text_and_popups():
     client = _FakeClient(
         [
@@ -143,6 +151,61 @@ def test_session_appends_after_guardrail_block(monkeypatch):
     session = Session()
     out = chat("몰빵", _JUDGE, session, client=_FakeClient([]))
     assert session.history()[-1]["content"] == out["text"]
+
+
+def test_view_context_tool_feeds_summary_and_keeps_popup(monkeypatch):
+    # P2: show_balance 는 여전히 popups(프론트 패널)로 가되, tool 결과에 서버 스냅샷 요약이 실려
+    # 같은 턴에 LLM 이 즉답할 수 있다.
+    monkeypatch.setattr(chatmod, "build_view_context", lambda kind, args: "기준시각: T\n순자산 1,900만원")
+    client = _FakeClient(
+        [
+            _resp(tool_calls=[_tool_call("show_balance", {})], finish_reason="tool_calls"),
+            _resp(content="순자산 1,900만원입니다."),
+        ]
+    )
+    out = chat("내 잔고 어때", _JUDGE, Session(), client=client)
+    # 여전히 팝업(프론트 패널 표시).
+    assert any(p["name"] == "show_balance" for p in out["popups"])
+    # 2차 호출 메시지의 tool 결과에 스냅샷 요약이 실림.
+    tool_msgs = [
+        m for m in client.calls[1]["messages"] if isinstance(m, dict) and m.get("role") == "tool"
+    ]
+    assert any("순자산 1,900만원" in (m.get("content") or "") for m in tool_msgs)
+
+
+def test_view_context_tool_forwards_ticker(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(
+        chatmod, "build_view_context",
+        lambda kind, args: seen.setdefault("ka", (kind, args)) and None or "기준시각: T\n종목",
+    )
+    client = _FakeClient(
+        [
+            _resp(tool_calls=[_tool_call("show_stock_report", {"ticker": "005930"})],
+                  finish_reason="tool_calls"),
+            _resp(content="삼성전자 현재가는…"),
+        ]
+    )
+    chat("삼성전자 얼마야", _JUDGE, Session(), client=client)
+    assert seen["ka"][0] == "stock_report"
+    assert seen["ka"][1]["ticker"] == "005930"
+
+
+def test_non_view_display_tool_no_summary(monkeypatch):
+    # 뷰 컨텍스트 툴이 아닌 표시 툴(show_macro_dashboard)은 {"ok":True}만(summary 없음).
+    monkeypatch.setattr(chatmod, "build_view_context", lambda kind, args: "SHOULD NOT APPEAR")
+    client = _FakeClient(
+        [
+            _resp(tool_calls=[_tool_call("show_macro_dashboard", {"highlight": "regime"})],
+                  finish_reason="tool_calls"),
+            _resp(content="국면 대시보드를 열었습니다."),
+        ]
+    )
+    chat("지금 국면 어때", _JUDGE, Session(), client=client)
+    tool_msgs = [
+        m for m in client.calls[1]["messages"] if isinstance(m, dict) and m.get("role") == "tool"
+    ]
+    assert all("SHOULD NOT APPEAR" not in (m.get("content") or "") for m in tool_msgs)
 
 
 def test_openai_failure_retries_then_falls_back(monkeypatch):

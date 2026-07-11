@@ -20,7 +20,15 @@ import json
 from chat.build_prompt import build_prompt
 from chat.intent import classify
 from chat.session import Session
-from chat.tools import CHAT_MODEL, CHAT_MODEL_PARAMS, CONTENT_TOOLS, TOOLS, run_content_tool
+from chat.tools import (
+    CHAT_MODEL,
+    CHAT_MODEL_PARAMS,
+    CONTENT_TOOLS,
+    TOOLS,
+    run_content_tool,
+    view_context_kind_args,
+)
+from chat.view_context import build_view_context
 
 # risk_guardrail 차단 안내(결정적). ③ 과도한 위험은 거절이 아니라 위험 환기 + 분산 안내로
 # 방향 전환(스킬 §3). 단정 예측·내부정보·시세조종 요구도 이 안내로 일괄 차단한다.
@@ -73,6 +81,26 @@ def _build_system_prompt(judgement: dict, session: Session) -> str:
     if getattr(session, "view_context", None):
         prompt += _VIEW_CONTEXT_HEADER + session.view_context
     return prompt
+
+
+def _display_tool_result(name: str, args: dict) -> str:
+    """표시 툴 되먹임 문자열 — 기본 `{"ok":True}`.
+
+    뷰 컨텍스트 툴(show_balance/watchlist/stock_report)이면 서버가 조회한 현재 화면 스냅샷 요약을
+    함께 실어(P2) 같은 턴에 LLM 이 즉답하게 한다. 표시 팝업은 별개로 유지된다(프론트가 패널 표시).
+    build_view_context 는 절대 예외를 안 내지만(None만) 방어적으로 감싼다. ensure_ascii=False 로
+    한글 스냅샷을 그대로 실어 LLM 이 인용하기 쉽게 한다.
+    """
+    payload = {"ok": True}
+    mapped = view_context_kind_args(name, args)
+    if mapped is not None:
+        try:
+            summary = build_view_context(mapped[0], mapped[1])
+        except Exception:
+            summary = None
+        if summary:
+            payload["summary"] = summary
+    return json.dumps(payload, ensure_ascii=False)
 
 
 def _make_client():
@@ -133,9 +161,9 @@ def chat(user_query: str, judgement: dict, session: Session, *, client=None) -> 
                     # 콘텐츠 툴: 서버가 실행해 실제 텍스트를 되먹인다(LLM 이 요약). 팝업 아님.
                     content = run_content_tool(name, args)
                 else:
-                    # 표시 툴: "무엇을 띄울지"만 팝업으로 리프팅 + 확인 신호(실데이터는 프론트 조회).
+                    # 표시 툴: "무엇을 띄울지"만 팝업으로 리프팅. 뷰 컨텍스트 툴이면 현재 화면 스냅샷도 되먹임(P2).
                     popups.append({"name": name, "args": args})
-                    content = json.dumps({"ok": True})
+                    content = _display_tool_result(name, args)
                 messages.append(
                     {
                         "role": "tool",
@@ -262,7 +290,7 @@ def chat_stream(user_query: str, judgement: dict, session: Session, *, client=No
                 if c["name"] in CONTENT_TOOLS:
                     content = run_content_tool(c["name"], c["args"])  # 실제 텍스트 되먹임
                 else:
-                    content = json.dumps({"ok": True})  # 표시 툴 확인 신호
+                    content = _display_tool_result(c["name"], c["args"])  # 확인 신호(+뷰 스냅샷 P2)
                 messages.append(
                     {
                         "role": "tool",
