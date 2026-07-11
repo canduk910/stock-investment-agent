@@ -91,7 +91,12 @@ def _in_backoff(env: str, entry, clock: Callable[[], float]) -> bool:
     return last_fail is not None and (clock() - last_fail) < REFRESH_BACKOFF_SECONDS
 
 
-def get_token(config, cache: Cache, clock: Callable[[], float] = time.time) -> str:
+def get_token(
+    config,
+    cache: Cache,
+    clock: Callable[[], float] = time.time,
+    stale_token: str | None = None,
+) -> str:
     """캐시된 토큰이 만료 임박이 아니면 재사용, 아니면 재발급 후 저장(plan §2).
 
     동시 갱신 스탬피드를 막기 위해 재발급 구간을 env별 락으로 감싸고, 락 획득 후
@@ -101,6 +106,13 @@ def get_token(config, cache: Cache, clock: Callable[[], float] = time.time) -> s
     동안은 재시도 없이 stale 토큰을 재사용한다(순차 재시도 폭주 방지). 완전 만료
     상태에서 발급이 거절되면 예외를 재전파한다.
 
+    **stale_token(강제 재발급)**: 데이터 호출이 EGW00123(만료 토큰) 등으로 거절돼
+    "이 토큰은 죽었다"가 확인된 경우 그 토큰 문자열을 넘긴다. 우리 expires_at 이
+    미래여도(=`_is_reusable`이 True여도) 죽은 토큰이므로 재사용 검사를 건너뛰고 재발급
+    한다. 단 동시 요청 폭주 방지를 위해 **캐시에 이미 다른(새) 토큰이 있으면**(다른
+    스레드가 방금 재발급) 그걸 반환한다. 강제 재발급 실패는 죽은 토큰으로 폴백하지
+    않고 예외를 전파한다(죽은 토큰 반환 무의미).
+
     한계: threading.Lock 기반 single-flight 는 in-process 에서만 유효하다.
     다중 프로세스/워커(예: Lambda 인스턴스 여럿)가 동시에 near-expiry 를 맞으면
     각 프로세스가 1회씩 발급할 수 있고, FileCache 쓰기도 원자적이지 않다. 로컬
@@ -108,26 +120,34 @@ def get_token(config, cache: Cache, clock: Callable[[], float] = time.time) -> s
     """
     key = kis_token_key(config.env)
     entry = cache.get(key)
-    if _is_reusable(entry, clock):
-        return entry["access_token"]
+    forcing = stale_token is not None
 
-    # 재발급 거절 직후 backoff 창: 락 경합 없이 즉시 stale 토큰 재사용
-    if _in_backoff(config.env, entry, clock):
-        return entry["access_token"]
+    if not forcing:
+        if _is_reusable(entry, clock):
+            return entry["access_token"]
+        # 재발급 거절 직후 backoff 창: 락 경합 없이 즉시 stale 토큰 재사용
+        if _in_backoff(config.env, entry, clock):
+            return entry["access_token"]
+    elif entry and entry.get("access_token") != stale_token:
+        return entry["access_token"]  # 다른 스레드가 이미 재발급 → 그 토큰 사용
 
     with _refresh_lock(config.env):
         # double-check: 대기 중 다른 스레드가 이미 갱신/실패했으면 발급 스킵
         entry = cache.get(key)
-        if _is_reusable(entry, clock):
-            return entry["access_token"]
-        if _in_backoff(config.env, entry, clock):
-            return entry["access_token"]
+        if not forcing:
+            if _is_reusable(entry, clock):
+                return entry["access_token"]
+            if _in_backoff(config.env, entry, clock):
+                return entry["access_token"]
+        elif entry and entry.get("access_token") != stale_token:
+            return entry["access_token"]  # 락 대기 중 다른 스레드가 재발급 완료
 
         try:
             fresh = request_token(config, clock=clock)
         except Exception:
-            # 거절 폴백: 완전 만료 전이면 기존 토큰 재사용 + 실패 시각 기록(backoff)
-            if entry and (entry["expires_at"] - clock()) > 0:
+            # 거절 폴백: 강제 재발급이 아니고(죽은 토큰 확정 아님) 완전 만료 전이면
+            # 기존 토큰 재사용 + 실패 시각 기록(backoff). 강제 재발급 실패는 전파.
+            if not forcing and entry and (entry["expires_at"] - clock()) > 0:
                 _LAST_REFRESH_FAILURE[config.env] = clock()
                 logger.warning(
                     "KIS 토큰 재발급 거절 — 완전 만료 전 기존 토큰으로 폴백(env=%s, "
@@ -145,10 +165,14 @@ def get_token(config, cache: Cache, clock: Callable[[], float] = time.time) -> s
         return fresh["access_token"]
 
 
-def make_token_provider(config, cache: Cache) -> Callable[[], str]:
+def make_token_provider(config, cache: Cache) -> Callable[..., str]:
     """get_token 을 감싼 provider(callable) 반환 — KisClient 배선용(plan §2).
 
-    KisClient 가 매 get() 마다 이 provider() 를 호출해 fresh 토큰을 얻는다.
-    캐시/락/폴백 정책은 전부 get_token 에 위임한다.
+    KisClient 가 매 get() 마다 이 provider() 를 호출해 fresh 토큰을 얻는다. 토큰이
+    무효화돼 KIS가 거절하면 KisClient 가 `provider(stale_token=죽은토큰)` 으로 강제
+    재발급을 요청한다. 캐시/락/폴백 정책은 전부 get_token 에 위임한다.
     """
-    return lambda: get_token(config, cache)
+    def provider(stale_token: str | None = None) -> str:
+        return get_token(config, cache, stale_token=stale_token)
+
+    return provider

@@ -5,7 +5,9 @@
 ## KIS 어댑터 (kis/)
 - **조회 전용.** 매매 주문(order/buy/sell) 계열은 절대 만들지 않는다(플랜 원칙 1).
 - **KIS 코드는 기억으로 쓰지 않는다.** TR_ID·파라미터·응답 필드명은 재현 불가 → `kis-code-assistant` MCP로 검증 코드를 받아 어댑터화한다(`kis-data-pipeline` 스킬).
-- **오류 표면화**: KIS는 실패해도 HTTP 200 + `rt_cd != "0"`(+`msg_cd`/`msg1`)로 응답한다. `client.get`이 이를 `KisApiError`로 던진다(`errors.py`). `rt_cd`는 문자열 비교, 부재(None)는 통과(토큰/웹소켓 응답 대비). 이 검사가 없으면 실패 body가 normalize에서 전 필드 조용한 None이 되어 잡히지 않는다.
+- **오류 표면화**: KIS 실패는 두 형태 — (a) HTTP 200 + `rt_cd != "0"`, (b) **HTTP 5xx**(게이트웨이/유량/토큰 무효). `client.get`이 **두 경우 모두** body의 `msg_cd/msg1/status`를 `KisApiError`로 표면화한다(`errors.py`) + WARNING 로깅(토큰/appkey 미출력). ⚠ `raise_for_status()`로 5xx 본문을 버리면 "왜 500인지"(예: `EGW00123` 만료토큰)를 못 봐 진단이 막힌다 — **본문을 먼저 읽는다**(비-JSON 5xx는 status+스냅샷). `rt_cd`는 문자열 비교, 부재(None)는 통과.
+- **재시도(client.get)**: 전이성 5xx·유량(`EGW00201`)은 짧은 지수 backoff로 최대 3회 재시도(자가치유). 인증/파라미터는 비재시도(즉시 표면화). `_SLEEP`은 테스트 patch용 간접참조.
+- **토큰 자가치유(★근본원인 회귀 방지)**: 캐시 토큰이 **외부 재발급 등으로 KIS에서 무효화**되면(우리 `expires_at`이 미래여도) 데이터 호출이 `EGW00123`(만료)/`EGW00121`(무효)로 거절된다. 같은 죽은 토큰 재시도는 무의미 → `client.get`이 이 코드를 감지해 **`provider(stale_token=죽은토큰)`로 강제 재발급** 후 재시도. `auth.get_token`은 stale_token이 오면 재사용 검사를 건너뛰고 재발급하되 **캐시에 이미 다른(새) 토큰이 있으면 그걸 사용**(동시 재발급 방지), 강제 재발급 실패는 죽은 토큰 폴백 없이 전파. (같은 appkey를 여러 프로젝트가 공유하면 서로 토큰을 무효화하니 **앱키 분리 권장**.)
 - **토큰(auth.py)**: 24h 유효. KIS가 재발급을 분당 1회 수준으로 제한(EGW00133) → 만료 <1h일 때만 재발급. single-flight 락 + double-checked locking(동시 스탬피드 차단) + 거절 시 유효 토큰 폴백 + **60s backoff**(순차 재시도 폭주 차단). **한계**: threading.Lock은 in-process 전용 — 다중 프로세스/Lambda는 각자 1회 발급 가능(배포 시 분산 락 필요).
 - **라이브 확정 필드명**(추측 아님): `intstock_multprice` → `inter_shrn_iscd`/`inter2_prpr`/`prdy_ctrt`. `quote` 등락률 → `antc_cntg_prdy_ctrt`(예상체결 전일대비율).
 - **W08 종목 어댑터 3종**(MCP 검증): `inquire_price`(FHKST01010100, `/quotations/inquire-price`, 단일 output — 현재가·`per`·`w52_hgpr`/`w52_lwpr`·`hts_avls`), `finance_income_statement`(FHKST66430200, `/finance/income-statement`), `finance_financial_ratio`(FHKST66430300, `/finance/financial-ratio`). 재무 2종 output은 **리스트(행 1개면 단일 dict로 오는 변형** → `normalize._output_rows`가 리스트화). ROE는 `roe_val`.

@@ -60,15 +60,109 @@ def test_extra_headers_merged():
 
 
 @responses.activate
-def test_http_error_raises():
-    """HTTP 에러는 rt_cd 검사보다 먼저 raise_for_status 에서 HTTPError 로 잡힌다.
+def test_http_500_surfaces_kis_body_as_error(monkeypatch):
+    """HTTP 5xx 도 본문(rt_cd/msg_cd/msg1)을 KisApiError 로 표면화한다(bare HTTPError 아님).
 
-    KisApiError(rt_cd 표면화)와 경계를 명시적으로 고정한다.
+    이전엔 raise_for_status 가 5xx 본문을 통째로 버려 "왜 500인지"를 못 봤다(관측 불능).
+    유량제한 EGW00201 등 실제 원인이 예외·로그에 실려야 진단·분기가 가능하다.
     """
+    monkeypatch.setattr("collectors.kis.client._SLEEP", lambda s: None)  # backoff 무력화(빠른 테스트)
     url = "https://openapi.koreainvestment.com:9443" + PATH
-    responses.add(responses.GET, url, json={"msg": "fail"}, status=500)
-    with pytest.raises(requests.exceptions.HTTPError):
+    responses.add(
+        responses.GET, url,
+        json={"rt_cd": "1", "msg_cd": "EGW00201", "msg1": "초당 거래건수를 초과하였습니다."},
+        status=500,
+    )
+    with pytest.raises(KisApiError) as exc:
         KisClient(REAL_CONFIG, token_provider="T").get("TR", PATH, params={})
+    err = exc.value
+    assert err.status == 500
+    assert err.msg_cd == "EGW00201"
+    assert "초과" in err.msg1
+    assert err.retryable is True  # 5xx·유량 → 재시도 대상
+
+
+@responses.activate
+def test_5xx_retries_then_succeeds(monkeypatch):
+    """전이성 5xx 는 짧은 backoff 후 재시도해 자가치유한다(다음 시도 성공 시 정상 반환)."""
+    monkeypatch.setattr("collectors.kis.client._SLEEP", lambda s: None)
+    url = "https://openapi.koreainvestment.com:9443" + PATH
+    responses.add(responses.GET, url, json={"msg1": "temporary"}, status=500)  # 1차 실패
+    responses.add(responses.GET, url, json={"rt_cd": "0", "output1": []}, status=200)  # 2차 성공
+    body = KisClient(REAL_CONFIG, token_provider="T").get("TR", PATH, params={})
+    assert body == {"rt_cd": "0", "output1": []}
+    assert len(responses.calls) == 2  # 1회 재시도로 복구
+
+
+@responses.activate
+def test_5xx_exhausts_retries_then_raises(monkeypatch):
+    """전이성 5xx 가 계속되면 _MAX_ATTEMPTS 회 시도 후 KisApiError 로 표면화."""
+    from collectors.kis.client import _MAX_ATTEMPTS
+
+    monkeypatch.setattr("collectors.kis.client._SLEEP", lambda s: None)
+    url = "https://openapi.koreainvestment.com:9443" + PATH
+    responses.add(responses.GET, url, json={"msg_cd": "EGW00201", "msg1": "유량"}, status=500)
+    with pytest.raises(KisApiError):
+        KisClient(REAL_CONFIG, token_provider="T").get("TR", PATH, params={})
+    assert len(responses.calls) == _MAX_ATTEMPTS  # 3회 전부 시도(replay)
+
+
+@responses.activate
+def test_http_5xx_non_json_body_graceful(monkeypatch):
+    """비-JSON 5xx 본문(게이트웨이 HTML 등)도 status + 스냅샷으로 KisApiError 표면화."""
+    monkeypatch.setattr("collectors.kis.client._SLEEP", lambda s: None)
+    url = "https://openapi.koreainvestment.com:9443" + PATH
+    responses.add(responses.GET, url, body="<html>Gateway Error</html>", status=502)
+    with pytest.raises(KisApiError) as exc:
+        KisClient(REAL_CONFIG, token_provider="T").get("TR", PATH, params={})
+    err = exc.value
+    assert err.status == 502
+    assert "502" in str(err)
+
+
+@responses.activate
+def test_token_expired_forces_refresh_and_retries(monkeypatch):
+    """EGW00123(만료 토큰) → 토큰 강제 재발급 후 재시도해 자가치유(근본원인 회귀 방지).
+
+    캐시 expires_at 이 미래여도 KIS가 토큰을 무효화(외부 재발급 등)하면 EGW00123 을
+    내린다. 같은 죽은 토큰으로 재시도하면 계속 실패하므로, provider 에 stale_token 을
+    넘겨 강제 재발급받아 새 토큰(T2)으로 재시도해야 한다.
+    """
+    monkeypatch.setattr("collectors.kis.client._SLEEP", lambda s: None)
+    url = "https://openapi.koreainvestment.com:9443" + PATH
+    responses.add(  # 1차: 죽은 토큰 → EGW00123(500)
+        responses.GET, url,
+        json={"rt_cd": "1", "msg_cd": "EGW00123", "msg1": "기간이 만료된 token 입니다."},
+        status=500,
+    )
+    responses.add(responses.GET, url, json={"rt_cd": "0", "output1": []}, status=200)  # 2차 성공
+
+    issued = ["T1"]
+
+    def provider(stale_token=None):
+        if stale_token is not None:  # 강제 재발급 요청 → 새 토큰
+            issued[0] = "T2"
+        return issued[0]
+
+    body = KisClient(REAL_CONFIG, token_provider=provider).get("TR", PATH, params={})
+
+    assert body == {"rt_cd": "0", "output1": []}
+    assert len(responses.calls) == 2
+    assert responses.calls[0].request.headers["authorization"] == "Bearer T1"  # 1차 죽은 토큰
+    assert responses.calls[1].request.headers["authorization"] == "Bearer T2"  # 재발급된 토큰
+
+
+@responses.activate
+def test_rt_cd_error_is_not_retried(monkeypatch):
+    """HTTP 200 + rt_cd!=0(비유량) 오류는 재시도하지 않고 즉시 표면화(1회 호출, backoff 없음)."""
+    sleeps: list = []
+    monkeypatch.setattr("collectors.kis.client._SLEEP", lambda s: sleeps.append(s))
+    url = "https://openapi.koreainvestment.com:9443" + PATH
+    responses.add(responses.GET, url, json={"rt_cd": "1", "msg_cd": "EGW00133", "msg1": "x"}, status=200)
+    with pytest.raises(KisApiError):
+        KisClient(REAL_CONFIG, token_provider="T").get("TR", PATH, params={})
+    assert len(responses.calls) == 1  # 비재시도 → 1회
+    assert sleeps == []  # backoff 없음
 
 
 @responses.activate
