@@ -18,6 +18,10 @@ dependencies = [
     "pdfplumber>=0.11.10",
     "numpy>=2.4.6",
     "beautifulsoup4>=4.15.0",
+    "sqlalchemy>=2.0",
+    "bcrypt>=4.0",
+    "pyjwt>=2.8",
+    "email-validator>=2.0",
 ]
 
 [dependency-groups]

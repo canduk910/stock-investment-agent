@@ -29,6 +29,17 @@ app.add_middleware(
 )
 
 
+# DB 초기화 — 앱 로드 시 테이블 생성(존재하면 skip). 로컬 SQLite / 프로덕션 GCP Cloud SQL Postgres.
+from infra.db import init_db  # noqa: E402
+
+init_db()
+
+# 인증 라우터(회원가입/로그인/me) — 유저별 데이터 스코프의 진입점.
+from api.auth import router as auth_router  # noqa: E402
+
+app.include_router(auth_router)
+
+
 def live_judgement() -> tuple[dict, dict, list[str]]:
     """실시간 수집(캐시 미경유) → 매핑(deps SSOT) → judge_regime.
 

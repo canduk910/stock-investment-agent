@@ -49,6 +49,15 @@ vi.mock('./api.js', () => ({
 }))
 import { fetchWatchlist, fetchMacroRegime, setViewContext } from './api.js'
 
+// 인증 게이트 — App 이 마운트 시 fetchMe 로 로그인 상태를 확인한다. 기본은 로그인됨(메인 앱 렌더).
+vi.mock('./auth.js', () => ({
+  fetchMe: vi.fn(),
+  logout: vi.fn(),
+  login: vi.fn(),
+  signup: vi.fn(),
+}))
+import { fetchMe, logout } from './auth.js'
+
 const regimeView = (over = {}) => ({
   regime: '확장',
   recommended_cash_ratio: 20,
@@ -79,29 +88,58 @@ beforeEach(() => {
   fetchMacroRegime.mockResolvedValue(regimeView())
   setViewContext.mockReset()
   setViewContext.mockResolvedValue({ ok: true, set: true })
+  fetchMe.mockReset()
+  fetchMe.mockResolvedValue({ id: 1, email: 'a@b.com' }) // 기본: 로그인됨
+  logout.mockReset()
 })
 afterEach(() => {
   vi.runOnlyPendingTimers()
   vi.useRealTimers()
 })
 
+// 로그인 상태로 App 렌더 — fetchMe 해결(authChecked+user)까지 기다린 뒤 메인 앱이 나온다.
+async function renderLoggedIn() {
+  render(<App />)
+  await act(async () => {})
+}
+
 describe('App 2컬럼 레이아웃(모달 폐기 · 우측 동적 패널)', () => {
-  it('랜딩 = 관심종목(watchlist)이 우측 패널에 렌더', () => {
-    render(<App />)
+  it('랜딩 = 관심종목(watchlist)이 우측 패널에 렌더', async () => {
+    await renderLoggedIn()
     expect(screen.getByTestId('right-kind')).toHaveTextContent('watchlist')
     expect(screen.getByTestId('chat-panel')).toBeInTheDocument()
   })
 
-  it('ChatPanel onShowPanel → 우측 패널 spec 전환(채팅 구동)', () => {
-    render(<App />)
+  it('ChatPanel onShowPanel → 우측 패널 spec 전환(채팅 구동)', async () => {
+    await renderLoggedIn()
     fireEvent.click(screen.getByText('chat-open-macro'))
     expect(screen.getByTestId('right-kind')).toHaveTextContent('macro_dashboard')
   })
 
-  it('RightPanel 퀵버튼 onSelect → 우측 패널 spec 전환(직접 탐색)', () => {
-    render(<App />)
+  it('RightPanel 퀵버튼 onSelect → 우측 패널 spec 전환(직접 탐색)', async () => {
+    await renderLoggedIn()
     fireEvent.click(screen.getByText('quick-balance'))
     expect(screen.getByTestId('right-kind')).toHaveTextContent('balance')
+  })
+})
+
+describe('인증 게이트', () => {
+  it('비로그인(fetchMe→null) → LoginScreen 렌더, 메인 앱 미노출', async () => {
+    fetchMe.mockResolvedValue(null)
+    render(<App />)
+    await act(async () => {})
+    expect(screen.getByText('디케이 투자에이전트')).toBeInTheDocument() // 로그인 화면 브랜드
+    expect(screen.queryByTestId('right-panel')).not.toBeInTheDocument() // 메인 앱 미노출
+    expect(screen.getAllByText(/회원가입/).length).toBeGreaterThan(0)
+  })
+
+  it('로그인 상태 → 톱바에 이메일 + 로그아웃, 로그아웃 시 LoginScreen 복귀', async () => {
+    await renderLoggedIn()
+    expect(screen.getByText('a@b.com')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('로그아웃'))
+    expect(logout).toHaveBeenCalled()
+    // user null → LoginScreen(메인 앱 미노출).
+    expect(screen.queryByTestId('right-panel')).not.toBeInTheDocument()
   })
 })
 

@@ -2077,6 +2077,160 @@ body {
   cursor: default;
 }
 
+/* 톱바 유저 이메일 + 로그아웃(인증). */
+.app__user {
+  font-size: 12px;
+  color: var(--c-text-secondary);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app__logout {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.app__logout:hover {
+  border-color: var(--c-border-strong);
+  color: var(--c-text);
+}
+
+/* ── 로그인/회원가입 화면(인증 게이트) ── */
+.login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--c-bg);
+  padding: 24px;
+}
+.login__card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 16px;
+  padding: 28px;
+  box-shadow: 0 8px 30px rgba(16, 27, 48, 0.08);
+}
+.login__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.login__logo {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--c-navy);
+  color: var(--c-white);
+  font-weight: 900;
+  border-radius: 10px;
+  font-size: 15px;
+}
+.login__title {
+  margin: 0;
+  font-size: 17px;
+  color: var(--c-navy);
+}
+.login__caption {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+.login__tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--c-surface-2);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 18px;
+}
+.login__tab {
+  flex: 1;
+  padding: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  background: transparent;
+  color: var(--c-text-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.login__tab[aria-pressed='true'] {
+  background: var(--c-navy);
+  color: var(--c-white);
+}
+.login__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.login__label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+}
+.login__input {
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+.login__input:focus {
+  outline: none;
+  border-color: var(--c-navy);
+}
+.login__error {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--c-danger);
+}
+.login__submit {
+  margin-top: 4px;
+  padding: 11px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--c-white);
+  background: var(--c-navy);
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.login__submit:disabled {
+  background: var(--c-border-strong);
+  cursor: default;
+}
+.login__hint {
+  margin: 16px 0 0;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--c-text-muted);
+}
+.login__link {
+  border: none;
+  background: none;
+  color: var(--c-brand);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
 /* 앱레벨 능동 알림 배너 — 강조 주황(패널 무관, 목표가 전이 시). 텍스트 + 우측 액션. */
 .app__alert {
   margin: 14px 0 0;

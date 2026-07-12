@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ChatPanel from './components/ChatPanel.jsx'
 import RightPanel from './components/RightPanel.jsx'
+import LoginScreen from './components/LoginScreen.jsx'
 import { fetchWatchlist, fetchMacroRegime, setReportContext, setViewContext } from './api.js'
+import { fetchMe, logout } from './auth.js'
 import { detectTargetAlerts } from './lib/watchlistLogic.js'
 
 // UX 개편 — 좌측 상시 채팅 + 우측 맥락형 동적 패널(모달 폐기). 2컬럼 그리드(.app__main).
@@ -76,6 +78,28 @@ export default function App() {
         ? crypto.randomUUID()
         : `sess-${Date.now()}-${Math.random().toString(16).slice(2)}`
   }
+
+  // 인증 게이트 — 마운트 시 토큰으로 fetchMe. user 없으면 LoginScreen(전체 게이트). null=확인 전.
+  const [user, setUser] = useState(null)
+  const [authChecked, setAuthChecked] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    fetchMe()
+      .then((u) => {
+        if (!cancelled) setUser(u)
+      })
+      .finally(() => {
+        if (!cancelled) setAuthChecked(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleLogout = useCallback(() => {
+    logout()
+    setUser(null)
+  }, [])
 
   // 우측 동적 패널 spec — 챗봇(onShowPanel)·퀵버튼(onSelect)이 리프팅. 닫으면 null(빈 상태).
   const [rightPanelSpec, setRightPanelSpec] = useState(LANDING_SPEC)
@@ -190,6 +214,10 @@ export default function App() {
     }
   }, [])
 
+  // 인증 게이트(모든 훅 뒤) — 확인 전엔 아무것도, 비로그인은 LoginScreen(전체 게이트).
+  if (!authChecked) return null
+  if (!user) return <LoginScreen onAuthed={setUser} />
+
   return (
     <div className="app">
       <header className="app__topbar">
@@ -202,6 +230,12 @@ export default function App() {
         </div>
 
         <div className="app__status">
+          <span className="app__user" title={user.email}>
+            {user.email}
+          </span>
+          <button type="button" className="app__logout" onClick={handleLogout}>
+            로그아웃
+          </button>
           {regime ? (
             <>
               <span className="app__chip app__chip--regime">
