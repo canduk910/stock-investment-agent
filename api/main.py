@@ -44,6 +44,11 @@ from api.conversations import router as conversations_router  # noqa: E402
 
 app.include_router(conversations_router)
 
+# 유저별 KIS 자격증명(등록/조회/삭제) — 암호화 저장·검증. 공유키 대체(유저 격리).
+from api.kis_credentials import router as kis_credentials_router  # noqa: E402
+
+app.include_router(kis_credentials_router)
+
 
 def live_judgement() -> tuple[dict, dict, list[str]]:
     """실시간 수집(캐시 미경유) → 매핑(deps SSOT) → judge_regime.
