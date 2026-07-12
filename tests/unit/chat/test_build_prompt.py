@@ -152,6 +152,38 @@ def test_prompt_says_rebalance_advice_is_text_only():
     assert "리밸런싱" in text
 
 
+# ── 포트폴리오 상담 활성 + 안전 강화(재분류 backstop) ────────────────────────────
+
+
+def test_prompt_has_portfolio_consultation_block():
+    # 코드 근거 자문 블록: 잔고 근거 조정 방향 + 추가편입 후보(게이트 통과) + 새 아이디어 + 면책.
+    text = build_prompt(_JUDGEMENT)
+    assert "포트폴리오 상담" in text
+    assert "추가편입" in text
+    assert "entry_allowed" in text or "게이트를 통과" in text  # 코드 게이트 근거
+    assert "single_cap" in text  # 종목당 상한 근거(값 아님, 변수명)
+
+
+def test_prompt_consultation_keeps_no_certainty_and_disclaimer():
+    # 완화해도 단정 금지·면책은 유지(불변 안전).
+    text = build_prompt(_JUDGEMENT)
+    assert "단정" in text
+    assert "면허" in text  # 면허 있는 자문 아님(면책)
+
+
+def test_prompt_safety_refuses_insider_and_manipulation():
+    # 재분류 backstop — 본 프롬프트도 내부정보·시세조종·수익보장 단정을 명시적으로 거부.
+    text = build_prompt(_JUDGEMENT)
+    assert "내부" in text and "시세조종" in text
+    assert "보장" in text  # 수익 보장 금지 명시
+
+
+def test_prompt_allows_actionable_recommendation():
+    # 완화의 핵심: 후보를 구체적으로 제시(actionable) 허용 문구가 있어야 한다.
+    text = build_prompt(_JUDGEMENT)
+    assert "후보" in text  # 편입 검토 후보 제시
+
+
 def _extract_entry_guidance(prompt: str) -> str:
     """진입신호 지침 블록만 잘라낸다(마커 [관심종목 진입 신호] ~ 다음 블록 경계).
 
