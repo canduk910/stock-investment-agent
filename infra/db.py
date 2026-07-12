@@ -69,6 +69,7 @@ def import_models() -> None:
     Phase 마다 신규 모델을 여기에 추가한다(단일 등록 지점).
     """
     from auth import models as _auth_models  # noqa: F401  (User)
+    from watchlist import db_models as _wl_models  # noqa: F401  (WatchlistItemRow)
 
 
 def get_db():

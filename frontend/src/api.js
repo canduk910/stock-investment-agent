@@ -1,4 +1,5 @@
 import { readChatStream } from './lib/sseChat.js'
+import { authFetch } from './auth.js'
 
 // 백엔드(FastAPI) 호출 헬퍼. 엔드포인트 계약은 api/main.py 와 일치해야 한다.
 export async function fetchMacroIndicators() {
@@ -76,14 +77,14 @@ export async function postChatStream(sessionId, message, handlers = {}) {
 // sort_by 는 서버가 에코만 하고 실제 정렬은 프론트(watchlistLogic.sortItems)가 재조회 없이 수행.
 export async function fetchWatchlist(sortBy) {
   const qs = sortBy ? `?sort_by=${encodeURIComponent(sortBy)}` : ''
-  const res = await fetch(`/api/watchlist${qs}`)
+  const res = await authFetch(`/api/watchlist${qs}`)
   if (!res.ok) throw new Error(`API ${res.status}`)
   return res.json()
 }
 
 // GET /api/watchlist/{ticker} → {ticker, member}. 경량 멤버십(시세 조회 없음) — 추가/제거 버튼 토글용.
 export async function fetchWatchlistMembership(ticker) {
-  const res = await fetch(`/api/watchlist/${encodeURIComponent(ticker)}`)
+  const res = await authFetch(`/api/watchlist/${encodeURIComponent(ticker)}`)
   if (!res.ok) throw new Error(`API ${res.status}`)
   return res.json()
 }
@@ -96,7 +97,7 @@ export async function addWatchlist({ ticker, stockName, reason, targetPrice } = 
   if (stockName != null) body.stock_name = stockName
   if (reason != null) body.reason = reason
   if (targetPrice != null) body.target_price = targetPrice
-  const res = await fetch('/api/watchlist', {
+  const res = await authFetch('/api/watchlist', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -119,14 +120,14 @@ function _throwWithStatus(res) {
 
 // DELETE /api/watchlist/{ticker} → {ok}.
 export async function removeWatchlist(ticker) {
-  const res = await fetch(`/api/watchlist/${encodeURIComponent(ticker)}`, { method: 'DELETE' })
+  const res = await authFetch(`/api/watchlist/${encodeURIComponent(ticker)}`, { method: 'DELETE' })
   if (!res.ok) _throwWithStatus(res)
   return res.json()
 }
 
 // PATCH /api/watchlist/{ticker} {target_price} → {ok, item}. 목표가 설정/변경(null 이면 해제).
 export async function updateWatchlistTarget(ticker, targetPrice) {
-  const res = await fetch(`/api/watchlist/${encodeURIComponent(ticker)}`, {
+  const res = await authFetch(`/api/watchlist/${encodeURIComponent(ticker)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ target_price: targetPrice }),

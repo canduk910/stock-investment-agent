@@ -31,10 +31,10 @@ def client(monkeypatch):
 
 
 def test_watchlist_router_mounted(client):
-    # include_router(watchlist) 가 빠지면 404 → wiring 회귀를 잡는다.
+    # include_router(watchlist) 가 빠지면 404 → wiring 회귀를 잡는다. 이제 인증 필수라
+    # 토큰 없으면 401(마운트됐다는 증거 — 404 가 아니다).
     r = client.get("/api/watchlist")
-    assert r.status_code == 200
-    assert set(r.json()) >= {"items", "regime", "partial_failure", "sort_by"}
+    assert r.status_code == 401
 
 
 def test_report_history_router_mounted(client):

@@ -17,33 +17,29 @@ from __future__ import annotations
 
 import datetime as dt
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 # api.detail 재사용(순환 회피 — detail 은 api.main 미참조).
 from api.deps import assert_valid_ticker
 from api.detail import _build_judgement, _build_kis_client
+from auth.deps import get_current_user
+from auth.models import User
 from collectors.kis import stock_info
 from collectors.stock_master import load_stock_master, search_stocks
+from infra.db import get_db
 from watchlist import service
-from watchlist.constants import (
-    DEFAULT_USER_ID,
-    SORT_KEYS,
-    WATCHLIST_MAX_ITEMS,
-    WATCHLIST_STORE_PATH,
-)
+from watchlist.constants import SORT_KEYS, WATCHLIST_MAX_ITEMS
 from watchlist.models import WatchlistItem
-from watchlist.store import JsonFileWatchlistStore
+from watchlist.sql_store import SqlWatchlistStore
 
 router = APIRouter()
 
-# 싱글톤 durable store(로컬 스탠드인 — 배포 시 DynamoDB 구현체 교체).
-_STORE = JsonFileWatchlistStore(WATCHLIST_STORE_PATH)
 
-
-def _get_store():
-    """store 접근 진입점(테스트는 이 함수를 monkeypatch → 인메모리 격리)."""
-    return _STORE
+def _get_store(db: Session):
+    """요청 스코프 DB Session 기반 store(유저별 durable). 테스트는 이 함수를 monkeypatch."""
+    return SqlWatchlistStore(db)
 
 
 def _now_iso() -> str:
@@ -54,16 +50,15 @@ def _now_iso() -> str:
 
 class AddRequest(BaseModel):
     # ticker 정규식은 라우트에서 명시 검증(불량 ticker=400 명확 안내 / target 음수=422 로 구분).
+    # user_id 는 요청 바디가 아니라 인증 토큰에서 온다(유저별 스코프).
     ticker: str
     stock_name: str | None = None
     reason: str | None = None
     target_price: float | None = Field(default=None, ge=0)
-    user_id: str | None = None
 
 
 class PatchRequest(BaseModel):
     target_price: float | None = Field(default=None, ge=0)
-    user_id: str | None = None
 
 
 # ── stock_name 해석 ──────────────────────────────────────────────────────────
@@ -102,11 +97,12 @@ def _normalize_sort_by(sort_by: str | None) -> str:
 @router.get("/api/watchlist")
 def get_watchlist(
     sort_by: str | None = Query(default=None),
-    user_id: str | None = Query(default=None),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> dict:
     """enriched 워치리스트(registered 순). judgement 실패는 service 가 regime degraded 처리."""
-    uid = user_id or DEFAULT_USER_ID
-    store = _get_store()
+    uid = str(user.id)
+    store = _get_store(db)
     client = _build_kis_client()
     try:
         judgement = _build_judgement()
@@ -118,11 +114,15 @@ def get_watchlist(
 
 
 @router.post("/api/watchlist")
-def add_watchlist(req: AddRequest) -> dict:
+def add_watchlist(
+    req: AddRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
     """관심종목 추가/갱신(upsert, added_at 보존). ticker 불량은 400(명확 안내, 저장 안 함)."""
     assert_valid_ticker(req.ticker)  # IMP-02: 공유 헬퍼(api.deps, report 라우트와 대칭)
-    uid = req.user_id or DEFAULT_USER_ID
-    store = _get_store()
+    uid = str(user.id)
+    store = _get_store(db)
     existing = store.get(uid, req.ticker)
 
     # 상한 방어(계획 §리스크): 신규 종목만 상한 검사, 기존 ticker 갱신(upsert)은 개수를 안
@@ -155,28 +155,38 @@ def add_watchlist(req: AddRequest) -> dict:
 
 
 @router.get("/api/watchlist/{ticker}")
-def watchlist_membership(ticker: str, user_id: str | None = Query(default=None)) -> dict:
+def watchlist_membership(
+    ticker: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
     """경량 멤버십 조회(시세 enrich·KIS 호출 없음 — 레이트리밋 무압박, IMP-21). {ticker, member}."""
     assert_valid_ticker(ticker)
-    uid = user_id or DEFAULT_USER_ID
-    return {"ticker": ticker, "member": _get_store().get(uid, ticker) is not None}
+    return {"ticker": ticker, "member": _get_store(db).get(str(user.id), ticker) is not None}
 
 
 @router.delete("/api/watchlist/{ticker}")
-def delete_watchlist(ticker: str, user_id: str | None = Query(default=None)) -> dict:
+def delete_watchlist(
+    ticker: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
     """관심종목 제거(idempotent — 없어도 ok). 불량 ticker 는 400."""
     assert_valid_ticker(ticker)  # IMP-02
-    uid = user_id or DEFAULT_USER_ID
-    _get_store().delete(uid, ticker)
+    _get_store(db).delete(str(user.id), ticker)
     return {"ok": True}
 
 
 @router.patch("/api/watchlist/{ticker}")
-def patch_watchlist(ticker: str, req: PatchRequest) -> dict:
+def patch_watchlist(
+    ticker: str,
+    req: PatchRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
     """목표가 갱신. 불량 ticker 는 400. 미등록 종목은 404. 음수는 Pydantic 이 422."""
     assert_valid_ticker(ticker)  # IMP-02
-    uid = req.user_id or DEFAULT_USER_ID
-    updated = _get_store().update_target(uid, ticker, req.target_price)
+    updated = _get_store(db).update_target(str(user.id), ticker, req.target_price)
     if updated is None:
         raise HTTPException(status_code=404, detail="watchlist item not found")
     return {"ok": True, "item": updated.model_dump()}
