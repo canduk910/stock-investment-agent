@@ -39,6 +39,11 @@ from api.auth import router as auth_router  # noqa: E402
 
 app.include_router(auth_router)
 
+# 대화기록 라우터(유저별 대화 목록·생성·메시지·삭제).
+from api.conversations import router as conversations_router  # noqa: E402
+
+app.include_router(conversations_router)
+
 
 def live_judgement() -> tuple[dict, dict, list[str]]:
     """실시간 수집(캐시 미경유) → 매핑(deps SSOT) → judge_regime.

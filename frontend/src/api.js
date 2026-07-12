@@ -32,12 +32,49 @@ export async function fetchStockBundle(ticker) {
   return res.json()
 }
 
+// ── 대화기록(대화 목록·생성·메시지·삭제, 유저 스코프) ─────────────────────────
+// session_id(챗)는 conversation.id 를 쓴다. 모두 인증 필수(authFetch).
+
+// GET /api/conversations → {conversations:[{id, title, created_at, updated_at}]}(최근 갱신순).
+export async function fetchConversations() {
+  const res = await authFetch('/api/conversations')
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
+// POST /api/conversations {title?} → {id, title, created_at, updated_at}. 새 대화 생성.
+export async function createConversation(title) {
+  const res = await authFetch('/api/conversations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: title ?? null }),
+  })
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
+// GET /api/conversations/{id}/messages → {conversation, messages:[{role, content, created_at}]}.
+export async function fetchConversationMessages(conversationId) {
+  const res = await authFetch(`/api/conversations/${encodeURIComponent(conversationId)}/messages`)
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
+// DELETE /api/conversations/{id} → {ok}. 대화 삭제(메시지 cascade).
+export async function deleteConversation(conversationId) {
+  const res = await authFetch(`/api/conversations/${encodeURIComponent(conversationId)}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
 // 챗봇(W09). POST /api/chat body {session_id, message} → {text, popups:[{name, args}]}.
 // text=말풍선, popups=팝업 트리거(name→컴포넌트, args=enum·ticker). 팝업 실데이터는 여기가 아니라
 // 프론트 컴포넌트가 fetchStockBundle/fetchMacroRegime 로 직접 조회한다(환각 차단, frontend-engineer 원칙2).
 // 세션 히스토리는 서버가 session_id 로 보관(슬라이딩 윈도우) — 프론트는 id+메시지만 보낸다.
 export async function postChat(sessionId, message) {
-  const res = await fetch('/api/chat', {
+  const res = await authFetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ session_id: sessionId, message }),
@@ -53,7 +90,7 @@ export async function postChat(sessionId, message) {
 export async function postChatStream(sessionId, message, handlers = {}) {
   let res
   try {
-    res = await fetch('/api/chat/stream', {
+    res = await authFetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId, message }),

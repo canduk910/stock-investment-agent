@@ -1106,6 +1106,28 @@ body {
   line-height: 1.6;
   color: var(--c-text-muted);
 }
+/* 대화 전환 바(대화 선택 + 새 대화) — 챗 헤더 우측. */
+.chat__convbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.chat__convselect {
+  max-width: 160px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--c-text);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.chat__newconv {
+  flex: none;
+  white-space: nowrap;
+}
+
 /* 좌측 챗 상단 상담 배너(주황) — 리포트 근거 상담 중 표시. */
 .chat__consult {
   margin: 0 0 10px;

@@ -10,11 +10,25 @@ chat_stream·live_judgement 를 경계로 mock 해 SSE 계약만 검증한다:
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 
 import api.chat as chat_route
 import api.main as main
+from auth.deps import get_current_user
+from infra.db import get_db
+
+
+@pytest.fixture(autouse=True)
+def _auth_override():
+    # 챗 스트림 라우트도 인증 필수 + 대화기록 저장. 고정 유저·더미 db(대화기록 helper 는 no-op).
+    main.app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
+    main.app.dependency_overrides[get_db] = lambda: None
+    yield
+    main.app.dependency_overrides.pop(get_current_user, None)
+    main.app.dependency_overrides.pop(get_db, None)
 
 
 def _parse_sse(text: str) -> list[dict]:

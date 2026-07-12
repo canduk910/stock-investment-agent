@@ -6,11 +6,26 @@ chat.chat 과 collect_macro_indicators 를 경계로 mock 해 계약만 검증�
 from __future__ import annotations
 
 import datetime as dt
+from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 
 import api.main as main
+from auth.deps import get_current_user
 from collectors.base import indicator_point
+from infra.db import get_db
+
+
+@pytest.fixture(autouse=True)
+def _auth_override():
+    # 챗 라우트는 이제 인증 필수 + DB 대화기록 저장(유저 스코프). 고정 유저·더미 db 로 오버라이드
+    # (db=None → 대화기록 helper 는 best-effort try/except 로 no-op). 후처리로 정리(누수 방지).
+    main.app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
+    main.app.dependency_overrides[get_db] = lambda: None
+    yield
+    main.app.dependency_overrides.pop(get_current_user, None)
+    main.app.dependency_overrides.pop(get_db, None)
 
 
 def _client(monkeypatch):

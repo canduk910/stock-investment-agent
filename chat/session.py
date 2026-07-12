@@ -34,6 +34,14 @@ class Session:
             {"role": "assistant", "content": assistant},
         ]
 
+    def hydrate(self, msgs: list[dict]) -> None:
+        """DB 대화기록으로 히스토리를 복원(재접속·재시작·대화 전환 시 LLM 컨텍스트 회복).
+
+        msgs 는 {role, content} 시간순 리스트(user/assistant). 핀(report/view_context)은 건드리지
+        않는다 — 슬라이딩 윈도우 히스토리만 교체(DB 가 source of truth).
+        """
+        self._msgs = list(msgs)
+
     def set_report_context(self, text: str | None) -> None:
         """리포트 요약 텍스트를 핀 컨텍스트로 설정(None/빈문자열이면 해제)."""
         self.report_context = text or None

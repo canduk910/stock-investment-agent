@@ -2,7 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import ChatPanel from './components/ChatPanel.jsx'
 import RightPanel from './components/RightPanel.jsx'
 import LoginScreen from './components/LoginScreen.jsx'
-import { fetchWatchlist, fetchMacroRegime, setReportContext, setViewContext } from './api.js'
+import {
+  fetchWatchlist,
+  fetchMacroRegime,
+  setReportContext,
+  setViewContext,
+  fetchConversations,
+  createConversation,
+} from './api.js'
 import { fetchMe, logout } from './auth.js'
 import { detectTargetAlerts } from './lib/watchlistLogic.js'
 
@@ -69,16 +76,6 @@ function DkMonogram() {
 }
 
 export default function App() {
-  // 챗 세션 id — App 이 단일 소유(ChatPanel 대화 + 리포트 상담 컨텍스트가 같은 세션을 공유).
-  //   마운트 1회 생성(구형 브라우저 폴백 포함). 좌측 챗과 우측 리포트 "상담하기"가 이 id 를 공유한다.
-  const sessionId = useRef(null)
-  if (sessionId.current === null) {
-    sessionId.current =
-      typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `sess-${Date.now()}-${Math.random().toString(16).slice(2)}`
-  }
-
   // 인증 게이트 — 마운트 시 토큰으로 fetchMe. user 없으면 LoginScreen(전체 게이트). null=확인 전.
   const [user, setUser] = useState(null)
   const [authChecked, setAuthChecked] = useState(false)
@@ -96,9 +93,51 @@ export default function App() {
     }
   }, [])
 
+  // 대화기록 — 유저별 대화 목록 + 현재 대화. 챗 session_id = conversation.id(문자열).
+  const [conversations, setConversations] = useState([])
+  const [conversationId, setConversationId] = useState(null)
+
+  // 로그인 후 대화 목록 로드 + 최소 1개 보장(없으면 생성). 최근 대화를 현재로.
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        let list = (await fetchConversations()).conversations || []
+        if (list.length === 0) list = [await createConversation()]
+        if (!cancelled) {
+          setConversations(list)
+          setConversationId(list[0].id)
+        }
+      } catch {
+        /* 대화 로드 실패 — 챗은 이후 재시도(무한 에러 화면 금지) */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
+  const newConversation = useCallback(async () => {
+    try {
+      const c = await createConversation()
+      setConversations((cs) => [c, ...cs])
+      setConversationId(c.id)
+    } catch {
+      /* graceful */
+    }
+  }, [])
+
+  const selectConversation = useCallback((id) => setConversationId(id), [])
+
+  // 챗·컨텍스트 공유 session_id = 현재 대화 id(문자열). 대화 로드 전엔 null(가드).
+  const sessionId = { current: conversationId != null ? String(conversationId) : null }
+
   const handleLogout = useCallback(() => {
     logout()
     setUser(null)
+    setConversations([])
+    setConversationId(null)
   }, [])
 
   // 우측 동적 패널 spec — 챗봇(onShowPanel)·퀵버튼(onSelect)이 리프팅. 닫으면 null(빈 상태).
@@ -186,6 +225,7 @@ export default function App() {
   //   디바운스(빠른 탭전환 KIS 폭주 방지) + 중복 kind+args 스킵(불필요 재조회 방지) + fire-and-forget.
   const lastViewCtxRef = useRef(null)
   useEffect(() => {
+    if (conversationId == null) return // 대화(session) 준비 전엔 핀 스킵
     const spec = rightPanelSpec
     const kind =
       spec && spec.valid !== false && VIEW_CONTEXT_KINDS.has(spec.kind) ? spec.kind : null
@@ -194,10 +234,10 @@ export default function App() {
     lastViewCtxRef.current = key
     const id = setTimeout(() => {
       // 핀 실패는 UI 를 막지 않는다(부가 기능) — endConsult 와 동일 fire-and-forget.
-      setViewContext(sessionId.current, kind, spec?.args || {}).catch(() => {})
+      setViewContext(String(conversationId), kind, spec?.args || {}).catch(() => {})
     }, VIEW_CONTEXT_DEBOUNCE_MS)
     return () => clearTimeout(id)
-  }, [rightPanelSpec])
+  }, [rightPanelSpec, conversationId])
 
   // 톱바 상태 칩용 국면 — 마운트 1회 자체 조회(RegimeGauge 와 동일 패턴). 실패는 조용히 무시(칩만 생략).
   useEffect(() => {
@@ -301,6 +341,10 @@ export default function App() {
             onShowPanel={setRightPanelSpec}
             consult={consult}
             onEndConsult={endConsult}
+            conversations={conversations}
+            conversationId={conversationId}
+            onNewConversation={newConversation}
+            onSelectConversation={selectConversation}
           />
         </div>
         <div className="app__right">

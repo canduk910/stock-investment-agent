@@ -24,20 +24,60 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
+from auth.deps import get_current_user
+from auth.models import User
 from chat.chat import chat, chat_stream
+from chat.history_store import HistoryStore
 from chat.intent import guardrail_label
 from chat.session import get_session
+from infra.db import get_db
 
 router = APIRouter()
 
+# LLM 컨텍스트 hydrate 창(세션 슬라이딩 윈도우와 정합).
+_HYDRATE_WINDOW = 8
+
 
 class ChatRequest(BaseModel):
-    session_id: str
+    session_id: str  # = conversation.id(문자열). 프론트가 대화 생성 후 그 id 로 이어간다.
     message: str
+
+
+def _conversation_id(user: User, db: Session, session_id: str) -> int | None:
+    """session_id(=conversation.id) → 소유 대화 id. 남의 것/미존재/비정수는 None(기록 skip)."""
+    try:
+        conv_id = int(session_id)
+    except (ValueError, TypeError):
+        return None
+    conv = HistoryStore(db).get_conversation(str(user.id), conv_id)
+    return conv.id if conv is not None else None
+
+
+def _hydrate_session(session, user: User, db: Session, session_id: str) -> None:
+    """세션 히스토리가 비어 있으면 DB 대화기록으로 복원(재접속·전환·재시작 시 LLM 컨텍스트). best-effort."""
+    try:
+        if session.history():
+            return  # 이미 인메모리 히스토리 있음(현재 서버 run 내 진행 중)
+        conv_id = _conversation_id(user, db, session_id)
+        if conv_id is not None:
+            session.hydrate(HistoryStore(db).recent_messages(conv_id, _HYDRATE_WINDOW))
+    except Exception:
+        pass  # hydrate 실패는 챗을 막지 않는다(빈 컨텍스트로 진행)
+
+
+def _persist_turn(user: User, db: Session, session_id: str, user_text: str, assistant_text: str) -> None:
+    """user+assistant 한 턴을 대화기록에 저장(write-through, best-effort). 소유 대화만."""
+    try:
+        conv_id = _conversation_id(user, db, session_id)
+        if conv_id is not None:
+            HistoryStore(db).add_turn(conv_id, user_text, assistant_text)
+    except Exception:
+        pass  # 기록 실패는 챗 응답을 막지 않는다
 
 
 class ReportContextRequest(BaseModel):
@@ -53,13 +93,20 @@ class ViewContextRequest(BaseModel):
 
 
 @router.post("/api/chat")
-def post_chat(body: ChatRequest) -> dict:
-    """{session_id, message} → {text, popups}. 서버가 session_id 별 히스토리 보관."""
+def post_chat(
+    body: ChatRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """{session_id(=conversation.id), message} → {text, popups}. 대화기록 DB 저장(유저 스코프)."""
     from api.main import live_judgement  # 지연 import(순환 참조 회피)
 
     session = get_session(body.session_id)
+    _hydrate_session(session, user, db, body.session_id)
     judgement, _indicators_used, _partial_failure = live_judgement()
-    return chat(body.message, judgement, session)
+    result = chat(body.message, judgement, session)
+    _persist_turn(user, db, body.session_id, body.message, result.get("text", ""))
+    return result
 
 
 @router.post("/api/chat/report-context")
@@ -118,7 +165,7 @@ def post_view_context(body: ViewContextRequest) -> dict:
     return {"ok": True, "set": True, "kind": body.kind}
 
 
-def _sse(body: ChatRequest):
+def _sse(body: ChatRequest, user: User, db: Session):
     """동기 제너레이터: 진행 단계·토큰을 `data: {json}\n\n` SSE 프레임으로 흘린다.
 
     흐름 조립:
@@ -136,6 +183,7 @@ def _sse(body: ChatRequest):
         return f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
 
     session = get_session(body.session_id)
+    _hydrate_session(session, user, db, body.session_id)
 
     yield frame({"type": "stage", "stage": "analyze"})
 
@@ -147,22 +195,32 @@ def _sse(body: ChatRequest):
         judgement, _used, _pf = live_judgement()
         yield frame({"type": "stage", "stage": "regime"})
 
+    assistant_text = ""  # 토큰 누적 → 스트림 종료 후 대화기록 저장(write-through).
     for ev in chat_stream(body.message, judgement, session):
         # chat_stream 이 선두에 내는 analyze 는 라우트가 이미 냈으므로 중복 제거.
         if ev.get("type") == "stage" and ev.get("stage") == "analyze":
             continue
+        if ev.get("type") == "token":
+            assistant_text += ev.get("text", "")
         yield frame(ev)
+
+    _persist_turn(user, db, body.session_id, body.message, assistant_text)
 
 
 @router.post("/api/chat/stream")
-def post_chat_stream(body: ChatRequest) -> StreamingResponse:
+def post_chat_stream(
+    body: ChatRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
     """{session_id, message} → SSE(text/event-stream) 진행 단계 + 답변 토큰 스트림.
 
     헤더로 프록시·브라우저 버퍼링을 막아(Cache-Control:no-cache, X-Accel-Buffering:no)
-    토큰이 도착 즉시 흐르게 한다. 논스트림 /api/chat 은 폴백으로 그대로 유지.
+    토큰이 도착 즉시 흐르게 한다. 논스트림 /api/chat 은 폴백으로 그대로 유지. 대화기록은 스트림
+    종료 후 write-through(유저 스코프). db Session 은 스트리밍 종료까지 살아 있다(get_db finally).
     """
     return StreamingResponse(
-        _sse(body),
+        _sse(body, user, db),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

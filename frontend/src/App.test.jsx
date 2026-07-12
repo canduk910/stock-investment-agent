@@ -46,8 +46,16 @@ vi.mock('./api.js', () => ({
   fetchMacroRegime: vi.fn(),
   setViewContext: vi.fn(),
   setReportContext: vi.fn(),
+  fetchConversations: vi.fn(),
+  createConversation: vi.fn(),
 }))
-import { fetchWatchlist, fetchMacroRegime, setViewContext } from './api.js'
+import {
+  fetchWatchlist,
+  fetchMacroRegime,
+  setViewContext,
+  fetchConversations,
+  createConversation,
+} from './api.js'
 
 // 인증 게이트 — App 이 마운트 시 fetchMe 로 로그인 상태를 확인한다. 기본은 로그인됨(메인 앱 렌더).
 vi.mock('./auth.js', () => ({
@@ -91,6 +99,10 @@ beforeEach(() => {
   fetchMe.mockReset()
   fetchMe.mockResolvedValue({ id: 1, email: 'a@b.com' }) // 기본: 로그인됨
   logout.mockReset()
+  fetchConversations.mockReset()
+  fetchConversations.mockResolvedValue({ conversations: [{ id: 1, title: '대화' }] })
+  createConversation.mockReset()
+  createConversation.mockResolvedValue({ id: 2, title: '새 대화' })
 })
 afterEach(() => {
   vi.runOnlyPendingTimers()
@@ -170,8 +182,9 @@ describe('현재 화면 → 챗 세션 핀 컨텍스트(P1, 패널 변경 시)',
 
   it('랜딩(watchlist) 마운트 시 1회 발화(현재 보는 화면 = 관심종목)', async () => {
     render(<App />)
+    await act(async () => {}) // fetchMe + fetchConversations 해결 → conversationId 설정
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(400)
+      await vi.advanceTimersByTimeAsync(400) // 디바운스 경과 → 랜딩 핀 발화
     })
     expect(setViewContext).toHaveBeenCalled()
     expect(setViewContext.mock.calls[0][1]).toBe('watchlist')

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { postChat, postChatStream } from '../api.js'
+import { postChat, postChatStream, fetchConversationMessages } from '../api.js'
 import { routePopups } from '../lib/popupRouter.js'
 import ChatMessage from './ChatMessage.jsx'
 
@@ -21,8 +21,17 @@ const SUGGESTIONS = [
   '카카오 목표가 4만원으로 바꿔줘',
 ]
 
-export default function ChatPanel({ sessionId: sessionIdProp, onShowPanel, consult, onEndConsult }) {
-  // 세션 id 는 App 이 단일 소유(리포트 상담 컨텍스트와 공유). prop 미전달 시(구 테스트) 자체 생성 폴백.
+export default function ChatPanel({
+  sessionId: sessionIdProp,
+  onShowPanel,
+  consult,
+  onEndConsult,
+  conversations = [],
+  conversationId = null,
+  onNewConversation,
+  onSelectConversation,
+}) {
+  // 세션 id 는 App 이 소유(= 현재 대화 id). prop 미전달 시(구 테스트) 자체 생성 폴백.
   const sessionRef = useRef(null)
   if (sessionRef.current === null) {
     sessionRef.current =
@@ -31,7 +40,6 @@ export default function ChatPanel({ sessionId: sessionIdProp, onShowPanel, consu
         ? crypto.randomUUID()
         : `sess-${Date.now()}-${Math.random().toString(16).slice(2)}`)
   }
-  // prop 이 뒤늦게(또는 바뀌어) 오면 그것을 우선(App 세션과 일치 보장).
   const sessionId = { current: sessionIdProp ?? sessionRef.current }
 
   const [messages, setMessages] = useState([])
@@ -40,6 +48,28 @@ export default function ChatPanel({ sessionId: sessionIdProp, onShowPanel, consu
   const [error, setError] = useState(null)
   const lastQueryRef = useRef(null)
   const listRef = useRef(null)
+
+  // 대화 전환/최초 로드 — 그 대화의 저장된 메시지를 불러와 말풍선으로 복원(DB role→ChatPanel role).
+  useEffect(() => {
+    if (conversationId == null) return
+    let cancelled = false
+    fetchConversationMessages(conversationId)
+      .then((data) => {
+        if (cancelled) return
+        const loaded = (data.messages || []).map((m) => ({
+          role: m.role === 'assistant' ? 'bot' : 'user',
+          text: m.content,
+          popups: [],
+        }))
+        setMessages(loaded)
+      })
+      .catch(() => {
+        if (!cancelled) setMessages([]) // 로드 실패 → 빈 대화(무한 에러 금지)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [conversationId])
 
   // 응답 popups → 우측 패널 spec 으로 리프팅(모달 폐기). 첫 spec 을 우측에 인라인 렌더.
   //   과거 팝업 재열기 칩(ChatMessage.onOpenPopup)도 같은 경로로 우측 패널에 다시 띄운다.
@@ -169,6 +199,33 @@ export default function ChatPanel({ sessionId: sessionIdProp, onShowPanel, consu
             자연어로 물어보세요 · 판정·수치는 코드가 결정(LLM 미개입), 팝업 데이터는 실시간 직접 조회
           </p>
         </div>
+        {onNewConversation ? (
+          <div className="chat__convbar">
+            {conversations.length > 0 ? (
+              <select
+                className="chat__convselect"
+                aria-label="대화 선택"
+                value={conversationId ?? ''}
+                onChange={(e) => onSelectConversation?.(Number(e.target.value))}
+                disabled={loading}
+              >
+                {conversations.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title || '대화'}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <button
+              type="button"
+              className="refresh chat__newconv"
+              onClick={() => onNewConversation()}
+              disabled={loading}
+            >
+              + 새 대화
+            </button>
+          </div>
+        ) : null}
       </header>
 
       <div className="chat__panel">
