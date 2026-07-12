@@ -5,7 +5,7 @@
 미지원 환경의 폴백 겸 기존 계약(270 테스트) 유지.
 
 스트리밍(/api/chat/stream): 같은 흐름을 SSE(text/event-stream)로 흘린다 — 진행 단계 이벤트
-(analyze→regime→generate→summarize) + gpt-5.4 답변 토큰 실시간. 안전 원칙 동일:
+(analyze→regime→generate→summarize) + CHAT_MODEL 답변 토큰 실시간. 안전 원칙 동일:
 risk_guardrail 은 코드가 결정적으로 차단(LLM 미호출), 팝업은 tool_calls 에서만, 판정 숫자는 코드.
 
 live judgement 계산은 api.main.live_judgement 를 재사용한다(핸들러 내부 지연 import 로
