@@ -34,6 +34,11 @@ from infra.db import init_db  # noqa: E402
 
 init_db()
 
+# 공유 KIS 자격증명(__shared__) 1회 시드 — env KIS_* → 암호화 DB(프로덕션 전환용, idempotent·graceful).
+from auth.kis_seed import seed_shared_kis_from_env  # noqa: E402
+
+seed_shared_kis_from_env()
+
 # 인증 라우터(회원가입/로그인/me) — 유저별 데이터 스코프의 진입점.
 from api.auth import router as auth_router  # noqa: E402
 
