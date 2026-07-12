@@ -2,7 +2,33 @@
 from __future__ import annotations
 
 from collectors import naver_research
-from collectors.naver_research import _parse_list_html, download_pdf, fetch_company_reports
+from collectors.naver_research import (
+    _parse_list_html,
+    download_pdf,
+    fetch_company_reports,
+    fetch_reports,
+)
+
+# 시황(market_info) 구조 반영 fixture: 종목 컬럼 없음(5칸) — [제목(nid)·증권사·첨부(class=file)·작성일·조회수].
+_MARKET_HTML = """
+<table class="type_1">
+  <tr><th>제목</th><th>증권사</th><th>첨부</th><th>작성일</th><th>조회수</th></tr>
+  <tr>
+    <td><a href="market_info_read.naver?nid=36722&page=1">7/10 KB 리서치 모닝코멘트</a></td>
+    <td>KB증권</td>
+    <td class="file"><a href="https://stock.pstatic.net/stock-research/market/58/20260710_market_400514000.pdf"><img></a></td>
+    <td class="date">26.07.10</td>
+    <td class="date">1557</td>
+  </tr>
+  <tr>
+    <td><a href="market_info_read.naver?nid=36721">첨부 없는 시황</a></td>
+    <td>신한투자증권</td>
+    <td class="file"></td>
+    <td class="date">26.07.10</td>
+    <td class="date">1522</td>
+  </tr>
+</table>
+"""
 
 # 실제 구조 반영 fixture: 헤더 행 + 유효 행(첨부 O) + 첨부 없는 행(skip 대상).
 _HTML = """
@@ -53,6 +79,43 @@ def test_parse_list_html_extracts_and_skips_no_attachment():
 
 def test_parse_empty_when_no_table():
     assert _parse_list_html("<html><body>no table</body></html>") == []
+
+
+# ── 시황(market_info) 파싱 — 종목 컬럼 없음(has_stock=False) ──
+def test_parse_market_html_no_stock_column():
+    rows = _parse_list_html(_MARKET_HTML, has_stock=False)
+    assert len(rows) == 1  # 첨부 없는 행 제외
+    r = rows[0]
+    assert r["stock_name"] is None and r["stock_code"] is None  # 시황=시장 전체, 종목 없음
+    assert r["title"] == "7/10 KB 리서치 모닝코멘트"
+    assert r["nid"] == "36722"
+    assert r["broker"] == "KB증권"
+    assert r["pdf_url"].endswith("20260710_market_400514000.pdf")
+    assert r["date"] == "26.07.10"
+
+
+def test_fetch_reports_market_category(monkeypatch):
+    encoded = _MARKET_HTML.encode("euc-kr")
+    monkeypatch.setattr(
+        naver_research.requests, "get", lambda *a, **k: _FakeResp(encoded)
+    )
+    out = fetch_reports("market", limit=5, pages=1)
+    assert len(out) == 1
+    assert out[0]["broker"] == "KB증권" and out[0]["stock_code"] is None
+
+
+def test_fetch_reports_unknown_category_returns_empty():
+    assert fetch_reports("nonsense", limit=5) == []
+
+
+def test_fetch_company_reports_delegates_to_fetch_reports(monkeypatch):
+    # 하위호환: 기존 wrapper 는 company 카테고리로 위임(무회귀).
+    encoded = _HTML.encode("euc-kr")
+    monkeypatch.setattr(
+        naver_research.requests, "get", lambda *a, **k: _FakeResp(encoded)
+    )
+    out = fetch_company_reports(limit=5)
+    assert len(out) == 1 and out[0]["stock_code"] == "006360"
 
 
 def test_fetch_decodes_cp949_and_limits(monkeypatch):

@@ -81,6 +81,10 @@ from api.balance import router as balance_router  # noqa: E402
 
 app.include_router(balance_router)
 
+from api.macro_outlook import router as macro_outlook_router  # noqa: E402  # 시황 요약(시장 국면 페이지)
+
+app.include_router(macro_outlook_router)
+
 
 @app.get("/api/macro/indicators")
 def macro_indicators() -> dict:

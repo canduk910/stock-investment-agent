@@ -168,6 +168,25 @@ export async function fetchBalance() {
   return res.json()
 }
 
+// ── 시황(market outlook) 요약 — 시장 국면 페이지 ─────────────────────────────
+// 시황 요약은 '증권사 시황 리포트 인용'(에이전트 시장 판정 아님)·출처 귀속·면책. 시장 판정은 코드(매크로 엔진).
+
+// GET /api/macro/market-outlook → {reports:[{report_id, broker, title, date, pdf_url,
+//   summary:{증권사,제목,시장전망,요약,핵심요지[],리스크요인[],면책고지}, created_at}]}. 없으면 reports:[].
+export async function fetchMarketOutlook() {
+  const res = await fetch('/api/macro/market-outlook')
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
+// POST /api/macro/market-outlook/fetch?limit=N → {fetched, new, skipped, failed}. 네이버 최신 시황
+// 수집·요약(서버, idempotent). 항상 200. 완료 후 fetchMarketOutlook 재조회.
+export async function fetchNaverMarketOutlook(limit = 15) {
+  const res = await fetch(`/api/macro/market-outlook/fetch?limit=${limit}`, { method: 'POST' })
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
 // ── 애널리스트 리포트(네이버 수집 · 종목별 요약 · 챗 상담 연계) ────────────────
 // 요약·자문은 '리포트 내용 인용'(에이전트 자체 매수/매도 판정 아님)이며 출처 귀속·면책 상시.
 // 실데이터(요약)는 프론트가 아래 GET 으로 직접 조회한다(환각 차단) — LLM 응답에서 꺼내지 않는다.

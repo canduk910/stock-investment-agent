@@ -4,6 +4,7 @@ import PopupStockReport from './PopupStockReport.jsx'
 import PopupWatchlist from './PopupWatchlist.jsx'
 import ManageWatchlistConfirm from './ManageWatchlistConfirm.jsx'
 import RegimeGauge from './RegimeGauge.jsx'
+import MarketOutlookSection from './MarketOutlookSection.jsx'
 import BalancePanel from './BalancePanel.jsx'
 
 // 우측 동적 패널(리디자인) — 좌측 상시 채팅 옆에서 맥락형 콘텐츠를 인라인 렌더한다(모달 폐기).
@@ -50,7 +51,13 @@ function RightPanelBody({ spec, onClose, sessionId, onConsult }) {
         />
       )
     case 'macro_dashboard':
-      return <RegimeGauge />
+      // 시장 국면 게이지 + 증권사 시황 리포트 요약(자체조회). 시황은 판정이 아니라 리포트 인용.
+      return (
+        <>
+          <RegimeGauge />
+          <MarketOutlookSection />
+        </>
+      )
     case 'watchlist':
       return <PopupWatchlist args={spec.args} />
     case 'manage_watchlist':
