@@ -15,17 +15,35 @@ import chat.intent as intent
 from chat.intent import LABELS, build_pipeline, classify, guardrail_label
 
 _SEED = Path(__file__).parents[2] / "fixtures" / "intent_seed.tsv"
+_DATASET = Path(__file__).parents[3] / "data" / "intent_dataset.tsv"
 
 
-def _load_seed():
+def _load_tsv(path: Path):
     texts, labels = [], []
-    for line in _SEED.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         q, label = line.split("\t")
         texts.append(q)
         labels.append(label)
     return texts, labels
+
+
+def _load_seed():
+    return _load_tsv(_SEED)
+
+
+# 정당한 잔고·손익·포트폴리오·추가편입 조회 — 절대 risk_guardrail 로 오분류되면 안 되는 표현.
+# (실측: 개선 전 모델이 "내 잔고 확인해줄래?" 등을 risk_guardrail 로 하드블록했다.)
+_BENIGN_MUST_NOT_BLOCK = [
+    "내 잔고 확인해줄래?",
+    "손실 난 종목 알려줘",
+    "지금 보고 있는 잔고에서 손실 난 종목과 손익 알려줘",
+    "평가손익 정리해줘",
+    "내 계좌 수익률 정리해줘",
+    "포트폴리오 조정안 만들어줘",
+    "추가편입 후보 종목 알려줘",
+]
 
 
 # ── (a) 결정적 키워드 가드레일: 차단 4유형 ───────────────────────────────────
@@ -92,6 +110,28 @@ def test_classify_falls_back_to_general_qa_when_model_missing(monkeypatch):
     # 모델 부재 + 가드레일 미매치 → 위험 아닌 안전 기본값(general_qa).
     monkeypatch.setattr(intent, "_load_model", lambda: (_ for _ in ()).throw(FileNotFoundError()))
     assert classify("배당이 뭐야") == "general_qa"
+
+
+# ── (e) 데이터셋 품질(정밀도): 정당 조회는 risk_guardrail 로 분류되지 않는다 ────────
+# data/intent_dataset.tsv 로 파이프라인을 즉석 학습해 검증한다(tfidf+lbfgs 는 고정 데이터에
+# 결정적 → 안정적 테스트). 모델 파일이 아니라 '데이터셋 품질'을 검증하므로 재학습 동기화와 무관.
+
+
+@pytest.mark.skipif(not _DATASET.exists(), reason="production dataset 부재(라이브 데이터셋 필요)")
+def test_dataset_does_not_misclassify_benign_as_risk():
+    texts, labels = _load_tsv(_DATASET)
+    pipe = build_pipeline()
+    pipe.fit(texts, labels)
+    preds = pipe.predict(_BENIGN_MUST_NOT_BLOCK)
+    misfires = [q for q, p in zip(_BENIGN_MUST_NOT_BLOCK, preds) if p == "risk_guardrail"]
+    assert not misfires, f"정당 조회가 risk_guardrail 로 오분류됨: {misfires}"
+
+
+@pytest.mark.skipif(not _DATASET.exists(), reason="production dataset 부재")
+def test_classify_does_not_block_benign_queries():
+    # 통합 경로(guardrail 정규식 → 커밋된 모델)로도 정당 조회는 차단되지 않아야 한다.
+    misfires = [q for q in _BENIGN_MUST_NOT_BLOCK if classify(q) == "risk_guardrail"]
+    assert not misfires, f"classify 가 정당 조회를 차단함: {misfires}"
 
 
 def test_labels_are_exactly_six():

@@ -358,3 +358,23 @@ ETF 추종오차는 뭘 보고 확인하나요?	general_qa
 물량 잠겨 있는 종목 중에 주가 띄우기 쉬운 거 알려줘	risk_guardrail
 주포가 관리하는 종목처럼 움직이는 애들 어디서 찾아?	risk_guardrail
 개미들 붙기 전에 세력 매집 끝난 종목 선점하고 싶은데 뭐 있어?	risk_guardrail
+내 잔고 확인해줄래?	portfolio_advice
+지금 내 잔고 좀 보여줘	portfolio_advice
+내 계좌 잔고 확인 좀 해줘	portfolio_advice
+보유 종목이랑 평가액 확인해줘	portfolio_advice
+손실 난 종목 알려줘	portfolio_advice
+지금 손실 중인 종목이 뭐야	portfolio_advice
+종목별 평가손익 정리해서 알려줘	portfolio_advice
+내 계좌 종목별 수익률 정리해줘	portfolio_advice
+평가손익 어떻게 되는지 정리해줘	portfolio_advice
+지금 보고 있는 잔고에서 손실 난 종목과 손익 알려줘	portfolio_advice
+수익 난 종목이랑 손실 난 종목 구분해서 알려줘	portfolio_advice
+내 포트폴리오 조정안 만들어줘	portfolio_advice
+포트폴리오 리밸런싱 방향 좀 잡아줘	portfolio_advice
+지금 자산배분 점검하고 조정안 알려줘	portfolio_advice
+추가로 편입할 만한 후보 종목 알려줘	portfolio_advice
+지금 국면에서 편입 검토할 만한 종목 있어?	portfolio_advice
+내 포트폴리오에 추가편입하면 좋을 종목 추천해줘	portfolio_advice
+관심종목 중에 지금 담아볼 만한 거 있을까	portfolio_advice
+내 보유 비중 조정하고 신규 편입 후보도 알려줘	portfolio_advice
+잔고 기준으로 종목별 손익이랑 비중 정리해줘	portfolio_advice
