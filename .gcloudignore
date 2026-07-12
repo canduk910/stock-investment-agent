@@ -1,0 +1,31 @@
+# gcloud run deploy --source 업로드 제외 목록(Cloud Build 로 보낼 소스에서 제외).
+# ⚠ 이 파일이 있으면 gcloud 는 .gitignore 대신 이것만 본다 → 시크릿·대용량을 명시 제외해야 한다.
+# 이미지에 실제로 무엇이 들어갈지는 .dockerignore(빌드 단계)가 최종 결정한다.
+
+# 시크릿 — 절대 업로드 금지.
+.env
+.env.local
+*.token.json
+
+# 의존성·빌드 산출물(Cloud Build 가 재생성).
+.venv
+node_modules
+frontend/node_modules
+frontend/dist
+.vite
+**/__pycache__
+**/*.pyc
+.pytest_cache
+
+# 런타임 캐시·사용자데이터·저작물.
+.cache
+reports
+
+# VCS·문서·작업기록(런타임 불필요).
+.git
+.gitignore
+.DS_Store
+_workspace
+.claude
+*.md
+tests

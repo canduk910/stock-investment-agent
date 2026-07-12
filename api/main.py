@@ -132,3 +132,43 @@ def macro_regime() -> dict:
         "indicators_used": dict(engine_input),
         "partial_failure": partial_failure,
     }
+
+
+# ─── 프로덕션: 빌드된 프론트(React/Vite dist) 정적 서빙 + SPA 폴백 ───────────────
+# 단일 Cloud Run 서비스가 API(/api/*)와 프론트를 **같은 오리진**에서 서빙한다 → CORS·프론트
+# 코드 변경 0, SSE(/api/chat/stream)도 그대로 동작. dist 가 없으면(로컬 개발·테스트) 블록 전체를
+# skip → 기존 동작 무영향.
+#
+# ⚠ catch-all GET 라우트는 쓰지 않는다 — 그러면 POST 전용 /api 라우트의 405(Method Not Allowed)를
+# 200 으로 가려버린다. 대신 **404 예외 핸들러**로 SPA 폴백을 한다: 비-API GET 요청이 매칭 라우트가
+# 없어 404 가 날 때만 index.html 을 돌려준다. /api 경로·405·API 의 JSON 에러는 기본 처리 유지.
+from pathlib import Path as _Path  # noqa: E402
+from fastapi.exception_handlers import http_exception_handler as _default_http_handler  # noqa: E402
+from fastapi.responses import FileResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from starlette.exceptions import HTTPException as _StarletteHTTPException  # noqa: E402
+
+_DIST = _Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if _DIST.is_dir():
+    _DIST_ROOT = str(_DIST.resolve())
+    _INDEX = _DIST / "index.html"
+    if (_DIST / "assets").is_dir():  # 해시 번들(JS/CSS)은 StaticFiles 로 직접 서빙.
+        app.mount("/assets", StaticFiles(directory=str(_DIST / "assets")), name="assets")
+
+    @app.exception_handler(_StarletteHTTPException)
+    async def _spa_fallback(request, exc):
+        """비-API GET 404 → 실제 정적파일이면 그 파일, 아니면 SPA index.html. 그 외는 기본 처리.
+
+        /api 경로·405·API JSON 에러(400/401/404/409 등)는 손대지 않고 기본 핸들러로 넘긴다.
+        """
+        if (
+            exc.status_code == 404
+            and request.method == "GET"
+            and not request.url.path.startswith("/api")
+        ):
+            rel = request.url.path.lstrip("/")
+            candidate = (_DIST / rel).resolve()
+            if rel and candidate.is_file() and str(candidate).startswith(_DIST_ROOT):
+                return FileResponse(str(candidate))  # 루트 정적파일(예: /vite.svg)
+            return FileResponse(str(_INDEX))  # SPA 진입점
+        return await _default_http_handler(request, exc)
