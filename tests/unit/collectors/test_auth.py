@@ -59,7 +59,7 @@ def test_token_refreshed_when_absent(load_fixture):
 
     assert token == fixture["access_token"]
     assert len(responses.calls) == 1  # 실제 발급 1회
-    assert cache.get(kis_token_key("real"))["access_token"] == fixture["access_token"]
+    assert cache.get(kis_token_key("real", "APPKEY"))["access_token"] == fixture["access_token"]
 
 
 @responses.activate
@@ -68,7 +68,7 @@ def test_token_reused_when_not_near_expiry():
     _register_token({"should": "not be called"})
     cache = LocalCache(clock=lambda: 1000.0)
     cache.set(
-        kis_token_key("real"),
+        kis_token_key("real", "APPKEY"),
         {"access_token": "CACHED", "token_type": "Bearer", "expires_at": 1000.0 + 86400},
         ttl_seconds=86400,
     )
@@ -86,7 +86,7 @@ def test_token_refreshed_when_near_expiry(load_fixture):
     _register_token(fixture)
     cache = LocalCache(clock=lambda: 1000.0)
     cache.set(
-        kis_token_key("real"),
+        kis_token_key("real", "APPKEY"),
         {"access_token": "STALE", "token_type": "Bearer", "expires_at": 1000.0 + 1800},  # 30분 남음
         ttl_seconds=1800,
     )
@@ -152,7 +152,7 @@ def test_get_token_rejection_fallback_returns_existing_when_still_valid(monkeypa
     """
     cache = LocalCache(clock=lambda: 1000.0)
     cache.set(
-        kis_token_key("real"),
+        kis_token_key("real", "APPKEY"),
         {"access_token": "NEAR", "token_type": "Bearer", "expires_at": 1000.0 + 1800},
         ttl_seconds=1800,
     )
@@ -190,7 +190,7 @@ def test_get_token_rejection_backoff_caps_retries(monkeypatch):
     """
     cache = LocalCache(clock=lambda: 1000.0)
     cache.set(
-        kis_token_key("real"),
+        kis_token_key("real", "APPKEY"),
         {"access_token": "NEAR", "token_type": "Bearer", "expires_at": 1000.0 + 1800},
         ttl_seconds=1800,
     )
@@ -214,6 +214,34 @@ def test_get_token_rejection_backoff_caps_retries(monkeypatch):
     now["t"] = 1000.0 + auth.REFRESH_BACKOFF_SECONDS + 1
     assert auth.get_token(CONFIG, cache, clock=clk) == "NEAR"
     assert calls["n"] == 2
+
+
+def test_token_cache_isolated_per_app_key(monkeypatch):
+    """서로 다른 app_key 는 토큰 캐시가 격리된다 — 유저별 KIS 키가 서로 토큰을 밟지 않는다."""
+    cache = LocalCache(clock=lambda: 1000.0)
+    cfg_a = KisConfig(app_key="KEY_A", app_secret="S", env="real", account_no="")
+    cfg_b = KisConfig(app_key="KEY_B", app_secret="S", env="real", account_no="")
+    cache.set(  # A 토큰을 캐시에 심는다(만료 여유 충분)
+        kis_token_key("real", "KEY_A"),
+        {"access_token": "TOKEN_A", "token_type": "Bearer", "expires_at": 1000.0 + 86400},
+        ttl_seconds=86400,
+    )
+    issued = {"n": 0}
+
+    def fake_issue(config, clock=time.time):
+        issued["n"] += 1
+        return {
+            "access_token": f"TOKEN_{config.app_key}",
+            "token_type": "Bearer",
+            "expires_at": clock() + 86400,
+        }
+
+    monkeypatch.setattr(auth, "request_token", fake_issue)
+    # A: 자기 캐시 재사용(발급 0). B: A 토큰을 재사용하지 않고 자기 키로 새 발급.
+    assert auth.get_token(cfg_a, cache, clock=lambda: 1000.0) == "TOKEN_A"
+    assert auth.get_token(cfg_b, cache, clock=lambda: 1000.0) == "TOKEN_KEY_B"
+    assert issued["n"] == 1  # B만 발급
+    assert cache.get(kis_token_key("real", "KEY_B"))["access_token"] == "TOKEN_KEY_B"
 
 
 @responses.activate

@@ -39,15 +39,19 @@ _LOCKS_GUARD = threading.Lock()
 _LAST_REFRESH_FAILURE: dict[str, float] = {}
 
 
-def _refresh_lock(env: str) -> threading.Lock:
-    """env별 재발급 락을 lazy 생성해 반환(double-checked)."""
-    lock = _REFRESH_LOCKS.get(env)
+def _refresh_lock(cache_key: str) -> threading.Lock:
+    """토큰 캐시 키별(=env+app_key) 재발급 락을 lazy 생성해 반환(double-checked).
+
+    앱키별 토큰 격리(유저별 KIS 키) → 락도 캐시 키 단위로 나눠 서로 다른 키의
+    재발급이 불필요하게 직렬화되지 않게 한다.
+    """
+    lock = _REFRESH_LOCKS.get(cache_key)
     if lock is None:
         with _LOCKS_GUARD:
-            lock = _REFRESH_LOCKS.get(env)
+            lock = _REFRESH_LOCKS.get(cache_key)
             if lock is None:
                 lock = threading.Lock()
-                _REFRESH_LOCKS[env] = lock
+                _REFRESH_LOCKS[cache_key] = lock
     return lock
 
 
@@ -79,15 +83,15 @@ def _is_reusable(entry, clock: Callable[[], float]) -> bool:
     return bool(entry) and (entry["expires_at"] - clock()) > REFRESH_MARGIN_SECONDS
 
 
-def _in_backoff(env: str, entry, clock: Callable[[], float]) -> bool:
+def _in_backoff(cache_key: str, entry, clock: Callable[[], float]) -> bool:
     """최근 재발급 실패 후 backoff 창 안이고, 기존 토큰이 완전 만료 전이면 True.
 
     이 창 동안은 재발급을 재시도하지 않고 stale 토큰을 재사용해, rate-limit
-    중 순차 호출이 발급 요청을 폭주시키는 것을 막는다(plan §2).
+    중 순차 호출이 발급 요청을 폭주시키는 것을 막는다(plan §2). 캐시 키별(=env+app_key).
     """
     if not (entry and (entry["expires_at"] - clock()) > 0):
         return False
-    last_fail = _LAST_REFRESH_FAILURE.get(env)
+    last_fail = _LAST_REFRESH_FAILURE.get(cache_key)
     return last_fail is not None and (clock() - last_fail) < REFRESH_BACKOFF_SECONDS
 
 
@@ -118,7 +122,7 @@ def get_token(
     각 프로세스가 1회씩 발급할 수 있고, FileCache 쓰기도 원자적이지 않다. 로컬
     우선 범위에선 수용하며, 프로덕션 다중 인스턴스는 분산 락/원자적 쓰기로 보강한다.
     """
-    key = kis_token_key(config.env)
+    key = kis_token_key(config.env, config.app_key)  # env+app_key 격리(유저별 KIS 키)
     entry = cache.get(key)
     forcing = stale_token is not None
 
@@ -126,18 +130,18 @@ def get_token(
         if _is_reusable(entry, clock):
             return entry["access_token"]
         # 재발급 거절 직후 backoff 창: 락 경합 없이 즉시 stale 토큰 재사용
-        if _in_backoff(config.env, entry, clock):
+        if _in_backoff(key, entry, clock):
             return entry["access_token"]
     elif entry and entry.get("access_token") != stale_token:
         return entry["access_token"]  # 다른 스레드가 이미 재발급 → 그 토큰 사용
 
-    with _refresh_lock(config.env):
+    with _refresh_lock(key):
         # double-check: 대기 중 다른 스레드가 이미 갱신/실패했으면 발급 스킵
         entry = cache.get(key)
         if not forcing:
             if _is_reusable(entry, clock):
                 return entry["access_token"]
-            if _in_backoff(config.env, entry, clock):
+            if _in_backoff(key, entry, clock):
                 return entry["access_token"]
         elif entry and entry.get("access_token") != stale_token:
             return entry["access_token"]  # 락 대기 중 다른 스레드가 재발급 완료
@@ -148,7 +152,7 @@ def get_token(
             # 거절 폴백: 강제 재발급이 아니고(죽은 토큰 확정 아님) 완전 만료 전이면
             # 기존 토큰 재사용 + 실패 시각 기록(backoff). 강제 재발급 실패는 전파.
             if not forcing and entry and (entry["expires_at"] - clock()) > 0:
-                _LAST_REFRESH_FAILURE[config.env] = clock()
+                _LAST_REFRESH_FAILURE[key] = clock()
                 logger.warning(
                     "KIS 토큰 재발급 거절 — 완전 만료 전 기존 토큰으로 폴백(env=%s, "
                     "%ds backoff)",
@@ -158,7 +162,7 @@ def get_token(
                 return entry["access_token"]
             raise
 
-        _LAST_REFRESH_FAILURE.pop(config.env, None)  # 발급 성공 → backoff 해제
+        _LAST_REFRESH_FAILURE.pop(key, None)  # 발급 성공 → backoff 해제
         ttl = max(int(fresh["expires_at"] - clock()), 0)
         is_cacheable(key)  # 정책 경유 일관성 가드(kis:token: 은 허용)
         cache.set(key, fresh, ttl_seconds=ttl)

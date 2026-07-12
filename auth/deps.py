@@ -39,3 +39,21 @@ def get_current_user(
     if user is None:
         raise _UNAUTH
     return user
+
+
+def get_current_user_optional(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """Bearer JWT → User, **없거나 무효면 None(401 안 냄)**.
+
+    공개 유지 라우트(잔고·종목번들·리포트)가 "로그인+등록 시 본인 KIS 키, 아니면 공유 fallback"을
+    쓰도록 하는 **옵션 인증**. 토큰 부재·형식오류·만료·유저 없음 모두 None(관대) — 게이트 아님.
+    """
+    token = _bearer_token(authorization)
+    if not token:
+        return None
+    user_id = decode_token(token)
+    if user_id is None:
+        return None
+    return db.get(User, user_id)

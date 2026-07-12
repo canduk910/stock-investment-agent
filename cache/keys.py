@@ -4,6 +4,8 @@
 """
 from __future__ import annotations
 
+import hashlib
+
 
 def macro_key(indicator: str) -> str:
     return f"macro:{indicator}"
@@ -23,5 +25,11 @@ def stock_meta_sub_key(ticker: str, section: str) -> str:
     return f"stock:meta:{ticker}:{section}"
 
 
-def kis_token_key(env: str) -> str:
-    return f"kis:token:{env}"
+def kis_token_key(env: str, app_key: str) -> str:
+    """토큰 캐시 키 — env + app_key 해시로 **앱키별 격리**.
+
+    유저별 KIS 키가 서로의 토큰을 밟지 않도록 app_key 를 키에 반영한다(원문 노출 방지:
+    sha256 앞 12자). 프리픽스 `kis:token:` 유지 → 캐시 정책 화이트리스트(원칙1) 통과.
+    """
+    digest = hashlib.sha256(app_key.encode()).hexdigest()[:12]
+    return f"kis:token:{env}:{digest}"

@@ -24,6 +24,12 @@ def test_stock_meta_sub_key():
     assert keys.stock_meta_sub_key("005930", "basic").startswith(keys.stock_meta_key("005930"))
 
 
-def test_kis_token_key():
-    assert keys.kis_token_key("real") == "kis:token:real"
-    assert keys.kis_token_key("demo") == "kis:token:demo"
+def test_kis_token_key_isolates_by_app_key():
+    # 프리픽스 유지(정책 통과) + env·app_key 별 격리.
+    k1 = keys.kis_token_key("real", "APPKEY-A")
+    k2 = keys.kis_token_key("real", "APPKEY-B")
+    k3 = keys.kis_token_key("demo", "APPKEY-A")
+    assert k1.startswith("kis:token:real:") and k3.startswith("kis:token:demo:")
+    assert k1 != k2 != k3 and k1 != k3  # 앱키·env 다르면 키 다름
+    assert "APPKEY-A" not in k1  # 원문 미노출(해시)
+    assert keys.kis_token_key("real", "APPKEY-A") == k1  # 결정적

@@ -38,7 +38,7 @@ from collectors.kis import (
     inquire_price,
     stock_info,
 )
-from infra.config import KisConfig
+from infra.config import KisConfig, kis_account
 from stock.constants import INDICATOR_CONFIG, STOCK_META_TTL_SECONDS
 from stock.summary import build_stock_summary, forward_valuation, regime_gate
 
@@ -226,16 +226,62 @@ def collect_stock_bundle(ticker: str, kis_client, judgement, cache=None) -> dict
 
 # ── 라우트 배선 ──────────────────────────────────────────────────────────────
 
-def _build_kis_client():
-    """실 KIS 클라이언트 조립(토큰 provider + env). 테스트는 이 함수를 monkeypatch."""
+class NoKisCredentials(Exception):
+    """유저 등록키·공유 fallback·env 어디에도 KIS 자격증명이 없을 때(라우트가 graceful 처리)."""
+
+
+class ResolvedKis:
+    """해석된 KIS 접근 — 클라이언트 + 계좌(cano/prdt) + 출처(user|shared|env)."""
+
+    __slots__ = ("client", "cano", "prdt", "source")
+
+    def __init__(self, client, cano: str, prdt: str, source: str) -> None:
+        self.client = client
+        self.cano = cano
+        self.prdt = prdt
+        self.source = source
+
+
+def _build_kis_client_from(app_key: str, app_secret: str, env: str):
+    """주어진 자격증명으로 KIS 클라이언트 조립(토큰 provider). 토큰 캐시는 app_key 별 격리."""
     from cache.local import FileCache
     from collectors.kis import auth
     from collectors.kis.client import KisClient
 
-    config = KisConfig.load()
-    token_cache = FileCache(_TOKEN_CACHE_PATH)
-    provider = auth.make_token_provider(config, token_cache)
+    config = KisConfig(app_key=app_key, app_secret=app_secret, env=env, account_no="")
+    provider = auth.make_token_provider(config, FileCache(_TOKEN_CACHE_PATH))
     return KisClient(config, provider)
+
+
+def _build_kis_client():
+    """env(.env) 기반 조립 — 하위호환·테스트 monkeypatch 경계. 진입점은 resolve_kis_client."""
+    config = KisConfig.load()
+    return _build_kis_client_from(config.app_key, config.app_secret, config.env)
+
+
+def resolve_kis_client(user, db) -> ResolvedKis:
+    """KIS 자격증명 해석: 본인 등록키 → 공유(__shared__) → env(.env, 로컬) 순.
+
+    - user(Optional[User])·db(Optional[Session]). 로그인+등록 시 본인 키, 아니면 공유 fallback,
+      그것도 없으면 로컬 .env, 다 없으면 NoKisCredentials(라우트가 graceful).
+    - 반환 ResolvedKis(client, cano, prdt, source). 시크릿은 여기서만 in-memory 복호화.
+    """
+    user_id = str(user.id) if user is not None else None
+    if db is not None:
+        from auth.kis_store import KisCredentialStore
+
+        resolved = KisCredentialStore(db).resolve(user_id)
+        if resolved is not None:
+            creds, source = resolved
+            client = _build_kis_client_from(creds.app_key, creds.app_secret, creds.env)
+            return ResolvedKis(client, creds.account_no, creds.acnt_prdt_cd, source)
+    try:  # env fallback(로컬 개발 .env)
+        config = KisConfig.load()
+    except Exception as exc:
+        raise NoKisCredentials() from exc
+    cano, prdt = kis_account()
+    client = _build_kis_client_from(config.app_key, config.app_secret, config.env)
+    return ResolvedKis(client, cano, prdt, "env")
 
 
 @router.get("/api/detail/{ticker}/bundle")
