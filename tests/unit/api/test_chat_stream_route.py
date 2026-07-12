@@ -91,6 +91,34 @@ def test_stream_guardrail_skips_regime_stage(monkeypatch):
     assert events[-1] == {"type": "done", "popups": []}
 
 
+def test_stream_ml_risk_without_keyword_still_fetches_judgement(monkeypatch):
+    """결정적 키워드 없는 질의는 라우트가 국면을 조회한다 — chat_stream 의 LLM 재분류로
+    허용될 수 있어 judgement(국면)가 필요하기 때문(결정적 차단만 스킵)."""
+    calls = {"live": 0}
+
+    def fake_live_judgement():
+        calls["live"] += 1
+        return ({"regime": "확장"}, {}, [])
+
+    def fake_chat_stream(message, judgement, session, **kwargs):
+        yield {"type": "stage", "stage": "generate"}
+        yield {"type": "token", "text": "답변"}
+        yield {"type": "done", "popups": []}
+
+    monkeypatch.setattr(main, "live_judgement", fake_live_judgement)
+    monkeypatch.setattr(chat_route, "chat_stream", fake_chat_stream)
+
+    client = TestClient(main.app)
+    # 키워드 없는 질의(결정적 차단 아님) → judgement 조회돼야 한다.
+    with client.stream("POST", "/api/chat/stream", json={"session_id": "m", "message": "이 종목 결국 오르지?"}) as resp:
+        body = resp.read().decode()
+
+    events = _parse_sse(body)
+    stages = [e["stage"] for e in events if e["type"] == "stage"]
+    assert "regime" in stages
+    assert calls["live"] == 1  # 결정적 차단이 아니므로 국면 조회 실행
+
+
 def test_stream_reuses_session_across_calls(monkeypatch):
     seen = []
 

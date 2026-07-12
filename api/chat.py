@@ -29,7 +29,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from chat.chat import chat, chat_stream
-from chat.intent import classify
+from chat.intent import guardrail_label
 from chat.session import get_session
 
 router = APIRouter()
@@ -139,8 +139,9 @@ def _sse(body: ChatRequest):
 
     yield frame({"type": "stage", "stage": "analyze"})
 
-    if classify(body.message) == "risk_guardrail":
-        # guardrail: 국면 조회 불필요 → live_judgement 미실행. chat_stream 이 결정적 차단.
+    if guardrail_label(body.message):
+        # 결정적 키워드 차단은 확정 → 국면 조회 불필요(live_judgement 미실행, FRED 낭비 0).
+        # ML-risk 는 chat_stream 의 LLM 재분류로 허용될 수 있어 여기서 스킵하지 않는다(judgement 필요).
         judgement: dict = {}
     else:
         judgement, _used, _pf = live_judgement()

@@ -208,6 +208,55 @@ def test_non_view_display_tool_no_summary(monkeypatch):
     assert all("SHOULD NOT APPEAR" not in (m.get("content") or "") for m in tool_msgs)
 
 
+def test_deterministic_keyword_blocks_without_reclassify(monkeypatch):
+    # 결정적 위험 키워드("빚내서/몰빵") → LLM 미호출 하드블록. 재분류 미호출.
+    called = {"reclassify": 0}
+    monkeypatch.setattr(chatmod, "_reclassify_risk", lambda c, q: called.__setitem__("reclassify", called["reclassify"] + 1) or True)
+    out = chat("삼성전자 빚내서 몰빵할까", _JUDGE, Session(), client=None)
+    assert out["text"] == chatmod._GUARDRAIL_MESSAGE and out["popups"] == []
+    assert called["reclassify"] == 0  # 결정적 차단은 재분류 없이
+
+
+def test_ml_risk_reclassify_confirms_block(monkeypatch):
+    # 결정적 키워드 없음 + ML=risk + LLM 재분류=위험 확정 → 차단.
+    monkeypatch.setattr(chatmod, "classify", lambda t: "risk_guardrail")
+    monkeypatch.setattr(chatmod, "_reclassify_risk", lambda c, q: True)
+    client = _FakeClient([])  # 재분류가 mock 이라 LLM 미소비
+    out = chat("이 종목 결국 오르는 거 맞지?", _JUDGE, Session(), client=client)
+    assert out["text"] == chatmod._GUARDRAIL_MESSAGE and out["popups"] == []
+
+
+def test_ml_risk_reclassify_allows_proceeds_to_llm(monkeypatch):
+    # ML=risk 이지만 LLM 재분류=오탐 → 정상 답변으로 진행(구제).
+    monkeypatch.setattr(chatmod, "classify", lambda t: "risk_guardrail")
+    monkeypatch.setattr(chatmod, "_reclassify_risk", lambda c, q: False)
+    client = _FakeClient([_resp(content="포트폴리오를 살펴보면…")])
+    out = chat("내 포트폴리오 조정안 만들어줘", _JUDGE, Session(), client=client)
+    assert out["text"] == "포트폴리오를 살펴보면…"  # 차단 아님
+    assert out["text"] != chatmod._GUARDRAIL_MESSAGE
+
+
+def test_reclassify_risk_parses_verdict(monkeypatch):
+    # _reclassify_risk 자체 — JSON {block} 파싱. block:true→True, false→False.
+    def _client(block):
+        return _FakeClient([_resp(content=json.dumps({"block": block}))])
+
+    assert chatmod._reclassify_risk(_client(True), "q") is True
+    assert chatmod._reclassify_risk(_client(False), "q") is False
+
+
+def test_reclassify_risk_defaults_block_on_error():
+    # 재분류 LLM 전체 실패 → 보수적 차단(True).
+    class _Boom:
+        def __init__(self):
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._boom))
+
+        def _boom(self, **kw):
+            raise Exception("openai down")
+
+    assert chatmod._reclassify_risk(_Boom(), "q") is True
+
+
 def test_openai_failure_retries_then_falls_back(monkeypatch):
     calls = {"n": 0}
 

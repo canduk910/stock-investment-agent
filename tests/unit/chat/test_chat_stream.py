@@ -206,6 +206,38 @@ def test_view_context_tool_stream_feeds_summary_and_keeps_popup(monkeypatch):
     assert "순자산 1,900만원" in (tool_msgs[0].get("content") or "")
 
 
+def test_stream_ml_risk_reclassify_allows_proceeds(monkeypatch):
+    # 스트리밍: ML=risk 이지만 재분류=오탐 → 정상 답변 스트림(차단 아님).
+    monkeypatch.setattr(chatmod, "classify", lambda t: "risk_guardrail")
+    monkeypatch.setattr(chatmod, "_reclassify_risk", lambda c, q: False)
+    stream = [_content_chunk("포트폴리오 조정 방향은…", finish_reason="stop")]
+    client = _FakeStreamClient([stream])
+    events = _collect(chat_stream("내 포트폴리오 조정안 만들어줘", _JUDGE, Session(), client=client))
+    text = "".join(e["text"] for e in events if e["type"] == "token")
+    assert "포트폴리오 조정 방향" in text
+    assert chatmod._GUARDRAIL_MESSAGE not in text  # 차단 아님
+
+
+def test_stream_ml_risk_reclassify_confirms_block(monkeypatch):
+    # 스트리밍: ML=risk + 재분류=위험 확정 → 차단 token + done(popups=[]).
+    monkeypatch.setattr(chatmod, "classify", lambda t: "risk_guardrail")
+    monkeypatch.setattr(chatmod, "_reclassify_risk", lambda c, q: True)
+    client = _FakeStreamClient([])  # LLM 미소비(재분류 mock)
+    events = _collect(chat_stream("이 종목 결국 오르지?", _JUDGE, Session(), client=client))
+    token_text = "".join(e["text"] for e in events if e["type"] == "token")
+    assert chatmod._GUARDRAIL_MESSAGE in token_text
+    assert events[-1] == {"type": "done", "popups": []}
+
+
+def test_stream_deterministic_keyword_blocks(monkeypatch):
+    # 스트리밍: 결정적 키워드 → 재분류 없이 차단.
+    called = {"n": 0}
+    monkeypatch.setattr(chatmod, "_reclassify_risk", lambda c, q: called.__setitem__("n", 1) or True)
+    events = _collect(chat_stream("빚내서 몰빵할까", _JUDGE, Session(), client=None))
+    assert chatmod._GUARDRAIL_MESSAGE in "".join(e.get("text", "") for e in events)
+    assert called["n"] == 0  # 결정적 차단은 재분류 없이
+
+
 def test_generate_stage_emitted_before_tokens():
     stream = [_content_chunk("답변", finish_reason="stop")]
     client = _FakeStreamClient([stream])

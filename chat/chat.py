@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 
 from chat.build_prompt import build_prompt
-from chat.intent import classify
+from chat.intent import classify, guardrail_label
 from chat.session import Session
 from chat.tools import (
     CHAT_MODEL,
@@ -46,6 +46,46 @@ _GUARDRAIL_MESSAGE = (
 _FALLBACK_MESSAGE = (
     "죄송합니다. 지금은 일시적으로 답변을 생성할 수 없습니다. 잠시 후 다시 시도해 주세요."
 )
+
+# LLM 2차 재분류 프롬프트 — ML 이 risk_guardrail 로 본 질의를 '차단 대상 여부'만 재판정한다.
+# 설명·자문이 아니라 분류만(판정은 코드 원칙). 잔고·손익·포트폴리오 상담 등 정상 요청은 통과시켜
+# ML 오탐을 구제하고, 진짜 4유형 위험만 차단한다.
+_RECLASSIFY_PROMPT = (
+    "너는 투자 챗봇의 안전 필터다. 아래 사용자 메시지가 다음 '차단 대상' 4유형에 해당하는지만 "
+    "판정하라.\n"
+    "① 수익 보장·단정 예측 확답 요구('반드시/무조건 오른다' 확언 요구)\n"
+    "② 내부·미공개 정보 요구\n"
+    "③ 시세조종·작전주·부정거래 조력 요구\n"
+    "④ 과도한 위험 조장(빚투·몰빵·전재산 집중 등 권유 요구)\n"
+    "잔고·손익 조회, 포트폴리오 점검·리밸런싱·추가편입 상담, 종목·국면 분석, 관심종목 관리, "
+    "용어 질문 등은 정상 요청이므로 차단 대상이 아니다.\n"
+    '오직 JSON 만 출력: {"block": true 또는 false}. 애매하면 block:false.'
+)
+
+
+def _reclassify_risk(client, user_query: str) -> bool:
+    """ML 이 risk 로 본 질의를 CHAT_MODEL 로 2차 판정 — 차단 대상이면 True, 오탐이면 False.
+
+    '차단 대상 여부'만 분류한다(자문·설명은 본 답변 LLM 담당). 전체 실패는 1회 재시도 후
+    **보수적으로 차단(True)** — 안전 우선(재분류 실패는 드묾).
+    """
+    messages = [
+        {"role": "system", "content": _RECLASSIFY_PROMPT},
+        {"role": "user", "content": user_query},
+    ]
+    for _ in range(2):
+        try:
+            resp = client.chat.completions.create(
+                model=CHAT_MODEL,
+                messages=messages,
+                response_format={"type": "json_object"},
+                **CHAT_MODEL_PARAMS,
+            )
+            data = json.loads(resp.choices[0].message.content or "{}")
+            return bool(data.get("block", False))
+        except Exception:
+            continue
+    return True  # 재분류 실패 → 보수적 차단(안전 우선)
 
 
 # 리포트 상담 컨텍스트 주입 블록(핀 고정). 출처 귀속·판정 금지·면책 유지를 재강조한다 —
@@ -125,14 +165,19 @@ def _create_with_retry(client, **kwargs):
 
 
 def chat(user_query: str, judgement: dict, session: Session, *, client=None) -> dict:
-    """사용자 질의 → {"text","popups"}. risk_guardrail 은 LLM 미호출 차단."""
-    # 1. 인텐트 사전분류 — risk_guardrail 은 코드가 결정적으로 차단(LLM 미호출).
-    if classify(user_query) == "risk_guardrail":
+    """사용자 질의 → {"text","popups"}. 위험 요청은 2층 차단(결정적 키워드 + ML→LLM 재분류)."""
+    # 1a. 결정적 키워드(4유형) → LLM 미호출 하드블록(안전 하한선, 재분류 없이).
+    if guardrail_label(user_query):
         session.append(user_query, _GUARDRAIL_MESSAGE)
         return {"text": _GUARDRAIL_MESSAGE, "popups": []}
 
     if client is None:
         client = _make_client()
+
+    # 1b. ML 이 risk 로 보면 LLM 2차 재분류 — 오탐이면 통과(구제), 위험 확정이면 차단.
+    if classify(user_query) == "risk_guardrail" and _reclassify_risk(client, user_query):
+        session.append(user_query, _GUARDRAIL_MESSAGE)
+        return {"text": _GUARDRAIL_MESSAGE, "popups": []}
 
     messages = [{"role": "system", "content": _build_system_prompt(judgement, session)}]
     messages += session.history()
@@ -238,8 +283,8 @@ def chat_stream(user_query: str, judgement: dict, session: Session, *, client=No
     """
     yield {"type": "stage", "stage": "analyze"}
 
-    # 1. 인텐트 사전분류 — risk_guardrail 은 코드가 결정적으로 차단(LLM 미호출).
-    if classify(user_query) == "risk_guardrail":
+    # 1a. 결정적 키워드(4유형) → LLM 미호출 하드블록(안전 하한선).
+    if guardrail_label(user_query):
         session.append(user_query, _GUARDRAIL_MESSAGE)
         yield {"type": "token", "text": _GUARDRAIL_MESSAGE}
         yield {"type": "done", "popups": []}
@@ -247,6 +292,13 @@ def chat_stream(user_query: str, judgement: dict, session: Session, *, client=No
 
     if client is None:
         client = _make_client()
+
+    # 1b. ML 이 risk 로 보면 LLM 2차 재분류 — 오탐이면 통과(구제), 위험 확정이면 차단.
+    if classify(user_query) == "risk_guardrail" and _reclassify_risk(client, user_query):
+        session.append(user_query, _GUARDRAIL_MESSAGE)
+        yield {"type": "token", "text": _GUARDRAIL_MESSAGE}
+        yield {"type": "done", "popups": []}
+        return
 
     messages = [{"role": "system", "content": _build_system_prompt(judgement, session)}]
     messages += session.history()
