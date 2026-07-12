@@ -23,6 +23,7 @@ dependencies = [
     "pyjwt>=2.8",
     "email-validator>=2.0",
     "psycopg[binary]>=3.3.4",
+    "cryptography>=41",
 ]
 
 [dependency-groups]

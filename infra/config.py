@@ -29,6 +29,20 @@ def _optional(name: str, default: str = "") -> str:
     return os.environ.get(name, default).strip()
 
 
+# KIS 자격증명 암호화 마스터키의 dev 전용 비보안 기본값(auth._DEV_SECRET 패턴).
+# 프로덕션은 반드시 KIS_ENC_KEY(Secret Manager)로 오버라이드한다 — 이 값은 공개 저장소에 있어 비보안.
+_DEV_ENC_KEY = "noiNyahceRH8zjRWO72a_nB9vbtgKcHyzFCsKI7Hsx0="
+
+
+def kis_encryption_key() -> str:
+    """유저별 KIS 자격증명 암호화(Fernet)용 마스터키(base64 44자).
+
+    KIS_ENC_KEY(Secret Manager) 우선, 미설정 시 dev 기본값(비보안). 생성:
+    `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
+    """
+    return _optional("KIS_ENC_KEY") or _DEV_ENC_KEY
+
+
 @dataclass(frozen=True)
 class KisConfig:
     app_key: str
