@@ -30,6 +30,7 @@ const baseProps = {
   ],
   onNewConversation: vi.fn(),
   onSelectConversation: vi.fn(),
+  onRenameConversation: vi.fn(),
 }
 
 describe('ChatPanel 대화기록', () => {
@@ -54,5 +55,35 @@ describe('ChatPanel 대화기록', () => {
     await waitFor(() => screen.getByLabelText('대화 선택'))
     fireEvent.change(screen.getByLabelText('대화 선택'), { target: { value: '2' } })
     expect(onSelect).toHaveBeenCalledWith(2)
+  })
+
+  it('✎ → 인라인 편집(현재 제목) → 수정·저장 시 onRenameConversation(id, title)', async () => {
+    const onRename = vi.fn()
+    render(<ChatPanel {...baseProps} onRenameConversation={onRename} />)
+    await waitFor(() => screen.getByLabelText('대화 이름 수정'))
+    fireEvent.click(screen.getByLabelText('대화 이름 수정'))
+    const input = screen.getByLabelText('대화 이름')
+    expect(input.value).toBe('대화 A') // 현재 대화(id 1) 제목으로 진입
+    fireEvent.change(input, { target: { value: '삼성전자 분석' } })
+    fireEvent.click(screen.getByLabelText('이름 저장'))
+    expect(onRename).toHaveBeenCalledWith(1, '삼성전자 분석')
+  })
+
+  it('편집 중 빈 제목이면 저장 비활성', async () => {
+    render(<ChatPanel {...baseProps} />)
+    await waitFor(() => screen.getByLabelText('대화 이름 수정'))
+    fireEvent.click(screen.getByLabelText('대화 이름 수정'))
+    fireEvent.change(screen.getByLabelText('대화 이름'), { target: { value: '   ' } })
+    expect(screen.getByLabelText('이름 저장')).toBeDisabled()
+  })
+
+  it('✕(취소) → 편집 종료, 스위처 복귀·rename 미호출', async () => {
+    const onRename = vi.fn()
+    render(<ChatPanel {...baseProps} onRenameConversation={onRename} />)
+    await waitFor(() => screen.getByLabelText('대화 이름 수정'))
+    fireEvent.click(screen.getByLabelText('대화 이름 수정'))
+    fireEvent.click(screen.getByLabelText('편집 취소'))
+    await waitFor(() => expect(screen.getByLabelText('대화 선택')).toBeInTheDocument())
+    expect(onRename).not.toHaveBeenCalled()
   })
 })

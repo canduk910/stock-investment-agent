@@ -30,6 +30,8 @@ export default function ChatPanel({
   conversationId = null,
   onNewConversation,
   onSelectConversation,
+  onRenameConversation,
+  onTurnComplete,
 }) {
   // 세션 id 는 App 이 소유(= 현재 대화 id). prop 미전달 시(구 테스트) 자체 생성 폴백.
   const sessionRef = useRef(null)
@@ -48,6 +50,20 @@ export default function ChatPanel({
   const [error, setError] = useState(null)
   const lastQueryRef = useRef(null)
   const listRef = useRef(null)
+  const [editingTitle, setEditingTitle] = useState(false) // 대화 이름 인라인 편집
+  const [draftTitle, setDraftTitle] = useState('')
+
+  const activeConv = conversations.find((c) => c.id === conversationId) || null
+
+  function startEditTitle() {
+    setDraftTitle(activeConv?.title || '')
+    setEditingTitle(true)
+  }
+  function saveTitle() {
+    const t = draftTitle.trim()
+    if (t && conversationId != null) onRenameConversation?.(conversationId, t)
+    setEditingTitle(false)
+  }
 
   // 대화 전환/최초 로드 — 그 대화의 저장된 메시지를 불러와 말풍선으로 복원(DB role→ChatPanel role).
   useEffect(() => {
@@ -109,6 +125,7 @@ export default function ChatPanel({
       return [...m.slice(0, -1), { ...last, text, popups, streaming: false }]
     })
     setLoading(false)
+    onTurnComplete?.() // 턴 저장 완료 → 대화목록 재조회(첫 질문 자동 명명·재정렬 반영)
   }
 
   // 논스트림 폴백(스트림 실패 시 1회) — 기존 postChat 경로. 봇 placeholder 를 결과로 대체한다.
@@ -129,6 +146,7 @@ export default function ChatPanel({
       })
       showPanel(specs)
       setError(null)
+      onTurnComplete?.() // 폴백 턴 완료 → 대화목록 재조회
     } catch (e) {
       // 폴백도 실패 → 배너 + 재시도. 진행 중 placeholder 는 제거(무한 스피너 금지).
       setMessages((m) => {
@@ -201,29 +219,78 @@ export default function ChatPanel({
         </div>
         {onNewConversation ? (
           <div className="chat__convbar">
-            {conversations.length > 0 ? (
-              <select
-                className="chat__convselect"
-                aria-label="대화 선택"
-                value={conversationId ?? ''}
-                onChange={(e) => onSelectConversation?.(Number(e.target.value))}
-                disabled={loading}
-              >
-                {conversations.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title || '대화'}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-            <button
-              type="button"
-              className="refresh chat__newconv"
-              onClick={() => onNewConversation()}
-              disabled={loading}
-            >
-              + 새 대화
-            </button>
+            {editingTitle ? (
+              // 인라인 이름 편집 — Enter 저장·Esc 취소·✓/✕ 버튼. 빈 제목은 저장 비활성.
+              <div className="chat__convedit">
+                <input
+                  className="chat__convinput"
+                  aria-label="대화 이름"
+                  value={draftTitle}
+                  autoFocus
+                  maxLength={200}
+                  onChange={(e) => setDraftTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveTitle()
+                    else if (e.key === 'Escape') setEditingTitle(false)
+                  }}
+                />
+                <button
+                  type="button"
+                  className="chat__convsave"
+                  onClick={saveTitle}
+                  disabled={!draftTitle.trim()}
+                  aria-label="이름 저장"
+                >
+                  ✓
+                </button>
+                <button
+                  type="button"
+                  className="chat__convcancel"
+                  onClick={() => setEditingTitle(false)}
+                  aria-label="편집 취소"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <>
+                {conversations.length > 0 ? (
+                  <select
+                    className="chat__convselect"
+                    aria-label="대화 선택"
+                    value={conversationId ?? ''}
+                    onChange={(e) => onSelectConversation?.(Number(e.target.value))}
+                    disabled={loading}
+                  >
+                    {conversations.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.title || '대화'}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                {onRenameConversation && conversationId != null ? (
+                  <button
+                    type="button"
+                    className="chat__convrename"
+                    onClick={startEditTitle}
+                    disabled={loading}
+                    aria-label="대화 이름 수정"
+                    title="대화 이름 수정"
+                  >
+                    ✎
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="refresh chat__newconv"
+                  onClick={() => onNewConversation()}
+                  disabled={loading}
+                >
+                  + 새 대화
+                </button>
+              </>
+            )}
           </div>
         ) : null}
       </header>

@@ -6,12 +6,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from auth.deps import get_current_user
 from auth.models import User
-from chat.history_models import Conversation, ChatMessage
+from chat.history_models import DEFAULT_CONVERSATION_TITLE, Conversation, ChatMessage
 from chat.history_store import HistoryStore
 from infra.db import get_db
 
@@ -20,6 +20,10 @@ router = APIRouter()
 
 class CreateConversationRequest(BaseModel):
     title: str | None = None
+
+
+class RenameConversationRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
 
 
 def _conv_public(conv: Conversation) -> dict:
@@ -50,7 +54,22 @@ def create_conversation(
     db: Session = Depends(get_db),
 ) -> dict:
     store = HistoryStore(db)
-    conv = store.create_conversation(str(user.id), title=(body.title or "새 대화"))
+    conv = store.create_conversation(str(user.id), title=(body.title or DEFAULT_CONVERSATION_TITLE))
+    return _conv_public(conv)
+
+
+@router.patch("/api/conversations/{conversation_id}")
+def rename_conversation(
+    conversation_id: int,
+    body: RenameConversationRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """대화 제목 변경(유저 소유권 검증). 빈 제목/초과는 422(Pydantic), 남의 대화는 404."""
+    store = HistoryStore(db)
+    conv = store.rename_conversation(str(user.id), conversation_id, body.title)
+    if conv is None:
+        raise HTTPException(status_code=404, detail="conversation not found")
     return _conv_public(conv)
 
 

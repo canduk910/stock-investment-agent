@@ -9,6 +9,7 @@ import {
   setViewContext,
   fetchConversations,
   createConversation,
+  renameConversation,
 } from './api.js'
 import { fetchMe, logout } from './auth.js'
 import { detectTargetAlerts } from './lib/watchlistLogic.js'
@@ -129,6 +130,26 @@ export default function App() {
   }, [])
 
   const selectConversation = useCallback((id) => setConversationId(id), [])
+
+  // 대화 이름 수동 수정 — 서버 rename 후 목록 title 갱신(낙관적 갱신은 서버 반환값으로 확정).
+  const handleRenameConversation = useCallback(async (id, title) => {
+    try {
+      const c = await renameConversation(id, title)
+      setConversations((cs) => cs.map((x) => (x.id === id ? { ...x, title: c.title } : x)))
+    } catch {
+      /* graceful — 실패해도 기존 제목 유지 */
+    }
+  }, [])
+
+  // 챗 턴 완료 후 대화목록 재조회 — 첫 질문 자동 명명·updated_at 재정렬을 스위처에 반영.
+  const refreshConversations = useCallback(async () => {
+    try {
+      const list = (await fetchConversations()).conversations || []
+      setConversations(list)
+    } catch {
+      /* graceful */
+    }
+  }, [])
 
   // 챗·컨텍스트 공유 session_id = 현재 대화 id(문자열). 대화 로드 전엔 null(가드).
   const sessionId = { current: conversationId != null ? String(conversationId) : null }
@@ -345,6 +366,8 @@ export default function App() {
             conversationId={conversationId}
             onNewConversation={newConversation}
             onSelectConversation={selectConversation}
+            onRenameConversation={handleRenameConversation}
+            onTurnComplete={refreshConversations}
           />
         </div>
         <div className="app__right">

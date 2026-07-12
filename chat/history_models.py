@@ -18,12 +18,18 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# 새 대화 기본 제목(SSOT) — model default·create·자동명명 게이트(아직 이 값이면 첫 질문으로 자동 명명)가 공유.
+DEFAULT_CONVERSATION_TITLE = "새 대화"
+
+
 class Conversation(Base):
     __tablename__ = "conversations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
-    title: Mapped[str] = mapped_column(String(200), default="새 대화", nullable=False)
+    title: Mapped[str] = mapped_column(
+        String(200), default=DEFAULT_CONVERSATION_TITLE, nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utcnow, onupdate=_utcnow, nullable=False

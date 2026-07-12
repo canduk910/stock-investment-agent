@@ -1195,6 +1195,59 @@ body {
   white-space: nowrap;
 }
 
+/* ── 대화 이름 수정(항목2) ── */
+.chat__convrename {
+  flex: none;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--c-text-secondary);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.chat__convrename:hover {
+  color: var(--c-emph);
+  border-color: var(--c-emph);
+}
+.chat__convedit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chat__convinput {
+  max-width: 200px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--c-text);
+  background: var(--c-white);
+  border: 1px solid var(--c-emph);
+  border-radius: var(--radius-sm);
+}
+.chat__convsave,
+.chat__convcancel {
+  flex: none;
+  padding: 6px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.chat__convsave {
+  color: var(--c-white);
+  background: var(--c-emph); /* 확정 CTA = 주황 */
+  border: none;
+}
+.chat__convsave:disabled {
+  background: var(--c-border-strong);
+  cursor: default;
+}
+.chat__convcancel {
+  color: var(--c-text-secondary);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+}
+
 /* 좌측 챗 상단 상담 배너(주황) — 리포트 근거 상담 중 표시. */
 .chat__consult {
   margin: 0 0 10px;

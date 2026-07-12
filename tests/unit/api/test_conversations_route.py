@@ -50,6 +50,28 @@ def test_create_and_list(ctx):
     assert [c["id"] for c in lst] == [conv_id]
 
 
+def test_rename_conversation(ctx):
+    conv_id = ctx.client.post("/api/conversations", json={}).json()["id"]
+    r = ctx.client.patch(f"/api/conversations/{conv_id}", json={"title": "삼성전자 분석"})
+    assert r.status_code == 200 and r.json()["title"] == "삼성전자 분석"
+    # 목록에도 반영.
+    lst = ctx.client.get("/api/conversations").json()["conversations"]
+    assert lst[0]["title"] == "삼성전자 분석"
+
+
+def test_rename_not_owner_404(ctx):
+    conv_id = ctx.client.post("/api/conversations", json={}).json()["id"]  # uid 1 소유
+    r = ctx.other.patch(f"/api/conversations/{conv_id}", json={"title": "탈취"})  # uid 2
+    assert r.status_code == 404
+    assert ctx.client.get("/api/conversations").json()["conversations"][0]["title"] == "새 대화"
+
+
+def test_rename_empty_title_422(ctx):
+    conv_id = ctx.client.post("/api/conversations", json={}).json()["id"]
+    assert ctx.client.patch(f"/api/conversations/{conv_id}", json={"title": ""}).status_code == 422
+    assert ctx.client.patch(f"/api/conversations/{conv_id}", json={}).status_code == 422
+
+
 def test_messages_empty_then_shape(ctx):
     conv_id = ctx.client.post("/api/conversations", json={}).json()["id"]
     r = ctx.client.get(f"/api/conversations/{conv_id}/messages")

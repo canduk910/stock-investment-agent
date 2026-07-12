@@ -28,6 +28,49 @@ def test_create_and_list_conversation(store):
     assert [x.id for x in convs] == [c.id]
 
 
+# ── 이름 지정/수정(항목2) ──
+def test_default_title_constant():
+    from chat.history_models import DEFAULT_CONVERSATION_TITLE
+
+    assert DEFAULT_CONVERSATION_TITLE == "새 대화"  # SSOT: model default·create·자동명명 게이트 공유
+
+
+def test_rename_conversation_owner(store):
+    c = store.create_conversation("1")
+    renamed = store.rename_conversation("1", c.id, "  삼성전자 분석  ")
+    assert renamed is not None and renamed.title == "삼성전자 분석"  # strip
+    assert store.get_conversation("1", c.id).title == "삼성전자 분석"
+
+
+def test_rename_conversation_not_owner_returns_none(store):
+    c = store.create_conversation("1")
+    assert store.rename_conversation("2", c.id, "탈취 시도") is None  # 남의 대화
+    assert store.get_conversation("1", c.id).title == "새 대화"  # 미변경
+
+
+def test_add_turn_auto_titles_from_first_message(store):
+    c = store.create_conversation("1")  # default "새 대화"
+    store.add_turn(c.id, "삼성전자 요즘 어때? 실적이랑 밸류에이션 알려줘 그리고 관심종목에 넣을만한지", "…응답…")
+    title = store.get_conversation("1", c.id).title
+    assert title != "새 대화" and title.startswith("삼성전자")
+    assert len(title) <= 31  # ~30자 + 말줄임
+
+
+def test_add_turn_does_not_overwrite_existing_title(store):
+    c = store.create_conversation("1")
+    store.add_turn(c.id, "첫 질문", "응답1")  # 자동명명 → "첫 질문"
+    first_title = store.get_conversation("1", c.id).title
+    store.add_turn(c.id, "둘째 질문 완전히 다른 내용", "응답2")  # 덮어쓰지 않음
+    assert store.get_conversation("1", c.id).title == first_title
+
+
+def test_add_turn_does_not_overwrite_manual_rename(store):
+    c = store.create_conversation("1")
+    store.rename_conversation("1", c.id, "내가 지은 이름")
+    store.add_turn(c.id, "첫 질문", "응답")  # 수동 제목 있으면 자동명명 안 함
+    assert store.get_conversation("1", c.id).title == "내가 지은 이름"
+
+
 def test_get_conversation_ownership(store):
     c = store.create_conversation("1")
     assert store.get_conversation("1", c.id) is not None

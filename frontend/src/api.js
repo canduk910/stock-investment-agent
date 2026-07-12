@@ -62,6 +62,17 @@ export async function fetchConversationMessages(conversationId) {
   return res.json()
 }
 
+// PATCH /api/conversations/{id} {title} → {id, title, ...}. 대화 이름 수정(소유권 검증·빈 제목 422).
+export async function renameConversation(conversationId, title) {
+  const res = await authFetch(`/api/conversations/${encodeURIComponent(conversationId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  })
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
 // DELETE /api/conversations/{id} → {ok}. 대화 삭제(메시지 cascade).
 export async function deleteConversation(conversationId) {
   const res = await authFetch(`/api/conversations/${encodeURIComponent(conversationId)}`, {
