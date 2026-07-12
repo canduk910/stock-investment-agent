@@ -49,6 +49,22 @@ def test_fetch_graceful_on_error(monkeypatch):
     assert r.status_code == 200 and "error" in r.json()
 
 
+def test_fetch_stream_emits_progress_events(monkeypatch):
+    def _fake(limit):
+        assert limit == 5
+        yield {"type": "stage", "stage": "list"}
+        yield {"type": "found", "reports": [{"id": "36722", "broker": "KB증권", "title": "시황"}]}
+        yield {"type": "progress", "id": "36722", "result": "new", "done": 1, "total": 1}
+        yield {"type": "done", "fetched": 1, "new": 1, "skipped": 0, "failed": 0}
+
+    monkeypatch.setattr(mo.market_outlook_service, "iter_fetch_and_summarize", _fake)
+    r = TestClient(_app()).post("/api/macro/market-outlook/fetch/stream?limit=5")
+    assert r.status_code == 200 and "text/event-stream" in r.headers["content-type"]
+    import json
+    types = [json.loads(l[6:])["type"] for l in r.text.splitlines() if l.startswith("data: ")]
+    assert types == ["stage", "found", "progress", "done"]
+
+
 def test_list_returns_reports(monkeypatch):
     class _Store:
         def list_reports(self):

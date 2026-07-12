@@ -116,6 +116,44 @@ def test_fetch_stock_reports_rejects_bad_ticker():
     assert r.status_code == 400  # assert_valid_ticker
 
 
+# ── SSE 진행 스트림 ──
+def _sse_events(body: str):
+    import json
+    return [json.loads(l[6:]) for l in body.splitlines() if l.startswith("data: ")]
+
+
+def test_fetch_stream_emits_progress_events(monkeypatch):
+    def _fake(ticker, limit):
+        assert ticker == "006360" and limit == 5
+        yield {"type": "stage", "stage": "list"}
+        yield {"type": "found", "reports": [{"id": "1", "broker": "한화", "title": "t"}]}
+        yield {"type": "progress", "id": "1", "result": "new", "done": 1, "total": 1}
+        yield {"type": "done", "fetched": 1, "new": 1, "skipped": 0, "failed": 0}
+
+    monkeypatch.setattr(reports.analyst_service, "iter_fetch_and_summarize_for_ticker", _fake)
+    r = TestClient(_app()).post("/api/detail/006360/analyst-reports/fetch/stream?limit=5")
+    assert r.status_code == 200 and "text/event-stream" in r.headers["content-type"]
+    types = [e["type"] for e in _sse_events(r.text)]
+    assert types == ["stage", "found", "progress", "done"]
+
+
+def test_fetch_stream_generator_error_is_graceful(monkeypatch):
+    def _boom(ticker, limit):
+        yield {"type": "stage", "stage": "list"}
+        raise RuntimeError("naver down")
+
+    monkeypatch.setattr(reports.analyst_service, "iter_fetch_and_summarize_for_ticker", _boom)
+    r = TestClient(_app()).post("/api/detail/006360/analyst-reports/fetch/stream")
+    assert r.status_code == 200  # 스트림 시작됨(200) → 중간 실패는 error 프레임
+    events = _sse_events(r.text)
+    assert events[-1]["type"] == "error" and "naver" in events[-1]["message"]
+
+
+def test_fetch_stream_rejects_bad_ticker():
+    r = TestClient(_app()).post("/api/detail/notaticker/analyst-reports/fetch/stream")
+    assert r.status_code == 400  # 스트림 전 assert_valid_ticker
+
+
 def test_fetch_stock_reports_graceful_on_error(monkeypatch):
     def _boom(ticker, limit):
         raise Exception("naver down")

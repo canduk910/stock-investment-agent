@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { fetchMarketOutlook, fetchNaverMarketOutlook } from '../api.js'
+import { fetchMarketOutlook, fetchNaverMarketOutlook, streamFetchMarketOutlook } from '../api.js'
+import FetchProgress, { applyProgressEvent } from './FetchProgress.jsx'
 
 // 시장 국면 페이지(RegimeGauge 아래) — 증권사 '시황(market outlook) 리포트' 요약 카드.
 // 실데이터는 프론트가 fetchMarketOutlook 로 직접 조회한다(환각 차단). 각 요약은 **해당 증권사 시황
@@ -72,6 +73,7 @@ export default function MarketOutlookSection() {
   const [error, setError] = useState(null)
   const [fetching, setFetching] = useState(false)
   const [fetchMsg, setFetchMsg] = useState(null)
+  const [progress, setProgress] = useState(null) // SSE 진행 체크리스트
 
   async function load() {
     setLoading(true)
@@ -91,21 +93,38 @@ export default function MarketOutlookSection() {
     load()
   }, [])
 
+  // 네이버 최신 시황 수집을 **SSE 진행 스트림**으로 — 목록·각 리포트 처리를 실시간 표시. 끊김은 폴백.
   async function fetchNaver() {
     setFetching(true)
     setFetchMsg(null)
-    try {
-      const res = await fetchNaverMarketOutlook(15)
-      setFetchMsg(
-        `네이버 최신 시황 ${res.fetched}건 확인 · 새 요약 ${res.new}건` +
-          (res.failed ? ` · 실패 ${res.failed}건` : ''),
-      )
-      await load()
-    } catch (e) {
-      setFetchMsg(`수집 실패(${e.message}).`)
-    } finally {
-      setFetching(false)
-    }
+    setProgress({ stage: 'list', reports: [], done: 0, total: 0 })
+    let finished = false
+    await streamFetchMarketOutlook({
+      limit: 15,
+      onEvent: (ev) => {
+        if (ev.type === 'done') {
+          finished = true
+          setFetchMsg(`새 요약 ${ev.new}건 · 확인 ${ev.fetched}건` + (ev.failed ? ` · 실패 ${ev.failed}건` : ''))
+        } else if (ev.type === 'error') {
+          finished = true
+          setFetchMsg(`수집 실패(${ev.message}).`)
+        } else {
+          setProgress((p) => applyProgressEvent(p, ev))
+        }
+      },
+      onError: async () => {
+        if (finished) return
+        try {
+          const res = await fetchNaverMarketOutlook(15)
+          setFetchMsg(`새 요약 ${res.new}건 · 확인 ${res.fetched}건` + (res.failed ? ` · 실패 ${res.failed}건` : ''))
+        } catch (e) {
+          setFetchMsg(`수집 실패(${e.message}).`)
+        }
+      },
+    })
+    setProgress(null)
+    await load()
+    setFetching(false)
   }
 
   return (
@@ -116,6 +135,8 @@ export default function MarketOutlookSection() {
           {fetching ? '가져오는 중…' : '네이버 최신 시황 가져오기'}
         </button>
       </div>
+
+      {fetching ? <FetchProgress progress={progress} /> : null}
 
       {fetchMsg ? (
         <p className="analyst__fetchmsg" role="status">

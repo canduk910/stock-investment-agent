@@ -8,9 +8,15 @@ import AnalystReportsSection from './AnalystReportsSection.jsx'
 vi.mock('../api.js', () => ({
   fetchAnalystReports: vi.fn(),
   fetchNaverStockReports: vi.fn(),
+  streamFetchStockReports: vi.fn(),
   setReportContext: vi.fn(),
 }))
-import { fetchAnalystReports, fetchNaverStockReports, setReportContext } from '../api.js'
+import {
+  fetchAnalystReports,
+  fetchNaverStockReports,
+  streamFetchStockReports,
+  setReportContext,
+} from '../api.js'
 
 const REPORT = {
   report_id: '94082',
@@ -29,6 +35,7 @@ const REPORT = {
 beforeEach(() => {
   fetchAnalystReports.mockReset()
   fetchNaverStockReports.mockReset()
+  streamFetchStockReports.mockReset()
   setReportContext.mockReset()
 })
 
@@ -54,19 +61,39 @@ describe('AnalystReportsSection 렌더', () => {
     )
   })
 
-  it('"이 종목 리포트 가져오기" → fetchNaverStockReports(ticker) 후 재조회', async () => {
+  it('"이 종목 리포트 가져오기" → SSE 진행 스트림(체크리스트) 후 완료·재조회', async () => {
     fetchAnalystReports
       .mockResolvedValueOnce({ ticker: '006360', reports: [] })
       .mockResolvedValueOnce({ ticker: '006360', reports: [REPORT] })
-    fetchNaverStockReports.mockResolvedValue({ fetched: 3, new: 1, skipped: 2, failed: 0 })
+    // 스트림 mock: found→progress→done 이벤트를 순서대로 흘린다(이 종목 006360, limit 10).
+    streamFetchStockReports.mockImplementation(async (ticker, { onEvent }) => {
+      expect(ticker).toBe('006360')
+      onEvent({ type: 'stage', stage: 'list' })
+      onEvent({ type: 'found', reports: [{ id: '94082', broker: '한화투자증권', title: '투자포인트' }] })
+      onEvent({ type: 'progress', id: '94082', result: 'new', done: 1, total: 1 })
+      onEvent({ type: 'done', fetched: 1, new: 1, skipped: 0, failed: 0 })
+    })
     render(<AnalystReportsSection ticker="006360" sessionId="s1" onConsult={() => {}} />)
     const btn = () => screen.getByRole('button', { name: /이 종목 리포트 가져오기/ })
     await waitFor(btn)
     fireEvent.click(btn())
-    // 전체 최신 피드가 아니라 이 종목(006360)으로 수집한다.
-    await waitFor(() => expect(fetchNaverStockReports).toHaveBeenCalledWith('006360', 10))
-    // 재조회로 새 리포트가 표시된다.
+    await waitFor(() => expect(streamFetchStockReports).toHaveBeenCalled())
+    // done 카운트 안내 + 재조회로 새 리포트 표시.
+    await waitFor(() => expect(screen.getByText(/새 요약 1건/)).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('한화투자증권')).toBeInTheDocument())
+  })
+
+  it('스트림 끊김(onError) → non-stream fetch 폴백', async () => {
+    fetchAnalystReports.mockResolvedValue({ ticker: '006360', reports: [] })
+    streamFetchStockReports.mockImplementation(async (ticker, { onError }) => {
+      await onError(new Error('stream ended')) // done 없이 끊김
+    })
+    fetchNaverStockReports.mockResolvedValue({ fetched: 2, new: 2, skipped: 0, failed: 0 })
+    render(<AnalystReportsSection ticker="006360" sessionId="s1" onConsult={() => {}} />)
+    await waitFor(() => screen.getByRole('button', { name: /이 종목 리포트 가져오기/ }))
+    fireEvent.click(screen.getByRole('button', { name: /이 종목 리포트 가져오기/ }))
+    await waitFor(() => expect(fetchNaverStockReports).toHaveBeenCalledWith('006360', 10))
+    await waitFor(() => expect(screen.getByText(/새 요약 2건/)).toBeInTheDocument())
   })
 
   it('"이 리포트로 상담하기" → setReportContext(sessionId,ticker,reportId) + onConsult(broker)', async () => {

@@ -1,4 +1,5 @@
 import { readChatStream } from './lib/sseChat.js'
+import { readSSE } from './lib/sse.js'
 import { authFetch } from './auth.js'
 
 // 백엔드(FastAPI) 호출 헬퍼. 엔드포인트 계약은 api/main.py 와 일치해야 한다.
@@ -276,9 +277,35 @@ export async function fetchNaverReports(limit = 20) {
   return res.json()
 }
 
+// SSE 진행 스트림 — 이 종목 리포트 수집·요약. onEvent 로 {stage|found|progress|done|error} 이벤트 전달
+// (실시간 체크리스트). 스트림 끊김/미지원 시 onError → 컴포넌트가 non-stream fetchNaverStockReports 폴백.
+export async function streamFetchStockReports(ticker, { onEvent, onError, limit = 10 } = {}) {
+  try {
+    const res = await fetch(
+      `/api/detail/${encodeURIComponent(ticker)}/analyst-reports/fetch/stream?limit=${limit}`,
+      { method: 'POST' },
+    )
+    await readSSE(res, onEvent, onError)
+  } catch (e) {
+    onError?.(e)
+  }
+}
+
+// SSE 진행 스트림 — 네이버 최신 시황 수집·요약(위와 동형).
+export async function streamFetchMarketOutlook({ onEvent, onError, limit = 15 } = {}) {
+  try {
+    const res = await fetch(`/api/macro/market-outlook/fetch/stream?limit=${limit}`, {
+      method: 'POST',
+    })
+    await readSSE(res, onEvent, onError)
+  } catch (e) {
+    onError?.(e)
+  }
+}
+
 // POST /api/detail/{ticker}/analyst-reports/fetch?limit=N → {fetched, new, skipped, failed}.
 // **이 종목**의 네이버 리포트만 수집·요약(itemCode 필터, 전체 최신 피드 아님). 항상 200(graceful).
-// 종목 상세 "이 종목 리포트 가져오기". 완료 후 fetchAnalystReports(ticker) 재조회.
+// 종목 상세 "이 종목 리포트 가져오기". 완료 후 fetchAnalystReports(ticker) 재조회. (SSE 폴백용.)
 export async function fetchNaverStockReports(ticker, limit = 10) {
   const res = await fetch(
     `/api/detail/${encodeURIComponent(ticker)}/analyst-reports/fetch?limit=${limit}`,

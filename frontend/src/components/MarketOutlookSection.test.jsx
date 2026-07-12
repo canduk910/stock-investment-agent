@@ -7,8 +7,9 @@ import MarketOutlookSection from './MarketOutlookSection.jsx'
 vi.mock('../api.js', () => ({
   fetchMarketOutlook: vi.fn(),
   fetchNaverMarketOutlook: vi.fn(),
+  streamFetchMarketOutlook: vi.fn(),
 }))
-import { fetchMarketOutlook, fetchNaverMarketOutlook } from '../api.js'
+import { fetchMarketOutlook, fetchNaverMarketOutlook, streamFetchMarketOutlook } from '../api.js'
 
 const REPORT = {
   report_id: '36722',
@@ -26,6 +27,7 @@ const REPORT = {
 beforeEach(() => {
   fetchMarketOutlook.mockReset()
   fetchNaverMarketOutlook.mockReset()
+  streamFetchMarketOutlook.mockReset()
 })
 
 describe('MarketOutlookSection 렌더', () => {
@@ -48,15 +50,21 @@ describe('MarketOutlookSection 렌더', () => {
     )
   })
 
-  it('"네이버 최신 시황 가져오기" → fetch 후 재조회', async () => {
+  it('"네이버 최신 시황 가져오기" → SSE 진행 스트림 후 완료·재조회', async () => {
     fetchMarketOutlook
       .mockResolvedValueOnce({ reports: [] })
       .mockResolvedValueOnce({ reports: [REPORT] })
-    fetchNaverMarketOutlook.mockResolvedValue({ fetched: 2, new: 1, skipped: 1, failed: 0 })
+    streamFetchMarketOutlook.mockImplementation(async ({ onEvent }) => {
+      onEvent({ type: 'stage', stage: 'list' })
+      onEvent({ type: 'found', reports: [{ id: '36722', broker: 'KB증권', title: '모닝코멘트' }] })
+      onEvent({ type: 'progress', id: '36722', result: 'new', done: 1, total: 1 })
+      onEvent({ type: 'done', fetched: 1, new: 1, skipped: 0, failed: 0 })
+    })
     render(<MarketOutlookSection />)
     await waitFor(() => screen.getByText(/네이버 최신 시황 가져오기/))
     fireEvent.click(screen.getByText(/네이버 최신 시황 가져오기/))
-    await waitFor(() => expect(fetchNaverMarketOutlook).toHaveBeenCalled())
+    await waitFor(() => expect(streamFetchMarketOutlook).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getByText(/새 요약 1건/)).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('KB증권')).toBeInTheDocument())
   })
 })

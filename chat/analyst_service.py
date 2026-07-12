@@ -73,3 +73,19 @@ def fetch_and_summarize_for_ticker(ticker: str, limit: int = 10, *, client=None,
     return _summarize_metas(
         naver_research.fetch_stock_reports(ticker, limit=limit), store=store, client=client
     )
+
+
+def iter_fetch_and_summarize_for_ticker(ticker: str, limit: int = 10, *, client=None, store=None):
+    """**특정 종목** 수집→요약을 진행 이벤트로 스트리밍(SSE용). stage:list → found → progress → done."""
+    from chat.analyst_store import default_store
+    from chat.report_progress import iter_process_metas
+    from collectors import naver_research
+
+    store = store or default_store()
+    yield {"type": "stage", "stage": "list"}
+    metas = naver_research.fetch_stock_reports(ticker, limit=limit)
+    yield from iter_process_metas(
+        metas,
+        lambda m: _process_one(m, store=store, client=client),
+        id_of=lambda m: m.get("nid"),
+    )

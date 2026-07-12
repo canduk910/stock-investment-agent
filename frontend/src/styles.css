@@ -972,6 +972,73 @@ body {
   font-size: 12px;
   color: var(--c-text-secondary);
 }
+
+/* ── 리포트 수집 진행 체크리스트(항목1, SSE) ── */
+.fetch-progress {
+  margin: 10px 0 0;
+  padding: 12px 14px;
+  background: var(--c-surface-2);
+  border-radius: var(--radius-sm, 8px);
+}
+.fetch-progress__head {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--c-text-secondary);
+}
+.fetch-progress__bar {
+  margin: 8px 0;
+  height: 6px;
+  background: var(--c-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.fetch-progress__fill {
+  height: 100%;
+  background: var(--c-emph); /* 진행=주황 강조 */
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+.fetch-progress__list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.fetch-progress__item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--c-text-muted); /* 대기=뉴트럴 회색 */
+}
+.fetch-progress__item--new,
+.fetch-progress__item--skipped,
+.fetch-progress__item--failed {
+  color: var(--c-text); /* 완료 항목은 본문색으로 또렷하게 */
+}
+.fetch-progress__mark {
+  flex: none;
+  width: 14px;
+  text-align: center;
+}
+.fetch-progress__item--new .fetch-progress__mark {
+  color: var(--c-emph);
+}
+.fetch-progress__label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fetch-progress__status {
+  flex: none;
+  font-size: 11px;
+  color: var(--c-text-secondary);
+}
 .analyst__cards {
   display: flex;
   flex-direction: column;
