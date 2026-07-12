@@ -54,3 +54,9 @@
 - **정렬은 순수 로직**(`lib/watchlistLogic.js`: `sortItems`·`distanceToTarget`·`classifyTargetStatus`·`detectTargetAlerts`) — 드롭다운 재정렬 시 재조회 없음. `SORT_KEYS`는 백엔드·`chat/tools.py` enum과 **SSOT 일치**. `classifyTargetStatus`는 **매수(진입가) 관점**(current≤target=도달)으로 백엔드 `_target_status`와 동일 — sell 관점으로 뒤집지 말 것.
 - **능동 목표가 알림은 `App.jsx` 앱 레벨**: `far→near/reached` **전이 시에만** 주황 배너 + 브라우저 `Notification`(권한 최초 1회). 60s `setInterval` refresh(언마운트 clear). 알림은 "안내"만(주문 자동실행 금지). 목표가 도달/근접·진입 검토가능 = **주황(`--c-emph`)**, 빨강 금지.
 - **[P2] `AiReportPanel`**: "AI 리포트 생성"→`POST /api/detail/{ticker}/report`→구조화 6필드 렌더(종합의견 배지 긍정적=파랑/중립=회색/**신중=주황**, 투자포인트·리스크요인·국면정합성·면책 상시). `validation_failed`면 정량요약 폴백 + "AI 서술 생성 실패" 안내. `lib/reportFormat.js::opinionTone`(순수)이 종합의견→토큰 매핑.
+
+## 유저베이스 — 로그인 게이트·대화기록·시황 (Phase 1~5)
+- **인증 게이트**: `App`이 마운트 시 `auth.fetchMe`로 로그인 확인 — 비로그인은 `LoginScreen`(전체 게이트), 로그인 시 톱바에 이메일+로그아웃. `auth.js`: 토큰 localStorage·`authFetch`(Bearer 주입)·login/signup/me/logout. **유저별 호출(관심종목·챗·대화)은 authFetch**로.
+- **대화기록**: `App`이 대화 목록·현재 대화 소유(로그인 후 로드·최소 1개 보장). 챗 `session_id = conversation.id`(문자열). `ChatPanel`: 대화 전환 시 저장 메시지 복원(`fetchConversationMessages`, DB role→bot/user 매핑) + 헤더 대화 스위처(드롭다운 + **+ 새 대화**). `newConversation`/`selectConversation`.
+- **시황 요약**(Phase 1): `MarketOutlookSection`(자체조회 `/api/macro/market-outlook`)이 시장 국면 패널(`RightPanel` macro_dashboard) RegimeGauge 아래. 시황=증권사 리포트 인용(시장 판정 아님·면책). "네이버 최신 시황 가져오기"(`POST …/fetch`).
+- 테스트: `App.test`·jsdom은 `./auth.js`(fetchMe 로그인됨)·`./api.js`(fetchConversations 등)를 mock. `auth.test.js`는 Node22 전역 localStorage 미비 → `vi.stubGlobal('localStorage', 인메모리)`.

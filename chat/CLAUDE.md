@@ -19,3 +19,7 @@
 - 테스트는 OpenAI 클라이언트를 mock(스트리밍은 FakeClient가 델타 청크 yield), ML은 소형 시드 fixture(`tests/fixtures/intent_seed.tsv`)로 학습해 라이브 호출 없이 검증.
 - **[P2] 구조화 리포트(§6.5b)**: `report_schema.py`의 `StockReport`(Pydantic)가 안전 요건을 **스키마 레벨에서 강제** — `리스크요인 min_length=1`(장밋빛 일변도 방지)·`면책고지` 필수·`종합의견 Literal["긍정적","중립","신중"]`(매수/매도 단정 라벨 원천 차단). `report.py::generate_stock_report`는 `CHAT_MODEL`로 JSON 생성 → 검증 실패 1회 재시도 → 재실패 시 **폴백**(정량요약만 + `validation_failed=True`, 부분실패 보존, §5.1). `report_store.py`가 `.cache/stock_reports.json`에 `(ticker, created_at)`·`regime_at_creation`으로 히스토리 누적(과거 평가 비교 데모). 테스트는 FakeOpenAI mock(라이브 미호출).
 - **진입신호 지침(build_prompt)**: 시스템 프롬프트에 "관심종목 진입 신호는 `single_cap>0` **그리고** `per_max`/`pbr_max` 이내일 때만 '검토 가능'; `single_cap=0` 국면은 신규진입 미제안" 블록 추가. **숫자 하드코딩 0** — 이미 주입된 `REGIME_PARAMS`에서 파생(3중 일관성). 관심종목 진입 판정은 `watchlist/` 코드가, LLM은 서술만.
+
+## 대화기록·공동 리포트 DB (Phase 4~5)
+- **대화기록**(유저별): `history_models`(Conversation/ChatMessage)·`history_store.HistoryStore`(대화 CRUD·`add_turn`·`recent_messages`[hydrate용]). 챗 라우트가 세션 hydrate + 턴 write-through(api/CLAUDE). `Session.hydrate(msgs)`가 슬라이딩 히스토리만 교체(핀 불변).
+- **애널리스트·시황 요약 = 공동 DB**(전역 공유, user 무관): `report_models.AnalystReportRow`(scope_key=ticker|`__MARKET__`, `(scope,report_id)` 유니크)·`report_repo.ScopedReportRepo`(**세션 팩토리로 메서드마다 새 세션 → 병렬 수집 스레드 안전**). `analyst_store`·`market_outlook_store`는 thin SQL 어댑터(인터페이스 has/upsert/list/get 불변 → 라우트·service·view_context 무변경). `default_store()`는 앱 기본 세션팩토리, 테스트는 인메모리 sessionmaker 주입.

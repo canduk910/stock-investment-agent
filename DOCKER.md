@@ -48,3 +48,8 @@ docker compose exec backend uv run python chat/intent_train.py   # 인텐트 모
 - 호스트(mac)에서 빌드된 `.venv`/`node_modules`가 컨테이너(Linux)를 덮지 않도록 named 볼륨(`backend-venv`, `frontend-node-modules`)으로 격리한다.
 - scikit-learn 런타임용 `libgomp1`을 백엔드 이미지에 설치한다.
 - `.env`는 `.dockerignore`로 이미지 빌드에서 제외 → 시크릿이 이미지 레이어에 남지 않는다.
+
+## 유저베이스(인증·DB) — 도커 주의
+- **DB env**: `.env`에 `DATABASE_URL`(미설정 시 로컬 SQLite `sqlite:///.cache/app.db`; 프로덕션 GCP Cloud SQL Postgres `postgresql+psycopg://…`)·`JWT_SECRET`(≥32B, 프로덕션 필수). 컨테이너는 `env_file`로 주입.
+- **★deps 추가 후 컨테이너 sync**: 백엔드는 `backend-venv` 볼륨(이미지 빌드 시점 설치)을 쓴다. 호스트에서 `uv add`로 새 파이썬 패키지를 추가하면 컨테이너 venv엔 없어 `--reload`가 ImportError로 죽는다 → **`docker compose exec backend uv sync`**(또는 `docker compose up --build`)로 컨테이너에 설치. (예: sqlalchemy·bcrypt·pyjwt 추가 시 겪음.)
+- SQLite 파일 DB는 `.cache/app.db`(볼륨 마운트 `./:/app`로 호스트와 공유·gitignore).

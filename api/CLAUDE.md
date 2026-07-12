@@ -15,3 +15,10 @@
 - **`api/deps.py` = 라우트 공용 SSOT**(IMP-02/06): ① `assert_valid_ticker`(모든 `{ticker}` 라우트 진입부 400 — 불량 코드가 KIS/OpenAI/저장 트리거 전 차단), ② 국면 4지표 매핑 `_REGIME_INPUT_MAP`·`map_engine_input`(단일 출처), `build_judgement`(종목/워치리스트/리포트가 소비). `macro_regime`·챗봇의 `live_judgement`는 `api/main.py`에 남기되(라우트 테스트가 `main.collect_macro_indicators`/`judge_regime`을 경계 patch) 매핑만 `deps`를 쓴다 — 매핑을 한쪽만 고쳐 국면 입력이 갈리는 부채 제거. `deps`는 `api.*`를 import하지 않아 사이클 없음.
 - CORS는 Vite 개발 서버(`localhost:5173`)만 허용. 프론트는 실제로 Vite 프록시로 호출하므로 CORS는 보조 안전망.
 - 테스트는 `collect_macro_indicators`·`fred_api_key`를 경계로 mock → 실 API/키 없이 계약 검증(`tests/unit/api/`). 챗 라우트는 `chat.chat`/`chat_stream`·`live_judgement`를 mock.
+
+## 유저베이스 — 인증·DB·대화기록 (Phase 2~5)
+- **DB = SQLAlchemy**(`infra/db.py`): `DATABASE_URL` env(로컬 기본 `sqlite:///.cache/app.db`, 프로덕션 **GCP Cloud SQL for PostgreSQL** `postgresql+psycopg://…`). `init_db()`(startup)가 `create_all`(Phase마다 신규 테이블 추가라 alter 불요). 모델 등록 단일 지점 `import_models()`. 요청 스코프 세션 `get_db` 의존성(테스트는 `dependency_overrides[get_db]`로 인메모리 주입).
+- **인증** — `api/auth.py`(signup/login/me), `auth/deps.get_current_user`(Bearer JWT→User, 401). 상세 `auth/CLAUDE.md`.
+- **관심종목은 이제 인증 스코프**(Phase 3): `api/watchlist.py`가 `DEFAULT_USER_ID`/query·body user_id 제거 → `get_current_user.id` 주입(모든 CRUD 401 without token). store 는 `SqlWatchlistStore`(기존 `WatchlistStore` Protocol 구현·`(user_id,ticker)` 유니크) — service·프론트 계약 불변. 유저 격리(A 종목 B 안 보임).
+- **대화기록**(Phase 4) — `api/conversations.py`: `GET/POST /api/conversations`·`GET /api/conversations/{id}/messages`·`DELETE`(모두 유저 스코프·소유권 404). 챗 라우트(`/api/chat`·`/api/chat/stream`)는 **인증 필수** + `session_id=conversation.id`: 세션 DB hydrate(재접속·전환·재시작 컨텍스트 복원, best-effort) + 턴 write-through. `Conversation`/`ChatMessage` 모델·`HistoryStore`. 스트림은 토큰 누적 후 저장(db Session 은 스트리밍 종료까지 생존).
+- **잔고는 여전히 공유 단일 데모 계좌**(env `KIS_ACNT_NO`) — 유저별 아님(유저별 KIS 키는 데모 범위 밖).
