@@ -6,6 +6,7 @@ import ManageWatchlistConfirm from './ManageWatchlistConfirm.jsx'
 import RegimeGauge from './RegimeGauge.jsx'
 import MarketOutlookSection from './MarketOutlookSection.jsx'
 import BalancePanel from './BalancePanel.jsx'
+import KisSettingsPanel from './KisSettingsPanel.jsx'
 
 // 우측 동적 패널(리디자인) — 좌측 상시 채팅 옆에서 맥락형 콘텐츠를 인라인 렌더한다(모달 폐기).
 // 두 경로로 구동: (a) 챗봇 tool_call(App 이 onShowPanel 로 spec 리프팅) · (b) 상단 세그먼트 탭·종목검색(대화 없이 직접 탐색).
@@ -20,6 +21,7 @@ const PANEL_TITLE = {
   watchlist: '관심종목',
   manage_watchlist: '관심종목 관리',
   balance: '내 잔고',
+  settings: '설정 · KIS API 키',
 }
 
 // 세그먼트 탭(SSOT) — 대화 없이 직접 탐색. 클릭 시 해당 kind spec 을 onSelect 로 리프팅한다.
@@ -28,6 +30,7 @@ const TABS = [
   { key: 'watchlist', label: '관심종목' },
   { key: 'macro_dashboard', label: '시장 국면' },
   { key: 'balance', label: '내 잔고' },
+  { key: 'settings', label: '설정' },
 ]
 
 // 팝업 스펙(kind) → 패널 본문. 데이터는 각 컴포넌트가 직접 조회한다(모달일 때와 동일 재사용).
@@ -66,6 +69,9 @@ function RightPanelBody({ spec, onClose, sessionId, onConsult }) {
     case 'balance':
       // 계좌 잔고·평가액·수익현황 — /api/balance 자체조회(무파라미터·조회전용·무캐시). show_balance 툴/탭 공통.
       return <BalancePanel />
+    case 'settings':
+      // 유저별 KIS API 키 등록/상태/삭제 — 탭 전용(챗 팝업 아님). 시크릿은 서버로만·마스킹 상태만.
+      return <KisSettingsPanel />
     default:
       return null
   }

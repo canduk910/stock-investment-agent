@@ -2238,6 +2238,61 @@ body {
   background: var(--c-border-strong);
   cursor: default;
 }
+
+/* ── KIS API 키 설정 패널(우측 '설정' 탭) ── */
+.kis-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 2px;
+}
+.kis-settings__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--c-surface-2);
+  border-radius: var(--radius-sm, 8px);
+}
+.kis-settings__meta {
+  font-size: 13px;
+  color: var(--c-text-secondary);
+}
+.kis-settings__delete {
+  margin-left: auto;
+}
+.kis-settings__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.kis-settings__save {
+  margin-top: 4px;
+  padding: 11px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--c-white);
+  background: var(--c-emph);          /* 주황 강조 CTA(중요 액션) */
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.kis-settings__save:disabled {
+  background: var(--c-border-strong);
+  cursor: default;
+}
+.kis-settings__notice {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--c-emph-strong);
+}
+.kis-settings__help {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--c-text-muted);
+}
 .login__hint {
   margin: 16px 0 0;
   text-align: center;

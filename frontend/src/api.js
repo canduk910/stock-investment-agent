@@ -26,8 +26,9 @@ export async function fetchMacroRegime() {
 //   summary|null, regime_gate|null, indicator_config:{ma_period,rsi_period}, partial_failure:[]}.
 // 섹션 실패는 null + partial_failure 로 오고 항상 200 — 그건 정상 응답이라 throw 하지 않는다.
 // 여기서 throw 하는 건 네트워크/HTTP 오류(백엔드 미연결 등)뿐이다.
+// authFetch — 로그인 시 토큰을 실어 백엔드가 본인 KIS 키로 조회(미로그인/미등록은 공유 fallback).
 export async function fetchStockBundle(ticker) {
-  const res = await fetch(`/api/detail/${encodeURIComponent(ticker)}/bundle`)
+  const res = await authFetch(`/api/detail/${encodeURIComponent(ticker)}/bundle`)
   if (!res.ok) throw new Error(`API ${res.status}`)
   return res.json()
 }
@@ -181,7 +182,7 @@ export async function updateWatchlistTarget(ticker, targetPrice) {
 //   면책고지}|null, validation_failed, quant_summary, message, regime_at_creation, created_at}.
 // 검증 실패 시 report=null + validation_failed=true + message(정량요약은 quant_summary 로 보존). 항상 200.
 export async function generateStockReport(ticker) {
-  const res = await fetch(`/api/detail/${encodeURIComponent(ticker)}/report`, { method: 'POST' })
+  const res = await authFetch(`/api/detail/${encodeURIComponent(ticker)}/report`, { method: 'POST' })
   if (!res.ok) throw new Error(`API ${res.status}`)
   return res.json()
 }
@@ -189,7 +190,7 @@ export async function generateStockReport(ticker) {
 // GET /api/detail/{ticker}/report/history → {ticker, history:[{created_at, regime_at_creation, report_json}]}.
 // created_at 내림차순(최신 우선). 빈 종목은 history:[](과거 대비 비교 데모).
 export async function fetchReportHistory(ticker) {
-  const res = await fetch(`/api/detail/${encodeURIComponent(ticker)}/report/history`)
+  const res = await authFetch(`/api/detail/${encodeURIComponent(ticker)}/report/history`)
   if (!res.ok) throw new Error(`API ${res.status}`)
   return res.json()
 }
@@ -201,7 +202,36 @@ export async function fetchReportHistory(ticker) {
 // holdings=null·summary=null·partial_failure:['balance'](항상 200) → 컴포넌트가 graceful 안내.
 // 여기서 throw 하는 건 네트워크/HTTP 오류(백엔드 미연결 등)뿐이다.
 export async function fetchBalance() {
-  const res = await fetch('/api/balance')
+  const res = await authFetch('/api/balance')  // 로그인 시 본인 계좌, 아니면 공유 데모 계좌
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
+// ── 유저별 KIS 자격증명(설정) ────────────────────────────────────────────────
+// GET /api/me/kis-credentials → {registered, source:'user'|'shared'|'none', app_key_masked, account_masked, env}.
+// 마스킹 상태만(원문 미반환). 인증 필수.
+export async function fetchKisCredentialsStatus() {
+  const res = await authFetch('/api/me/kis-credentials')
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
+// POST /api/me/kis-credentials {app_key, app_secret, account_no?, acnt_prdt_cd?, env?} → {ok, status}.
+// 서버가 실제 KIS 토큰 발급으로 검증 후 암호화 저장. 검증 실패 400(키 값은 서버·응답에 미노출).
+export async function setKisCredentials(body) {
+  const res = await authFetch('/api/me/kis-credentials', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.detail || `API ${res.status}`)
+  return data
+}
+
+// DELETE /api/me/kis-credentials → {ok, status}. 본인 키 삭제(이후 공유 fallback).
+export async function deleteKisCredentials() {
+  const res = await authFetch('/api/me/kis-credentials', { method: 'DELETE' })
   if (!res.ok) throw new Error(`API ${res.status}`)
   return res.json()
 }
