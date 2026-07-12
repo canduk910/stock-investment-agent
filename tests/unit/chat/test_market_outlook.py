@@ -11,9 +11,25 @@ import chat.market_outlook as mo
 import chat.market_outlook_service as svc
 import collectors.naver_research as naver_research
 import rag.ingest as ingest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
 from chat.market_outlook import summarize_market_outlook
 from chat.market_outlook_schema import MarketOutlookSummary
 from chat.market_outlook_store import MarketOutlookStore
+from infra.db import Base, import_models
+
+
+def _sql_market_store():
+    """SQL 공동 DB(인메모리) 백엔드의 시황 store(격리된 새 엔진)."""
+    import_models()
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    Base.metadata.create_all(engine)
+    sf = sessionmaker(bind=engine, expire_on_commit=False)
+    return MarketOutlookStore(session_factory=sf)
 
 _META = {"broker": "KB증권", "title": "7/10 모닝코멘트", "date": "26.07.10"}
 _VALID = {
@@ -83,14 +99,14 @@ def test_summarize_invalid_falls_back():
 
 # ── store ──
 def test_store_upsert_idempotent(tmp_path):
-    s = MarketOutlookStore(tmp_path / "m.json")
+    s = _sql_market_store()
     assert s.upsert({"report_id": "36722", "broker": "KB증권", "date": "26.07.10"}) is True
     assert s.upsert({"report_id": "36722", "broker": "KB증권", "date": "26.07.10"}) is False
     assert len(s.list_reports()) == 1
 
 
 def test_store_list_sorted_desc(tmp_path):
-    s = MarketOutlookStore(tmp_path / "m.json")
+    s = _sql_market_store()
     s.upsert({"report_id": "1", "date": "26.07.08"})
     s.upsert({"report_id": "2", "date": "26.07.10"})
     assert [r["date"] for r in s.list_reports()] == ["26.07.10", "26.07.08"]
@@ -107,7 +123,7 @@ def test_service_fetch_and_summarize(monkeypatch, tmp_path):
         mo, "summarize_market_outlook",
         lambda text, meta, client=None: {"summary": {"증권사": meta["broker"]}, "validation_failed": False},
     )
-    store = MarketOutlookStore(tmp_path / "m.json")
+    store = _sql_market_store()
     out = svc.fetch_and_summarize(limit=10, store=store)
     assert out == {"fetched": 1, "new": 1, "skipped": 0, "failed": 0}
     assert len(store.list_reports()) == 1
@@ -121,5 +137,5 @@ def test_service_fetch_uses_market_category(monkeypatch, tmp_path):
         return []
 
     monkeypatch.setattr(naver_research, "fetch_reports", _fake)
-    svc.fetch_and_summarize(limit=5, store=MarketOutlookStore(tmp_path / "m.json"))
+    svc.fetch_and_summarize(limit=5, store=_sql_market_store())
     assert seen["cat"] == "market"
