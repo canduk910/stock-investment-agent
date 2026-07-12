@@ -7,10 +7,10 @@ import AnalystReportsSection from './AnalystReportsSection.jsx'
 
 vi.mock('../api.js', () => ({
   fetchAnalystReports: vi.fn(),
-  fetchNaverReports: vi.fn(),
+  fetchNaverStockReports: vi.fn(),
   setReportContext: vi.fn(),
 }))
-import { fetchAnalystReports, fetchNaverReports, setReportContext } from '../api.js'
+import { fetchAnalystReports, fetchNaverStockReports, setReportContext } from '../api.js'
 
 const REPORT = {
   report_id: '94082',
@@ -28,7 +28,7 @@ const REPORT = {
 
 beforeEach(() => {
   fetchAnalystReports.mockReset()
-  fetchNaverReports.mockReset()
+  fetchNaverStockReports.mockReset()
   setReportContext.mockReset()
 })
 
@@ -54,15 +54,17 @@ describe('AnalystReportsSection 렌더', () => {
     )
   })
 
-  it('"네이버 최신 리포트 가져오기" → fetchNaverReports 후 재조회', async () => {
+  it('"이 종목 리포트 가져오기" → fetchNaverStockReports(ticker) 후 재조회', async () => {
     fetchAnalystReports
       .mockResolvedValueOnce({ ticker: '006360', reports: [] })
       .mockResolvedValueOnce({ ticker: '006360', reports: [REPORT] })
-    fetchNaverReports.mockResolvedValue({ fetched: 3, new: 1, skipped: 2, failed: 0 })
+    fetchNaverStockReports.mockResolvedValue({ fetched: 3, new: 1, skipped: 2, failed: 0 })
     render(<AnalystReportsSection ticker="006360" sessionId="s1" onConsult={() => {}} />)
-    await waitFor(() => screen.getByText(/네이버 최신 리포트 가져오기/))
-    fireEvent.click(screen.getByText(/네이버 최신 리포트 가져오기/))
-    await waitFor(() => expect(fetchNaverReports).toHaveBeenCalled())
+    const btn = () => screen.getByRole('button', { name: /이 종목 리포트 가져오기/ })
+    await waitFor(btn)
+    fireEvent.click(btn())
+    // 전체 최신 피드가 아니라 이 종목(006360)으로 수집한다.
+    await waitFor(() => expect(fetchNaverStockReports).toHaveBeenCalledWith('006360', 10))
     // 재조회로 새 리포트가 표시된다.
     await waitFor(() => expect(screen.getByText('한화투자증권')).toBeInTheDocument())
   })

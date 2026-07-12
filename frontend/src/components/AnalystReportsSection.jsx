@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchAnalystReports, fetchNaverReports, setReportContext } from '../api.js'
+import { fetchAnalystReports, fetchNaverStockReports, setReportContext } from '../api.js'
 
 // 종목 상세(StockReportView) 하단 — 그 ticker 의 네이버 애널리스트 리포트 '요약' 카드 섹션.
 // 실데이터(요약)는 프론트가 fetchAnalystReports 로 직접 조회한다(환각 차단) — LLM 응답에서 꺼내지 않는다.
@@ -132,14 +132,14 @@ export default function AnalystReportsSection({ ticker, sessionId, onConsult }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker])
 
-  // 네이버 최신 리포트 수집(서버) → 완료 후 이 종목 요약 재조회. 결과 카운트 안내.
+  // **이 종목**의 네이버 리포트 수집(서버, itemCode 필터) → 완료 후 요약 재조회. 결과 카운트 안내.
   async function fetchNaver() {
     setFetching(true)
     setFetchMsg(null)
     try {
-      const res = await fetchNaverReports(30)
+      const res = await fetchNaverStockReports(ticker, 10)
       setFetchMsg(
-        `네이버 최신 리포트 ${res.fetched}건 확인 · 새 요약 ${res.new}건` +
+        `이 종목 네이버 리포트 ${res.fetched}건 확인 · 새 요약 ${res.new}건` +
           (res.failed ? ` · 실패 ${res.failed}건` : ''),
       )
       await load()
@@ -160,7 +160,7 @@ export default function AnalystReportsSection({ ticker, sessionId, onConsult }) 
           onClick={fetchNaver}
           disabled={fetching}
         >
-          {fetching ? '가져오는 중…' : '네이버 최신 리포트 가져오기'}
+          {fetching ? '가져오는 중…' : '이 종목 리포트 가져오기'}
         </button>
       </div>
 
@@ -198,8 +198,8 @@ export default function AnalystReportsSection({ ticker, sessionId, onConsult }) 
         </>
       ) : (
         <div className="analyst__empty">
-          아직 저장된 애널리스트 리포트가 없어요. 위 버튼으로 네이버 최신 리포트를 가져오면
-          이 종목의 요약이 있을 때 여기에 표시됩니다.
+          아직 저장된 애널리스트 리포트가 없어요. 위 “이 종목 리포트 가져오기”를 누르면
+          이 종목의 네이버 애널리스트 리포트를 수집·요약해 여기에 표시합니다.
         </div>
       )}
     </section>

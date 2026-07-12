@@ -86,24 +86,18 @@ def _parse_list_html(html: str, *, has_stock: bool = True) -> list[dict]:
     return out
 
 
-def fetch_reports(
-    category: str = "company", limit: int = 20, pages: int = 1, *, timeout: int = 15
+def _fetch_list(
+    url: str, base_params: dict, *, has_stock: bool, limit: int, pages: int, timeout: int
 ) -> list[dict]:
-    """카테고리 리서치 목록(최신순) → 최대 limit 개. 미지원 카테고리·네트워크 실패는 graceful.
-
-    category: company(종목분석)·market(시황)·invest(투자정보)·economy(경제분석).
-    시황/투자/경제 리포트는 종목이 없어 stock_code=None 이다(다운스트림 graceful 처리 필요).
-    """
-    cfg = _CATEGORIES.get(category)
-    if cfg is None:
-        return []
-    url_file, has_stock = cfg
-    url = f"{_RESEARCH_BASE}/{url_file}"
+    """목록 URL(page 순회) GET → cp949 디코드 → 파싱. 네트워크 실패는 graceful(수집분까지)."""
     reports: list[dict] = []
     for page in range(1, max(1, pages) + 1):
         try:
             resp = requests.get(
-                url, params={"page": page}, headers={"User-Agent": _UA}, timeout=timeout
+                url,
+                params={**base_params, "page": page},
+                headers={"User-Agent": _UA},
+                timeout=timeout,
             )
             resp.raise_for_status()
             html = resp.content.decode("euc-kr", errors="replace")  # cp949(stock_master 패턴)
@@ -117,6 +111,41 @@ def fetch_reports(
             break
         time.sleep(_PAGE_DELAY)  # 예의 크롤링
     return reports[:limit]
+
+
+def fetch_reports(
+    category: str = "company", limit: int = 20, pages: int = 1, *, timeout: int = 15
+) -> list[dict]:
+    """카테고리 리서치 목록(최신순) → 최대 limit 개. 미지원 카테고리·네트워크 실패는 graceful.
+
+    category: company(종목분석)·market(시황)·invest(투자정보)·economy(경제분석).
+    시황/투자/경제 리포트는 종목이 없어 stock_code=None 이다(다운스트림 graceful 처리 필요).
+    """
+    cfg = _CATEGORIES.get(category)
+    if cfg is None:
+        return []
+    url_file, has_stock = cfg
+    return _fetch_list(
+        f"{_RESEARCH_BASE}/{url_file}", {},
+        has_stock=has_stock, limit=limit, pages=pages, timeout=timeout,
+    )
+
+
+def fetch_stock_reports(
+    ticker: str, limit: int = 20, pages: int = 1, *, timeout: int = 15
+) -> list[dict]:
+    """**특정 종목(ticker)**의 애널리스트 리포트 목록 — 네이버 itemCode 필터(라이브 확인).
+
+    company_list.naver?searchType=itemCode&itemCode=<ticker> 는 그 종목의 리포트만 준다
+    (전체 최신 피드가 아님). 종목 상세의 "이 종목 리포트 가져오기"가 쓴다. 종목 없으면 [].
+    """
+    if not ticker:
+        return []
+    return _fetch_list(
+        f"{_RESEARCH_BASE}/company_list.naver",
+        {"searchType": "itemCode", "itemName": "", "itemCode": ticker},
+        has_stock=True, limit=limit, pages=pages, timeout=timeout,
+    )
 
 
 def fetch_company_reports(limit: int = 20, pages: int = 1, *, timeout: int = 15) -> list[dict]:

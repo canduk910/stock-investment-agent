@@ -42,6 +42,20 @@ def fetch_naver_reports(limit: int = 20) -> dict:
         return {"error": str(e)[:200], "fetched": 0, "new": 0, "skipped": 0, "failed": 0}
 
 
+@router.post("/api/detail/{ticker}/analyst-reports/fetch")
+def fetch_stock_analyst_reports(ticker: str, limit: int = 10) -> dict:
+    """**이 종목**의 네이버 리포트(itemCode 필터) 수집→요약→저장. 항상 200 + 카운트.
+
+    전체 최신 피드가 아니라 그 종목의 리포트만 가져온다(종목 상세 '이 종목 가져오기').
+    """
+    assert_valid_ticker(ticker)  # 불량 코드 400(공용 SSOT)
+    limit = max(1, min(limit, 30))  # 예의 크롤링 상한
+    try:
+        return analyst_service.fetch_and_summarize_for_ticker(ticker, limit=limit)
+    except Exception as e:  # 수집/요약 실패 — 크래시 대신 안내
+        return {"error": str(e)[:200], "fetched": 0, "new": 0, "skipped": 0, "failed": 0}
+
+
 @router.get("/api/detail/{ticker}/analyst-reports")
 def analyst_reports(ticker: str) -> dict:
     """종목별 저장된 애널리스트 리포트 요약 리스트(최신순). 없으면 reports=[]."""

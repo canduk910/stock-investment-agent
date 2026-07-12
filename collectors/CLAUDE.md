@@ -28,6 +28,7 @@
 - 반환 dict: `{stock_name, stock_code, title, nid, broker, pdf_url, date}`. **목록만으로 전 필드 확보**(상세페이지 조회 불필요) — 라이브 검증됨(nid·broker·code·pdf_url 실제 채워짐).
 - `download_pdf(url, dest_dir="reports/naver")`: `stock.pstatic.net`에서 **직접 다운로드**. 비-`.pdf` URL 거부, UA+timeout, 실패 graceful `None`. PDF는 각 증권사 **저작물** → `reports/` gitignore(원문 재배포 금지, 요약만 제공).
 - **예의 크롤링**: UA 지정·페이지 간 지연·top-N 소량. `fetch_company_reports(limit, pages)`는 개별 오류에 graceful(빈 리스트/부분).
+- **종목별 수집은 itemCode 필터 필수**(라이브 확인): `company_list.naver`를 파라미터 없이 부르면 **전체 최신 피드**(모든 종목 섞임)라 특정 종목 상세엔 그 종목 리포트가 없기 일쑤 → `fetch_stock_reports(ticker, limit)`가 `?searchType=itemCode&itemName=&itemCode=<ticker>`로 **그 종목만** 받는다(6칸 company 레이아웃 재사용). ticker 빈값·네트워크 실패는 graceful `[]`. `fetch_reports`/`fetch_stock_reports` 모두 공용 `_fetch_list`(page 순회·cp949·graceful) 위임.
 
 ## 지표 수집기 (fred/vix/fear_greed)
 - 공통 반환 계약 **`IndicatorPoint = {key, value, as_of, source, prev_value}`**(`base.py`). 소비자(quant·api)가 이 shape에 의존.

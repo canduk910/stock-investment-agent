@@ -7,6 +7,7 @@ from collectors.naver_research import (
     download_pdf,
     fetch_company_reports,
     fetch_reports,
+    fetch_stock_reports,
 )
 
 # 시황(market_info) 구조 반영 fixture: 종목 컬럼 없음(5칸) — [제목(nid)·증권사·첨부(class=file)·작성일·조회수].
@@ -116,6 +117,38 @@ def test_fetch_company_reports_delegates_to_fetch_reports(monkeypatch):
     )
     out = fetch_company_reports(limit=5)
     assert len(out) == 1 and out[0]["stock_code"] == "006360"
+
+
+# ── 종목별(itemCode 필터) 수집 — 전체 최신 피드가 아니라 그 종목만 ──
+def test_fetch_stock_reports_sends_itemcode_filter(monkeypatch):
+    captured = {}
+
+    def _get(url, *, params=None, **k):
+        captured["url"] = url
+        captured["params"] = params
+        return _FakeResp(_HTML.encode("euc-kr"))
+
+    monkeypatch.setattr(naver_research.requests, "get", _get)
+    out = fetch_stock_reports("006360", limit=10)
+    # 그 종목의 리포트만 파싱(종목 컬럼 있는 company 레이아웃)
+    assert len(out) == 1 and out[0]["stock_code"] == "006360"
+    # itemCode 필터가 실제로 요청에 실렸는가(핵심 회귀 방지 — 전체 피드 URL 아님)
+    assert captured["url"].endswith("/company_list.naver")
+    assert captured["params"]["searchType"] == "itemCode"
+    assert captured["params"]["itemCode"] == "006360"
+
+
+def test_fetch_stock_reports_empty_ticker_returns_empty():
+    assert fetch_stock_reports("") == []
+    assert fetch_stock_reports(None) == []
+
+
+def test_fetch_stock_reports_graceful_on_network_error(monkeypatch):
+    def _boom(*a, **k):
+        raise Exception("network down")
+
+    monkeypatch.setattr(naver_research.requests, "get", _boom)
+    assert fetch_stock_reports("006360", limit=10) == []
 
 
 def test_fetch_decodes_cp949_and_limits(monkeypatch):

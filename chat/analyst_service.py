@@ -45,16 +45,31 @@ def _process_one(meta: dict, *, store, client) -> str:
         return "failed"  # 개별 리포트 실패는 전체를 막지 않음
 
 
-def fetch_and_summarize(limit: int = 20, *, client=None, store=None) -> dict:
-    """네이버 최신 리포트 수집→요약→저장. {fetched, new, skipped, failed} 반환(항상)."""
-    from chat.analyst_store import default_store
-    from collectors import naver_research
-
-    store = store or default_store()
-    metas = naver_research.fetch_company_reports(limit=limit)
+def _summarize_metas(metas: list[dict], *, store, client) -> dict:
+    """메타 리스트 → 병렬 처리 카운트({fetched,new,skipped,failed})."""
     counts = {"new": 0, "skipped": 0, "failed": 0}
     if metas:
         with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as ex:
             for label in ex.map(lambda m: _process_one(m, store=store, client=client), metas):
                 counts[label] += 1
     return {"fetched": len(metas), **counts}
+
+
+def fetch_and_summarize(limit: int = 20, *, client=None, store=None) -> dict:
+    """네이버 최신 리포트(전체 피드) 수집→요약→저장. {fetched, new, skipped, failed} 반환(항상)."""
+    from chat.analyst_store import default_store
+    from collectors import naver_research
+
+    store = store or default_store()
+    return _summarize_metas(naver_research.fetch_company_reports(limit=limit), store=store, client=client)
+
+
+def fetch_and_summarize_for_ticker(ticker: str, limit: int = 10, *, client=None, store=None) -> dict:
+    """**특정 종목**의 네이버 리포트(itemCode 필터) 수집→요약→저장. 종목 상세의 '이 종목 가져오기'용."""
+    from chat.analyst_store import default_store
+    from collectors import naver_research
+
+    store = store or default_store()
+    return _summarize_metas(
+        naver_research.fetch_stock_reports(ticker, limit=limit), store=store, client=client
+    )

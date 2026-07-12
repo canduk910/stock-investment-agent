@@ -246,6 +246,18 @@ export async function fetchNaverReports(limit = 20) {
   return res.json()
 }
 
+// POST /api/detail/{ticker}/analyst-reports/fetch?limit=N → {fetched, new, skipped, failed}.
+// **이 종목**의 네이버 리포트만 수집·요약(itemCode 필터, 전체 최신 피드 아님). 항상 200(graceful).
+// 종목 상세 "이 종목 리포트 가져오기". 완료 후 fetchAnalystReports(ticker) 재조회.
+export async function fetchNaverStockReports(ticker, limit = 10) {
+  const res = await fetch(
+    `/api/detail/${encodeURIComponent(ticker)}/analyst-reports/fetch?limit=${limit}`,
+    { method: 'POST' },
+  )
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
 // POST /api/chat/report-context {session_id, ticker, report_id} → {ok, set, broker?}.
 // 저장된 리포트 요약을 세션 상담 컨텍스트로 핀 고정(이후 후속 질문이 그 리포트 근거로 답변).
 // **요약 본문은 보내지 않는다** — 서버가 store 에서 조회(환각·조작 차단). ticker/reportId 가 없으면 해제.

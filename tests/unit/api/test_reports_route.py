@@ -83,6 +83,48 @@ def test_fetch_graceful_on_error(monkeypatch):
     assert r.status_code == 200 and "error" in r.json()  # graceful
 
 
+# ── 종목별 수집(itemCode 필터) — POST /api/detail/{ticker}/analyst-reports/fetch ──
+def test_fetch_stock_reports_passes_ticker(monkeypatch):
+    calls = {}
+
+    def _fake(ticker, limit):
+        calls["ticker"] = ticker
+        calls["limit"] = limit
+        return {"fetched": 2, "new": 2, "skipped": 0, "failed": 0}
+
+    monkeypatch.setattr(reports.analyst_service, "fetch_and_summarize_for_ticker", _fake)
+    r = TestClient(_app()).post("/api/detail/006360/analyst-reports/fetch?limit=5")
+    assert r.status_code == 200
+    assert r.json()["new"] == 2
+    assert calls == {"ticker": "006360", "limit": 5}  # 그 종목·limit 로 위임
+
+
+def test_fetch_stock_reports_clamps_limit(monkeypatch):
+    seen = {}
+
+    def _fake(ticker, limit):
+        seen["limit"] = limit
+        return {"fetched": 0, "new": 0, "skipped": 0, "failed": 0}
+
+    monkeypatch.setattr(reports.analyst_service, "fetch_and_summarize_for_ticker", _fake)
+    TestClient(_app()).post("/api/detail/006360/analyst-reports/fetch?limit=999")
+    assert seen["limit"] == 30  # 종목별 상한 클램프
+
+
+def test_fetch_stock_reports_rejects_bad_ticker():
+    r = TestClient(_app()).post("/api/detail/notaticker/analyst-reports/fetch")
+    assert r.status_code == 400  # assert_valid_ticker
+
+
+def test_fetch_stock_reports_graceful_on_error(monkeypatch):
+    def _boom(ticker, limit):
+        raise Exception("naver down")
+
+    monkeypatch.setattr(reports.analyst_service, "fetch_and_summarize_for_ticker", _boom)
+    r = TestClient(_app()).post("/api/detail/006360/analyst-reports/fetch")
+    assert r.status_code == 200 and "error" in r.json()  # graceful
+
+
 def test_analyst_reports_lists_for_ticker(monkeypatch):
     class _Store:
         def list_reports(self, ticker):
