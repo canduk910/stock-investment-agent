@@ -39,14 +39,32 @@
 
 | 시크릿 | 출처 | 주입 env |
 |--------|------|----------|
-| `OPENAI_API_KEY` `KIS_APP_KEY` `KIS_APP_SECRET` `KIS_ACCOUNT_NO` `KIS_ACNT_NO` `FRED_API_KEY` | 로컬 `.env`(사용자) | 동명 env |
+| `OPENAI_API_KEY` `FRED_API_KEY` | 로컬 `.env`(사용자) | 동명 env |
 | `JWT_SECRET` | 랜덤 생성(openssl) | `JWT_SECRET` |
+| `KIS_ENC_KEY` | 랜덤 생성(Fernet) — **KIS 자격증명 암호화 마스터키** | `KIS_ENC_KEY` |
 | `DATABASE_URL` | 구성(`postgresql+psycopg://postgres:***@/appdb?host=/cloudsql/<CONN>`) | `DATABASE_URL` |
 
 비밀 아닌 config 는 env 로: `KIS_ENV=real`, `KIS_ACNT_PRDT_CD_STK=01`.
 
-> **안전**: 시크릿 생성·IAM 부여는 사용자가 직접 실행(API 키를 필드에 입력·접근제어 변경은 자동화 대상 아님).
-> `.env`·시크릿 값은 이미지·로그·업로드에 미포함(`.dockerignore`/`.gcloudignore` 로 `.env` 제외).
+> **KIS 앱키는 Secret Manager 에 없다** — 유저별로 앱 '설정'에서 등록해 **암호화 DB 저장**하고(사용 시 복호화),
+> 미등록 유저는 **`__shared__` 암호화 행**(1회 시드)을 공유 fallback 으로 쓴다. 상세는 아래 "KIS 자격증명 마이그레이션".
+> **안전**: 시크릿 생성·IAM 부여는 사용자가 직접 실행. `.env`·시크릿 값·복호화 KIS 자격증명은 이미지·로그·응답·업로드에 미포함.
+
+## KIS 자격증명 마이그레이션 (공유키 제거 → 유저별 암호화 DB)
+
+KIS 앱키를 전 유저 공용(Secret Manager)에서 **유저별 암호화 DB 저장**으로 옮겼다. 우선순위:
+**본인 등록키(DB `scope_key=str(user.id)`) → 공유(`__shared__` DB 행) → env(`.env`, 로컬 개발)**.
+암호화는 Fernet(`infra/encryption.py`), 마스터키 `KIS_ENC_KEY`. 토큰 캐시는 app_key 해시로 격리(유저 키 상호 무간섭).
+
+**프로덕션 전환(1회, 완료됨):**
+1. `KIS_ENC_KEY`(Fernet) 생성 → Secret Manager 등록(사용자).
+2. **전환 배포**: `KIS_ENC_KEY` + 기존 `KIS_APP_KEY/SECRET/ACCOUNT_NO/ACNT_NO` 유지 → startup `seed_shared_kis_from_env()`
+   가 env → `__shared__` 암호화 행을 Cloud SQL 에 1회 시드(idempotent).
+3. **KIS 앱키 시크릿 제거 + 재배포**: `gcloud secrets delete KIS_APP_KEY KIS_APP_SECRET KIS_ACCOUNT_NO KIS_ACNT_NO`,
+   `--set-secrets` 에서도 제거(아래 배포 명령이 최종형). env 에 KIS 앱키 없어도 `__shared__` 행이 공유 fallback.
+
+유저 등록 API: `POST/GET/DELETE /api/me/kis-credentials`(인증). POST 는 실제 KIS 토큰 발급으로 검증 후 암호화 저장.
+GET 은 마스킹 상태만. 프론트 '설정' 탭(`KisSettingsPanel`).
 
 ## 배포 / 재배포
 
@@ -60,7 +78,7 @@ gcloud run deploy dk-invest-agent \
   --allow-unauthenticated \
   --add-cloudsql-instances=dk-invest-agent-2607122107:asia-northeast3:dk-invest-db \
   --set-env-vars=KIS_ENV=real,KIS_ACNT_PRDT_CD_STK=01 \
-  --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest,KIS_APP_KEY=KIS_APP_KEY:latest,KIS_APP_SECRET=KIS_APP_SECRET:latest,KIS_ACCOUNT_NO=KIS_ACCOUNT_NO:latest,KIS_ACNT_NO=KIS_ACNT_NO:latest,FRED_API_KEY=FRED_API_KEY:latest,JWT_SECRET=JWT_SECRET:latest,DATABASE_URL=DATABASE_URL:latest \
+  --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest,FRED_API_KEY=FRED_API_KEY:latest,JWT_SECRET=JWT_SECRET:latest,KIS_ENC_KEY=KIS_ENC_KEY:latest,DATABASE_URL=DATABASE_URL:latest \
   --memory=1Gi --cpu=1 --timeout=300 --min-instances=0 --max-instances=3 --quiet
 ```
 

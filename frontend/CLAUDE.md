@@ -20,7 +20,8 @@
 - **`App.jsx` = 2컬럼 그리드**(`.app__main`: 좌 `ChatPanel` 상시 / 우 `RightPanel`). 반응형 ~1024px 이하 세로 스택. 상단 세로 스택(상시 지표 그리드)·**모달(`Modal.jsx` 삭제)** 폐기 — 컴포넌트를 우측 패널에 **인라인** 렌더한다.
 - **톱바 리브랜딩(Refined Pro)**: DK 모노그램 인라인 SVG(`DkMonogram`, 색은 `var(--c-navy)/--c-emph/--c-white`) + 파랑 워드마크 "디케이 투자에이전트"(`--c-brand`) + **상태 칩**(현재 국면·권장 현금비중·VIX 패닉) — App이 `fetchMacroRegime`를 **자체 조회**(환각 차단)해 그리며, 조회 실패해도 칩만 생략(전체 에러 화면 금지). 목표가 알림 배너는 주황 풀폭(+[관심종목 보기]).
 - **우측 패널은 두 경로로 구동**: (a) 챗봇 tool_call(`onShowPanel(routePopups(popups)[0])`), (b) `RightPanel` 상단 **세그먼트 탭**(관심종목·시장 국면·내 잔고 — 활성=네이비 채움) + 우측 **인라인 종목검색**(`isValidTicker` 폼, 형식 불량 시 회색 안내). kind 전환 시 **450ms 스켈레톤**(초기 마운트 제외). 상태는 `App`의 `rightPanelSpec`(`{kind,args,valid}`) 단일 소유, **랜딩=관심종목**(`{kind:'watchlist'}`).
-- **`RightPanel.jsx`의 `RightPanelBody` switch = 렌더 SSOT**: `stock_report→PopupStockReport`·`macro_dashboard→RegimeGauge`·`watchlist→PopupWatchlist`·`manage_watchlist→ManageWatchlistConfirm`·**`balance→BalancePanel`**. 팝업 컴포넌트는 전부 모달 비종속·자체조회형이라 **재작성 0**으로 인라인 재사용.
+- **`RightPanel.jsx`의 `RightPanelBody` switch = 렌더 SSOT**: `stock_report→PopupStockReport`·`macro_dashboard→RegimeGauge`·`watchlist→PopupWatchlist`·`manage_watchlist→ManageWatchlistConfirm`·**`balance→BalancePanel`**·**`settings→KisSettingsPanel`**. 팝업 컴포넌트는 전부 모달 비종속·자체조회형이라 **재작성 0**으로 인라인 재사용.
+- **'설정' 탭(`KisSettingsPanel`)** — 유저별 KIS API 키 등록/상태/삭제. **탭 전용**(챗 `POPUP_KIND` 아님 — popupRouter 무관). 시크릿은 서버로만(응답에 원문 없음), 상태는 마스킹만(`app_key_masked`·`account_masked`·source). 저장=주황 `--c-emph` CTA(서버가 실제 KIS 토큰 발급으로 검증 후 저장, 실패 시 파랑 배너). `api.js` `set/fetch/deleteKisCredentials`. **KIS 데이터 fetch(`fetchBalance`·`fetchStockBundle`·`generateStockReport`·`fetchReportHistory`)는 authFetch로 전환** — 로그인 시 토큰 전송 → 백엔드가 본인 KIS 키 사용(미로그인은 공유 fallback).
 - **목표가 능동 알림은 `App` 레벨로 이관**: WatchlistView가 이제 온디맨드(상시 마운트 아님)라, 60s 폴링을 `App`이 직접(`fetchWatchlist`+`detectTargetAlerts`) 수행 → 패널 내용과 **무관하게** 앱레벨 배너+`Notification` 동작.
 
 ## 챗봇 (W09)
