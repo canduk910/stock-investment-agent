@@ -24,7 +24,7 @@ class _EmptyHistoryStore:
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setattr(wl, "_get_store", lambda: InMemoryWatchlistStore())
-    monkeypatch.setattr(wl, "_build_kis_client", lambda: object())
+    monkeypatch.setattr(wl, "_resolve_client", lambda *a, **k: object())
     monkeypatch.setattr(wl, "_build_judgement", lambda: None)  # 국면 degraded(시세 없어도 200)
     monkeypatch.setattr(report_mod, "_get_store", lambda: _EmptyHistoryStore())
     return TestClient(main.app)

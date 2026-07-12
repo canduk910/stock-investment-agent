@@ -17,7 +17,7 @@ def _app() -> FastAPI:
 
 def test_data_kind_pins_snapshot(monkeypatch):
     SESSIONS.clear()
-    monkeypatch.setattr(vc, "build_view_context", lambda kind, args: "기준시각: T\n순자산 1,900만원")
+    monkeypatch.setattr(vc, "build_view_context", lambda kind, args, **kw: "기준시각: T\n순자산 1,900만원")
     r = TestClient(_app()).post(
         "/api/chat/context", json={"session_id": "s1", "kind": "balance", "args": {}}
     )
@@ -32,7 +32,7 @@ def test_stock_kind_forwards_args(monkeypatch):
     SESSIONS.clear()
     seen = {}
 
-    def _fake(kind, args):
+    def _fake(kind, args, **kw):
         seen["kind"] = kind
         seen["args"] = args
         return "기준시각: T\n종목"
@@ -48,7 +48,7 @@ def test_stock_kind_forwards_args(monkeypatch):
 def test_none_result_clears(monkeypatch):
     SESSIONS.clear()
     get_session("s3").set_view_context("이전 스냅샷")
-    monkeypatch.setattr(vc, "build_view_context", lambda kind, args: None)  # 조회 불가
+    monkeypatch.setattr(vc, "build_view_context", lambda kind, args, **kw: None)  # 조회 불가
     r = TestClient(_app()).post(
         "/api/chat/context", json={"session_id": "s3", "kind": "stock_report", "args": {"ticker": "bad"}}
     )
@@ -77,7 +77,7 @@ def test_missing_kind_clears():
 
 def test_session_isolation(monkeypatch):
     SESSIONS.clear()
-    monkeypatch.setattr(vc, "build_view_context", lambda kind, args: "기준시각: T\n잔고")
+    monkeypatch.setattr(vc, "build_view_context", lambda kind, args, **kw: "기준시각: T\n잔고")
     TestClient(_app()).post(
         "/api/chat/context", json={"session_id": "a", "kind": "balance", "args": {}}
     )

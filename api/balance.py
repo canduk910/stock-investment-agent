@@ -18,41 +18,41 @@ GET /api/balance → {
 - KIS 실패는 graceful: 항상 200, partial_failure 에 'balance', holdings/summary=None
   (한 소스 실패가 프론트 전체를 죽이지 않는다 — 번들 partial_failure 철학).
 
-api.detail 의 _build_kis_client 를 재사용(순환 회피 — detail 은 api.main 미참조).
-라우터 wiring(api.main include)은 리더 전담.
+계좌·자격증명은 **유저별**: 로그인+등록 시 본인 KIS 키/계좌, 아니면 공유 fallback(→env, 로컬).
+`api.detail.resolve_kis_client(user, db)` 가 (client, cano, prdt) 를 해석한다. 옵션 인증
+(get_current_user_optional)이라 **비로그인도 공개 조회**(공유 계좌) — 게이트 아님.
 """
 from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
 # api.detail 재사용(순환 회피 — detail 은 api.main 을 import 하지 않으므로 사이클 없음).
-from api.detail import _build_kis_client
+from api.detail import NoKisCredentials, resolve_kis_client
+from auth.deps import get_current_user_optional
+from auth.models import User
 from collectors.kis import balance as kis_balance
-from infra import config as infra_config
+from infra.db import get_db
 
 router = APIRouter()
 
 _log = logging.getLogger(__name__)
 
 
-def _load_account() -> tuple[str, str]:
-    """계좌번호(CANO)·상품코드(ACNT_PRDT_CD)를 config 에서 로드(단일 로컬 사용자).
-
-    SSOT 는 infra.config.kis_account() — 폴백·기본값 규칙은 거기 단일 출처.
-    테스트는 이 함수를 monkeypatch → 실 .env 를 타지 않는다.
-    """
-    return infra_config.kis_account()
-
-
 @router.get("/api/balance")
-def get_balance() -> dict:
-    """계좌 보유종목·요약(조회 전용). KIS 실패는 partial_failure 로 graceful(항상 200)."""
-    cano, prdt = _load_account()
-    client = _build_kis_client()
+def get_balance(
+    user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+) -> dict:
+    """계좌 보유종목·요약(조회 전용). 자격증명 없음·KIS 실패는 graceful(항상 200)."""
     try:
-        result = kis_balance.inquire_balance(client, cano, prdt)
+        resolved = resolve_kis_client(user, db)  # 본인 등록키 → 공유 → env
+    except NoKisCredentials:
+        return {"holdings": None, "summary": None, "partial_failure": ["balance"]}
+    try:
+        result = kis_balance.inquire_balance(resolved.client, resolved.cano, resolved.prdt)
     except Exception:
         # KIS 조회 실패(오류 표면화 KisApiError·네트워크 등)를 삼키지 않고 partial_failure
         # 로 기록한다(§5 금지: except pass). 프론트는 이 리스트로 "일시 조회 불가"를 표시.

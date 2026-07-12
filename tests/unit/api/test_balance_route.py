@@ -62,21 +62,31 @@ def balance_body(load_fixture):
 
 
 def _make_client(monkeypatch, *, body=None, fail=False):
-    """balance 라우트가 참조하는 _build_kis_client 를 stub 으로 교체.
+    """balance 라우트가 참조하는 resolve_kis_client 를 stub 으로 교체.
 
-    balance.py 는 api.detail._build_kis_client 를 import 하므로, api.balance 모듈이
-    바인딩한 이름을 patch 해야 한다(테스트는 실 KIS·config·토큰을 호출하지 않는다).
+    유저별 자격증명 해석(본인/공유/env)은 여기서 우회 — StubClient + 고정 계좌를 담은
+    ResolvedKis 를 돌려준다(테스트는 실 KIS·config·토큰·DB 를 타지 않는다).
     """
+    from api.detail import ResolvedKis
+
     stub = StubClient(body=body, fail=fail)
-    monkeypatch.setattr(balance, "_build_kis_client", lambda: stub)
-    # config 계정 로드도 실 .env·KisConfig.load 를 타지 않도록 고정.
-    monkeypatch.setattr(balance, "_load_account", lambda: ("00000000", "01"))
+    monkeypatch.setattr(
+        balance, "resolve_kis_client",
+        lambda user, db: ResolvedKis(stub, "00000000", "01", "shared"),
+    )
     return stub
 
 
+def _no_db():
+    yield None  # resolve_kis_client 를 patch 했으므로 실제 DB Session 불요
+
+
 def _app():
+    from infra.db import get_db
+
     app = FastAPI()
     app.include_router(balance.router)
+    app.dependency_overrides[get_db] = _no_db  # 옵션인증·해석 모두 DB 미사용(patch)
     return TestClient(app)
 
 

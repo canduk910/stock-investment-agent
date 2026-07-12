@@ -15,18 +15,22 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
 # api.detail 재사용(순수 조회·엔진 조립 — 사이클 없음). 모듈 네임스페이스에 바인딩해
 # 테스트가 report_mod._build_judgement 등을 monkeypatch 할 수 있게 한다.
 from api.deps import assert_valid_ticker
 from api.detail import (
     _build_judgement,
-    _build_kis_client,
+    _resolve_client,
     collect_stock_bundle,
 )
+from auth.deps import get_current_user_optional
+from auth.models import User
 from chat.report import generate_stock_report
 from chat.report_store import JsonFileReportStore
+from infra.db import get_db
 
 router = APIRouter()
 
@@ -60,15 +64,22 @@ def _same_as_latest(store, ticker: str, opinion, regime) -> bool:
 
 
 @router.post("/api/detail/{ticker}/report")
-def create_report(ticker: str) -> dict:
-    """리포트 생성·검증·저장·반환(§6.5b). 국면 수집 실패는 regime_at_creation=None(항상 200)."""
+def create_report(
+    ticker: str,
+    user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+) -> dict:
+    """리포트 생성·검증·저장·반환(§6.5b). 국면 수집 실패는 regime_at_creation=None(항상 200).
+
+    공개 유지(옵션 인증) — 로그인+등록 시 본인 KIS 키, 아니면 공유 fallback.
+    """
     assert_valid_ticker(ticker)  # 불량 코드가 KIS·OpenAI·저장을 트리거하기 전에 400(IMP-02)
     try:
         judgement = _build_judgement()
     except Exception:
         judgement = None  # 국면 수집 실패해도 리포트 생성은 진행(regime_at_creation=None)
 
-    client = _build_kis_client()
+    client = _resolve_client(user, db)
     bundle = collect_stock_bundle(ticker, client, judgement)
 
     result = generate_stock_report(bundle, judgement or {}, client=None)

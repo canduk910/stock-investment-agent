@@ -75,30 +75,44 @@ def _stamp(body: str) -> str:
     return f"기준시각: {_now_iso()}\n{body}"[:_MAX_CHARS]
 
 
-def build_view_context(kind: str, args: dict | None) -> str | None:
-    """현재 화면 kind → 컴팩트 스냅샷 텍스트, 또는 None(비데이터/조회불가). 절대 예외 없음."""
+def _resolve(user, db):
+    """뷰 컨텍스트용 KIS 해석(본인 등록키 → 공유 → env). ResolvedKis(client, cano, prdt, source).
+
+    **테스트 monkeypatch 경계**. user/db 없으면(챗 인라인 P2 경로) env fallback — 자격증명 없으면
+    NoKisCredentials 전파(호출측 try/except 가 "조회 불가"로 흡수).
+    """
+    from api.detail import resolve_kis_client
+
+    return resolve_kis_client(user, db)
+
+
+def build_view_context(
+    kind: str, args: dict | None, *, user=None, db=None
+) -> str | None:
+    """현재 화면 kind → 컴팩트 스냅샷 텍스트, 또는 None(비데이터/조회불가). 절대 예외 없음.
+
+    user/db 주입 시 **본인 KIS 키/계좌**로 조회(로그인 핀 경로, api/chat.py). 미주입 시 공유/env
+    fallback(챗 인라인 P2 same-turn 경로) — P1 핀이 authoritative 라 허용.
+    """
     args = args or {}
     try:
         if kind == "balance":
-            return _balance_context()
+            return _balance_context(user, db)
         if kind == "watchlist":
-            return _watchlist_context()
+            return _watchlist_context(user, db)
         if kind == "stock_report":
-            return _stock_context(args)
+            return _stock_context(args, user, db)
         return None  # 비데이터 kind
     except Exception:
         return None  # 최종 방어 — 어떤 실패도 챗/엔드포인트를 깨지 않는다
 
 
-def _balance_context() -> str:
-    from api.detail import _build_kis_client
+def _balance_context(user, db) -> str:
     from collectors.kis import balance as kis_balance
-    from infra.config import kis_account
 
     try:
-        cano, prdt = kis_account()
-        client = _build_kis_client()
-        data = kis_balance.inquire_balance(client, cano, prdt)
+        resolved = _resolve(user, db)  # 본인 계좌 → 공유 → env
+        data = kis_balance.inquire_balance(resolved.client, resolved.cano, resolved.prdt)
     except Exception:
         return _stamp("[내 잔고] 잔고 일시 조회 불가")
 
@@ -122,15 +136,14 @@ def _balance_context() -> str:
     return _stamp("\n".join(lines))
 
 
-def _watchlist_context() -> str:
-    from api.detail import _build_kis_client
+def _watchlist_context(user, db) -> str:
     from watchlist.constants import DEFAULT_USER_ID, WATCHLIST_STORE_PATH
     from watchlist.service import build_watchlist_view
     from watchlist.store import JsonFileWatchlistStore
 
     try:
         store = JsonFileWatchlistStore(WATCHLIST_STORE_PATH)
-        client = _build_kis_client()
+        client = _resolve(user, db).client
         view = build_watchlist_view(store, DEFAULT_USER_ID, client, _safe_judgement())
     except Exception:
         return _stamp("[관심종목] 관심종목 일시 조회 불가")
@@ -167,7 +180,7 @@ def _watchlist_context() -> str:
     return _stamp("\n".join(lines))
 
 
-def _stock_context(args: dict) -> str | None:
+def _stock_context(args: dict, user, db) -> str | None:
     from api.deps import assert_valid_ticker
 
     ticker = (args.get("ticker") or "").strip()
@@ -176,14 +189,13 @@ def _stock_context(args: dict) -> str | None:
     except Exception:
         return None  # 불량 ticker → 컨텍스트 없음(잘못된 조회 트리거 방지)
 
-    from api.detail import _build_kis_client
     from collectors.kis import inquire_price as ip
     from stock.summary import _pos_52w, regime_gate
 
     name = args.get("stock_name") or ticker
     lines = [f"[종목 상세 · {name}({ticker})]"]
     try:
-        client = _build_kis_client()
+        client = _resolve(user, db).client
         val = ip.inquire_price(client, ticker)
     except Exception:
         val = None

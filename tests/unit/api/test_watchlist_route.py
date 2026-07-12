@@ -43,7 +43,7 @@ def client(monkeypatch):
     """로컬 앱 + 인메모리 store + 시세/판정 경계 stub. 종목별 시세는 기본 정상."""
     store = InMemoryWatchlistStore()
     monkeypatch.setattr(wl, "_get_store", lambda db: store)  # db 무시(인메모리 격리)
-    monkeypatch.setattr(wl, "_build_kis_client", lambda: object())
+    monkeypatch.setattr(wl, "_resolve_client", lambda *a, **k: object())
     monkeypatch.setattr(wl, "_build_judgement", lambda: _judgement())
     # inquire_price 는 service 안에서 호출 → service 모듈의 것을 patch.
     monkeypatch.setattr(

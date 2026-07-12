@@ -281,7 +281,7 @@ def test_bundle_financials_failure_skips_all_meta_cache__plan_principle2(bodies,
 
 def _route_client(monkeypatch, bodies_map, judgement="ok", fail=None):
     stub = RoutingStubClient(bodies_map, fail=fail)
-    monkeypatch.setattr(detail, "_build_kis_client", lambda: stub)
+    monkeypatch.setattr(detail, "_resolve_client", lambda *a, **k: stub)
     if judgement == "raise":
         def boom():
             raise RuntimeError("FRED down")

@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 # api.detail 재사용(순환 회피 — detail 은 api.main 미참조).
 from api.deps import assert_valid_ticker
-from api.detail import _build_judgement, _build_kis_client
+from api.detail import _build_judgement, _resolve_client
 from auth.deps import get_current_user
 from auth.models import User
 from collectors.kis import stock_info
@@ -103,7 +103,7 @@ def get_watchlist(
     """enriched 워치리스트(registered 순). judgement 실패는 service 가 regime degraded 처리."""
     uid = str(user.id)
     store = _get_store(db)
-    client = _build_kis_client()
+    client = _resolve_client(user, db)  # 본인 등록키 → 공유 → env(자격증명 없으면 시세 graceful null)
     try:
         judgement = _build_judgement()
     except Exception:
@@ -136,7 +136,7 @@ def add_watchlist(
     # stock_name: 미제공 시 기존값 보존(재-resolve·불필요 KIS 호출 회피) → 없으면 라이브 해석.
     stock_name = req.stock_name or (existing.stock_name if existing else None)
     if not stock_name:
-        client = _build_kis_client()
+        client = _resolve_client(user, db)
         stock_name = _resolve_stock_name(client, req.ticker)
 
     item = WatchlistItem(

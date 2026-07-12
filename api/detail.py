@@ -24,9 +24,13 @@ from __future__ import annotations
 import datetime as dt
 from concurrent.futures import ThreadPoolExecutor
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
 from api.deps import build_judgement as _build_judgement  # 국면 판정 빌더 SSOT(IMP-06)
+from auth.deps import get_current_user_optional
+from auth.models import User
+from infra.db import get_db
 from cache.keys import stock_meta_sub_key
 from cache.local import LocalCache
 from cache.policy import cache_if_clean
@@ -284,12 +288,41 @@ def resolve_kis_client(user, db) -> ResolvedKis:
     return ResolvedKis(client, cano, prdt, "env")
 
 
+class _NullKisClient:
+    """자격증명 부재 시 자리표시자 — 모든 조회가 실패해 KIS 섹션이 graceful null 이 된다."""
+
+    env = "real"
+
+    def get(self, *args, **kwargs):  # noqa: D401
+        raise NoKisCredentials("KIS 자격증명 없음")
+
+
+def _resolve_client(user, db):
+    """시장데이터 라우트용 KIS 클라이언트 해석(본인/공유/env). 자격증명 없으면 null client.
+
+    **테스트 monkeypatch 경계** — 종목번들·리포트·워치리스트·view_context 가 이 함수로 클라이언트를
+    얻는다(각 소비 모듈이 이 이름을 바인딩). NoKisCredentials 는 null client 로 흡수 → 섹션 graceful null.
+    """
+    try:
+        return resolve_kis_client(user, db).client
+    except NoKisCredentials:
+        return _NullKisClient()
+
+
 @router.get("/api/detail/{ticker}/bundle")
-def stock_detail_bundle(ticker: str) -> dict:
-    """종목 종합리포트 번들(§6.5). 매크로 수집 실패는 regime 만 degraded, 종목은 정상."""
+def stock_detail_bundle(
+    ticker: str,
+    user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+) -> dict:
+    """종목 종합리포트 번들(§6.5). 매크로 수집 실패는 regime 만 degraded, 종목은 정상.
+
+    공개 유지(옵션 인증) — 로그인+등록 시 본인 KIS 키, 아니면 공유 fallback. 자격증명 없으면
+    KIS 섹션 graceful null(항상 200).
+    """
     try:
         judgement = _build_judgement()
     except Exception:
         judgement = None  # regime_gate=None + partial_failure 에 'regime'(collect_stock_bundle 내부)
-    client = _build_kis_client()
+    client = _resolve_client(user, db)
     return collect_stock_bundle(ticker, client, judgement, cache=_META_CACHE)

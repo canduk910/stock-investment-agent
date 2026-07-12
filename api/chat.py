@@ -29,7 +29,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from auth.deps import get_current_user
+from auth.deps import get_current_user, get_current_user_optional
 from auth.models import User
 from chat.chat import chat, chat_stream
 from chat.history_store import HistoryStore
@@ -142,7 +142,11 @@ def post_report_context(body: ReportContextRequest) -> dict:
 
 
 @router.post("/api/chat/context")
-def post_view_context(body: ViewContextRequest) -> dict:
+def post_view_context(
+    body: ViewContextRequest,
+    user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+) -> dict:
     """사용자가 현재 보고 있는 화면(잔고·관심종목·종목상세)을 세션 핀 컨텍스트로 고정(또는 해제).
 
     body {session_id, kind, args}. 데이터 보유 kind 만 서버가 재조회해 스냅샷을 세팅한다
@@ -157,7 +161,7 @@ def post_view_context(body: ViewContextRequest) -> dict:
         session.clear_view_context()  # 비데이터 화면(국면·관리)으로 전환 → 이전 스냅샷 제거
         return {"ok": True, "set": False}
 
-    text = build_view_context(body.kind, body.args or {})
+    text = build_view_context(body.kind, body.args or {}, user=user, db=db)
     if text is None:  # 조회 불가·불량 인자 → 해제(graceful)
         session.clear_view_context()
         return {"ok": True, "set": False}

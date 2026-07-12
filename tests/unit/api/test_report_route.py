@@ -21,7 +21,7 @@ import api.report as report_mod
 @pytest.fixture
 def client(monkeypatch):
     # 경계 monkeypatch: KIS 클라이언트·judgement·bundle 조립은 mock(라이브 미호출).
-    monkeypatch.setattr(report_mod, "_build_kis_client", lambda: object())
+    monkeypatch.setattr(report_mod, "_resolve_client", lambda *a, **k: object())
     monkeypatch.setattr(
         report_mod, "_build_judgement", lambda: {"regime": "확장", "recommended_cash_ratio": 60}
     )

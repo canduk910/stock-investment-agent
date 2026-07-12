@@ -1,19 +1,27 @@
-"""현재 화면 스냅샷 빌더 — kind별 포맷·top-N·기준시각·graceful·비데이터 None(서비스 boundary mock)."""
+"""현재 화면 스냅샷 빌더 — kind별 포맷·top-N·기준시각·graceful·비데이터 None(서비스 boundary mock).
+
+KIS 해석은 `vc._resolve`(본인/공유/env → ResolvedKis) 단일 경계로 mock — 실 KIS/DB 미호출.
+"""
 from __future__ import annotations
 
 import chat.view_context as vc
 
 
+def _stub_resolve(monkeypatch, *, cano="C", prdt="01"):
+    """vc._resolve 를 stub ResolvedKis(빈 클라이언트 + 고정 계좌)로 교체."""
+    from api.detail import ResolvedKis
+
+    monkeypatch.setattr(vc, "_resolve", lambda user, db: ResolvedKis(object(), cano, prdt, "shared"))
+
+
 def _no_kis(monkeypatch):
-    # 클라이언트 조립·판정은 stub(테스트는 포맷 로직만 검증, 실제 KIS/FRED 미호출).
-    monkeypatch.setattr("api.detail._build_kis_client", lambda: object())
+    _stub_resolve(monkeypatch)
     monkeypatch.setattr(vc, "_safe_judgement", lambda: None)
 
 
 # ── balance ──
 def test_balance_context(monkeypatch):
     _no_kis(monkeypatch)
-    monkeypatch.setattr("infra.config.kis_account", lambda: ("C", "01"))
     monkeypatch.setattr(
         "collectors.kis.balance.inquire_balance",
         lambda c, cano, prdt: {
@@ -33,7 +41,6 @@ def test_balance_context(monkeypatch):
 
 def test_balance_top_n_and_truncation(monkeypatch):
     _no_kis(monkeypatch)
-    monkeypatch.setattr("infra.config.kis_account", lambda: ("C", "01"))
     holdings = [
         {"ticker": f"{i:06d}", "name": f"종목{i}", "qty": i + 1,
          "eval_amount": (i + 1) * 1000, "pnl_amount": i, "pnl_pct": 1.0}
@@ -49,12 +56,10 @@ def test_balance_top_n_and_truncation(monkeypatch):
 
 
 def test_balance_kis_fail_graceful(monkeypatch):
-    monkeypatch.setattr("infra.config.kis_account", lambda: ("C", "01"))
-
-    def _boom():
+    def _boom(user, db):  # 자격증명 해석/조회 실패 시뮬
         raise Exception("kis down")
 
-    monkeypatch.setattr("api.detail._build_kis_client", _boom)
+    monkeypatch.setattr(vc, "_resolve", _boom)
     out = vc.build_view_context("balance", {})
     assert out is not None and "조회 불가" in out  # 크래시 아님, 안내 노트
 
@@ -91,7 +96,7 @@ def test_watchlist_empty_note(monkeypatch):
 
 # ── stock_report ──
 def test_stock_context(monkeypatch):
-    monkeypatch.setattr("api.detail._build_kis_client", lambda: object())
+    _stub_resolve(monkeypatch)
     monkeypatch.setattr(
         vc, "_safe_judgement",
         lambda: {"regime": "확장", "params": {"per_max": 25, "pbr_max": 3, "single_cap": 20}},
@@ -121,8 +126,8 @@ def test_stock_bad_ticker_none():
 
 
 def test_stock_kis_fail_graceful(monkeypatch):
+    _stub_resolve(monkeypatch)
     monkeypatch.setattr(vc, "_safe_judgement", lambda: None)
-    monkeypatch.setattr("api.detail._build_kis_client", lambda: object())
 
     def _boom(c, t):
         raise Exception("kis down")
