@@ -69,6 +69,7 @@ def import_models() -> None:
     Phase 마다 신규 모델을 여기에 추가한다(단일 등록 지점).
     """
     from auth import models as _auth_models  # noqa: F401  (User)
+    from auth import kis_models as _kis_models  # noqa: F401  (KisCredentialRow, 유저별 암호화)
     from watchlist import db_models as _wl_models  # noqa: F401  (WatchlistItemRow)
     from chat import history_models as _hist_models  # noqa: F401  (Conversation, ChatMessage)
     from chat import report_models as _report_models  # noqa: F401  (AnalystReportRow, 공동)
