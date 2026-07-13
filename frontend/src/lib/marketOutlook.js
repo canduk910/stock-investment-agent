@@ -38,3 +38,23 @@ export function threeLineSummary(summary) {
   if (Array.isArray(key) && key.length > 0) return key.slice(0, 3)
   return []
 }
+
+// 저장된 최신 시황이 오늘(today, "YY.MM.DD")이 아니면 stale → 자동 최신화 트리거 판정(순수).
+// reports 는 최신순(list_reports desc). 비었거나 최신 항목 date 결측/불일치면 stale(수집 필요).
+export function isOutlookStale(reports, today) {
+  if (!Array.isArray(reports) || reports.length === 0) return true
+  const latest = reports[0]?.date
+  return !latest || latest !== today
+}
+
+// KST 기준 오늘 "YY.MM.DD"(네이버 시황 date 형식과 일치). 브라우저 TZ 무관하게 서울 날짜 사용.
+export function todayStampKST() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: '2-digit',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const get = (t) => parts.find((p) => p.type === t)?.value ?? ''
+  return `${get('year')}.${get('month')}.${get('day')}`
+}

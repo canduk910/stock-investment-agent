@@ -11,6 +11,22 @@ vi.mock('../api.js', () => ({
   streamFetchMarketOutlook: vi.fn(),
 }))
 import { fetchMarketOutlook, fetchNaverMarketOutlook, streamFetchMarketOutlook } from '../api.js'
+import { todayStampKST } from '../lib/marketOutlook.js' // 실제 헬퍼(모킹 안 함)
+
+// jsdom 환경에 localStorage 전역이 없어(auth.test.js 선례) 인메모리로 스텁 — 자동수집 가드 검증용.
+const _ls = {}
+vi.stubGlobal('localStorage', {
+  getItem: (k) => (k in _ls ? _ls[k] : null),
+  setItem: (k, v) => {
+    _ls[k] = String(v)
+  },
+  removeItem: (k) => {
+    delete _ls[k]
+  },
+  clear: () => {
+    for (const k of Object.keys(_ls)) delete _ls[k]
+  },
+})
 
 const REPORT = {
   report_id: '36722',
@@ -43,6 +59,10 @@ beforeEach(() => {
   fetchMarketOutlook.mockReset()
   fetchNaverMarketOutlook.mockReset()
   streamFetchMarketOutlook.mockReset()
+  streamFetchMarketOutlook.mockResolvedValue(undefined) // 자동수집이 우발적으로 fire해도 안전
+  // 기존 테스트는 자동 최신화를 억제(가드=오늘) — 자동수집 테스트만 가드를 해제/조작한다.
+  localStorage.clear()
+  localStorage.setItem('mo_autofetch_date', todayStampKST())
 })
 
 describe('MarketOutlookSection 렌더(항목4: 일별·3줄·오버레이)', () => {
@@ -127,5 +147,37 @@ describe('MarketOutlookSection 렌더(항목4: 일별·3줄·오버레이)', () 
     await waitFor(() => expect(streamFetchMarketOutlook).toHaveBeenCalled())
     await waitFor(() => expect(screen.getByText(/새 요약 1건/)).toBeInTheDocument())
     await waitFor(() => expect(screen.getByText('KB증권')).toBeInTheDocument())
+  })
+})
+
+describe('시황 자동 최신화 — 패널 로드 시 stale이면 자동 수집', () => {
+  it('저장 최신 시황이 오래된 날짜 → 마운트 시 자동 수집 + 안내', async () => {
+    localStorage.clear() // 가드 해제 → 자동수집 허용
+    fetchMarketOutlook.mockResolvedValue({ reports: [{ ...REPORT_OLD, date: '20.01.01' }] })
+    streamFetchMarketOutlook.mockImplementation(async ({ onEvent }) => {
+      onEvent({ type: 'done', fetched: 0, new: 0, skipped: 0, failed: 0 })
+    })
+    render(<MarketOutlookSection />)
+    // 클릭 없이(마운트만으로) 자동 수집 트리거.
+    await waitFor(() => expect(streamFetchMarketOutlook).toHaveBeenCalled())
+    // 가드가 오늘로 세팅됨(중복 방지).
+    expect(localStorage.getItem('mo_autofetch_date')).toBe(todayStampKST())
+  })
+
+  it('저장 최신 시황이 오늘 → 자동 수집 안 함', async () => {
+    localStorage.clear()
+    const today = todayStampKST()
+    fetchMarketOutlook.mockResolvedValue({ reports: [{ ...REPORT, date: today }] })
+    render(<MarketOutlookSection />)
+    await waitFor(() => expect(screen.getByText('KB증권')).toBeInTheDocument())
+    expect(streamFetchMarketOutlook).not.toHaveBeenCalled() // 오늘자라 자동수집 불필요
+  })
+
+  it('오늘 이미 자동수집함(가드) → stale이어도 자동 수집 안 함', async () => {
+    localStorage.setItem('mo_autofetch_date', todayStampKST()) // 가드 = 오늘
+    fetchMarketOutlook.mockResolvedValue({ reports: [{ ...REPORT_OLD, date: '20.01.01' }] })
+    render(<MarketOutlookSection />)
+    await waitFor(() => expect(screen.getByText('삼성증권')).toBeInTheDocument())
+    expect(streamFetchMarketOutlook).not.toHaveBeenCalled() // 가드로 중복 수집 방지
   })
 })

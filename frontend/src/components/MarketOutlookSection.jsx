@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchMarketOutlook, fetchNaverMarketOutlook, streamFetchMarketOutlook } from '../api.js'
-import { groupReportsByDate, threeLineSummary } from '../lib/marketOutlook.js'
+import {
+  groupReportsByDate,
+  threeLineSummary,
+  isOutlookStale,
+  todayStampKST,
+} from '../lib/marketOutlook.js'
 import FetchProgress, { applyProgressEvent } from './FetchProgress.jsx'
+
+// 자동 최신화 중복 방지 가드 — 날짜별 최대 1회 자동수집(패널 반복 오픈·주말 무자료 시 폭주 방지).
+const AUTO_FETCH_KEY = 'mo_autofetch_date'
 
 // 시장 국면 페이지(RegimeGauge 아래) — 증권사 '시황(market outlook) 리포트' 요약.
 // 실데이터는 프론트가 fetchMarketOutlook 로 직접 조회한다(환각 차단). 각 요약은 **해당 증권사 시황
@@ -145,7 +153,9 @@ export default function MarketOutlookSection() {
   const [fetchMsg, setFetchMsg] = useState(null)
   const [progress, setProgress] = useState(null) // SSE 진행 체크리스트
   const [selected, setSelected] = useState(null) // 상세 오버레이 대상 report(null=닫힘)
+  const [autoNote, setAutoNote] = useState(null) // 자동 최신화 안내(수동과 구분)
   const triggerRef = useRef(null) // 오버레이 닫을 때 포커스 복원 대상
+  const autoTriedRef = useRef(false) // 마운트당 자동수집 판정 1회(StrictMode 이중마운트 방지)
 
   function openDetail(report) {
     triggerRef.current = document.activeElement // 트리거(카드) 기억
@@ -162,17 +172,41 @@ export default function MarketOutlookSection() {
     setError(null)
     try {
       const data = await fetchMarketOutlook()
-      setReports(data.reports ?? [])
+      const list = data.reports ?? []
+      setReports(list)
+      return list
     } catch (e) {
       setError(e.message)
       setReports(null)
+      return []
     } finally {
       setLoading(false)
     }
   }
 
+  // 저장된 최신 시황이 오늘(KST)이 아니면 자동으로 최신 수집(기존 SSE). 날짜별 1회 가드로 폭주 방지.
+  function maybeAutoFetch(list) {
+    const today = todayStampKST()
+    if (!isOutlookStale(list, today)) return // 이미 오늘자 최신 → 자동수집 불필요
+    try {
+      if (localStorage.getItem(AUTO_FETCH_KEY) === today) return // 오늘 이미 자동수집 시도함
+      localStorage.setItem(AUTO_FETCH_KEY, today)
+    } catch {
+      /* localStorage 불가 환경 — 그래도 마운트당 1회는 진행(autoTriedRef) */
+    }
+    setAutoNote('오늘 최신 시황을 자동으로 확인하는 중…')
+    fetchNaver()
+  }
+
   useEffect(() => {
-    load()
+    ;(async () => {
+      const list = await load()
+      if (!autoTriedRef.current) {
+        autoTriedRef.current = true
+        maybeAutoFetch(list)
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // 네이버 최신 시황 수집을 **SSE 진행 스트림**으로 — 목록·각 리포트 처리를 실시간 표시. 끊김은 폴백.
@@ -207,6 +241,7 @@ export default function MarketOutlookSection() {
     setProgress(null)
     await load()
     setFetching(false)
+    setAutoNote(null) // 자동 최신화 안내 해제(완료 메시지 fetchMsg 로 대체)
   }
 
   const groups = groupReportsByDate(reports ?? [])
@@ -219,6 +254,12 @@ export default function MarketOutlookSection() {
           {fetching ? '가져오는 중…' : '네이버 최신 시황 가져오기'}
         </button>
       </div>
+
+      {autoNote ? (
+        <p className="analyst__fetchmsg" role="status">
+          {autoNote}
+        </p>
+      ) : null}
 
       {fetching ? <FetchProgress progress={progress} /> : null}
 
