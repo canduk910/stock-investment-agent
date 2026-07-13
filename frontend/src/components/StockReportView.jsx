@@ -3,6 +3,7 @@ import StatCard from './StatCard.jsx'
 import FinancialTrendTable from './FinancialTrendTable.jsx'
 import AiReportPanel from './AiReportPanel.jsx'
 import AnalystReportsSection from './AnalystReportsSection.jsx'
+import WatchlistStar from './WatchlistStar.jsx'
 import { sectionFailed, isValuationReady } from '../lib/reportLogic.js'
 
 // ── 표시 포맷 헬퍼(순수) — 값·판정은 백엔드 summary 가 확정, 여기선 표시만. 결측은 '—'. ──
@@ -77,9 +78,13 @@ export default function StockReportView({ bundle, sessionId, onConsult }) {
       {/* ── 헤더: 종목명·업종 + 현재가·등락률(파랑/회색) ── */}
       <header className="report__head">
         <div className="report__id">
-          <h2 className="report__name">
-            {basic?.name ?? '종목'} <span className="report__ticker">{ticker}</span>
-          </h2>
+          <div className="report__name-row">
+            <h2 className="report__name">
+              {basic?.name ?? '종목'} <span className="report__ticker">{ticker}</span>
+            </h2>
+            {/* 관심종목 별 토글(항목7) — 위젯이 자체 멤버십 조회·add/remove(환각 차단). ★=등록완료 식별. */}
+            <WatchlistStar ticker={ticker} stockName={basic?.name} />
+          </div>
           <p className="report__sector">
             {basic?.sector ? basic.sector : failed(bundle, 'basic') ? '종목 정보 일시 조회 불가' : ''}
           </p>

@@ -57,6 +57,7 @@
 - **정렬은 순수 로직**(`lib/watchlistLogic.js`: `sortItems`·`distanceToTarget`·`classifyTargetStatus`·`detectTargetAlerts`) — 드롭다운 재정렬 시 재조회 없음. `SORT_KEYS`는 백엔드·`chat/tools.py` enum과 **SSOT 일치**. `classifyTargetStatus`는 **매수(진입가) 관점**(current≤target=도달)으로 백엔드 `_target_status`와 동일 — sell 관점으로 뒤집지 말 것.
 - **능동 목표가 알림은 `App.jsx` 앱 레벨**: `far→near/reached` **전이 시에만** 주황 배너 + 브라우저 `Notification`(권한 최초 1회). 60s `setInterval` refresh(언마운트 clear). 알림은 "안내"만(주문 자동실행 금지). 목표가 도달/근접·진입 검토가능 = **주황(`--c-emph`)**, 빨강 금지.
 - **[P2] `AiReportPanel`**: "AI 리포트 생성"→`POST /api/detail/{ticker}/report`→구조화 6필드 렌더(종합의견 배지 긍정적=파랑/중립=회색/**신중=주황**, 투자포인트·리스크요인·국면정합성·면책 상시). `validation_failed`면 정량요약 폴백 + "AI 서술 생성 실패" 안내. `lib/reportFormat.js::opinionTone`(순수)이 종합의견→토큰 매핑.
+- **관심종목 별 토글(항목7) — `WatchlistStar.jsx`**: `StockReportView` 헤더(종목명 옆 `.report__name-row`)에 배치. **캡슐화 위젯**이 자체 `fetchWatchlistMembership(ticker)`(환각 차단)로 ★(등록완료)/☆(미등록) 표시 → 클릭 토글: 미등록→`addWatchlist({ticker,stockName})`·등록→`removeWatchlist(ticker)`. **등록완료 식별 = 주황 소프트 채움 ★**(`--c-emph`, 강조/확인 — 가격방향색 아님), 미등록 ☆=회색. `aria-pressed`·`aria-label`·busy disabled. **사용자 명시적 클릭만**(자동 아님), 409 상한은 `addErrorMessage`로 회색 안내(무한 스피너 없음), 불량 ticker 는 렌더 안 함(`isValidTicker` SSOT). 백엔드 변경 0(기존 워치리스트 API 재사용). 레거시 `StockReport.jsx`(죽은 코드·미마운트)는 손대지 않음.
 
 ## 유저베이스 — 로그인 게이트·대화기록·시황 (Phase 1~5)
 - **인증 게이트**: `App`이 마운트 시 `auth.fetchMe`로 로그인 확인 — 비로그인은 `LoginScreen`(전체 게이트), 로그인 시 톱바에 이메일+로그아웃. `auth.js`: 토큰 localStorage·`authFetch`(Bearer 주입)·login/signup/me/logout. **유저별 호출(관심종목·챗·대화)은 authFetch**로.
