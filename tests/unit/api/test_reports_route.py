@@ -178,3 +178,49 @@ def test_analyst_reports_lists_for_ticker(monkeypatch):
 def test_analyst_reports_rejects_bad_ticker():
     r = TestClient(_app()).get("/api/detail/notaticker/analyst-reports")
     assert r.status_code == 400  # assert_valid_ticker
+
+
+# ── 최근 3개 종합 10줄요약(항목5) — POST /api/detail/{ticker}/analyst-reports/summary ──
+def test_analyst_summary_happy_path(monkeypatch):
+    calls = {}
+
+    def _fake(ticker):
+        calls["ticker"] = ticker
+        return {
+            "summary": {"종목": "GS건설", "의견분포": "매수 2·중립 1", "목표주가범위": "5만원~5.5만원",
+                        "종합요약": ["실적 개선", "수주 회복"], "면책고지": "리포트 종합·자문 아님."},
+            "validation_failed": False, "report_count": 2,
+        }
+
+    monkeypatch.setattr(reports.analyst_combined, "summarize_recent_reports", _fake)
+    r = TestClient(_app()).post("/api/detail/006360/analyst-reports/summary")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ticker"] == "006360" and calls["ticker"] == "006360"
+    assert body["validation_failed"] is False and body["report_count"] == 2
+    assert body["summary"]["의견분포"] == "매수 2·중립 1"
+
+
+def test_analyst_summary_no_reports_graceful(monkeypatch):
+    # 저장 리포트 0개 → 항상 200 + validation_failed(안내).
+    monkeypatch.setattr(
+        reports.analyst_combined, "summarize_recent_reports",
+        lambda ticker: {"summary": None, "validation_failed": True, "report_count": 0, "message": "리포트 없음"},
+    )
+    r = TestClient(_app()).post("/api/detail/006360/analyst-reports/summary")
+    assert r.status_code == 200
+    assert r.json()["validation_failed"] is True and r.json()["report_count"] == 0
+
+
+def test_analyst_summary_graceful_on_error(monkeypatch):
+    def _boom(ticker):
+        raise Exception("openai down")
+
+    monkeypatch.setattr(reports.analyst_combined, "summarize_recent_reports", _boom)
+    r = TestClient(_app()).post("/api/detail/006360/analyst-reports/summary")
+    assert r.status_code == 200 and r.json()["validation_failed"] is True  # 크래시 아님
+
+
+def test_analyst_summary_rejects_bad_ticker():
+    r = TestClient(_app()).post("/api/detail/notaticker/analyst-reports/summary")
+    assert r.status_code == 400  # assert_valid_ticker

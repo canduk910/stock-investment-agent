@@ -12,7 +12,7 @@ from fastapi import APIRouter
 
 from api._sse import sse_response
 from api.deps import assert_valid_ticker
-from chat import analyst_service
+from chat import analyst_combined, analyst_service
 from chat.analyst_store import default_store
 from rag import store
 
@@ -70,3 +70,21 @@ def analyst_reports(ticker: str) -> dict:
     """종목별 저장된 애널리스트 리포트 요약 리스트(최신순). 없으면 reports=[]."""
     assert_valid_ticker(ticker)  # 불량 코드 400(공용 SSOT)
     return {"ticker": ticker, "reports": default_store().list_reports(ticker)}
+
+
+@router.post("/api/detail/{ticker}/analyst-reports/summary")
+def analyst_reports_summary(ticker: str) -> dict:
+    """이 종목 **최근 3개** 애널리스트 리포트를 종합해 10줄로 요약(항목5, 온디맨드).
+
+    저장된 per-report 요약만으로 종합(PDF 재다운로드 없음, 0 네이버/KIS). 리포트 0개·검증
+    실패는 graceful(항상 200 + validation_failed). 종합은 '여러 리포트 인용'(판정 아님)·면책.
+    """
+    assert_valid_ticker(ticker)  # 불량 코드 400(공용 SSOT)
+    try:
+        result = analyst_combined.summarize_recent_reports(ticker)
+    except Exception as e:  # LLM/조회 실패 — 크래시 대신 안내
+        return {
+            "ticker": ticker, "summary": None, "validation_failed": True,
+            "report_count": 0, "error": str(e)[:200],
+        }
+    return {"ticker": ticker, **result}

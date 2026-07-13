@@ -7,12 +7,14 @@ import AnalystReportsSection from './AnalystReportsSection.jsx'
 
 vi.mock('../api.js', () => ({
   fetchAnalystReports: vi.fn(),
+  fetchAnalystReportsSummary: vi.fn(),
   fetchNaverStockReports: vi.fn(),
   streamFetchStockReports: vi.fn(),
   setReportContext: vi.fn(),
 }))
 import {
   fetchAnalystReports,
+  fetchAnalystReportsSummary,
   fetchNaverStockReports,
   streamFetchStockReports,
   setReportContext,
@@ -34,6 +36,7 @@ const REPORT = {
 
 beforeEach(() => {
   fetchAnalystReports.mockReset()
+  fetchAnalystReportsSummary.mockReset()
   fetchNaverStockReports.mockReset()
   streamFetchStockReports.mockReset()
   setReportContext.mockReset()
@@ -116,5 +119,45 @@ describe('AnalystReportsSection 렌더', () => {
     render(<AnalystReportsSection ticker="006360" sessionId={null} onConsult={() => {}} />)
     await waitFor(() => screen.getByText('이 리포트로 상담하기'))
     expect(screen.getByText('이 리포트로 상담하기')).toBeDisabled()
+  })
+
+  // ── 최근 3개 종합 10줄요약(항목5) ──
+  it('"종합요약 생성" → 최근 3개 종합요약(10줄·의견분포·면책) 렌더', async () => {
+    fetchAnalystReports.mockResolvedValue({ ticker: '006360', reports: [REPORT] })
+    fetchAnalystReportsSummary.mockResolvedValue({
+      ticker: '006360', validation_failed: false, report_count: 3,
+      summary: {
+        종목: 'GS건설', 의견분포: '매수 2·중립 1', 목표주가범위: '5.0만원~5.5만원',
+        종합요약: ['수주 회복 흐름', '마진 개선 기대', '밸류에이션 부담 완화'],
+        면책고지: '이 종합은 여러 증권사 리포트 내용이며 자문이 아니다.',
+      },
+    })
+    render(<AnalystReportsSection ticker="006360" sessionId="s1" onConsult={() => {}} />)
+    await waitFor(() => screen.getByText('한화투자증권'))
+    fireEvent.click(screen.getByRole('button', { name: /종합요약 생성/ }))
+    await waitFor(() => expect(fetchAnalystReportsSummary).toHaveBeenCalledWith('006360'))
+    await waitFor(() => expect(screen.getByText('수주 회복 흐름')).toBeInTheDocument())
+    expect(screen.getByText('마진 개선 기대')).toBeInTheDocument()
+    expect(screen.getByText(/매수 2·중립 1/)).toBeInTheDocument() // 의견 분포(출처 귀속)
+    expect(screen.getByText(/리포트 3개 종합/)).toBeInTheDocument()
+  })
+
+  it('종합요약 생성 실패(validation_failed) → 안내 메시지', async () => {
+    fetchAnalystReports.mockResolvedValue({ ticker: '006360', reports: [REPORT] })
+    fetchAnalystReportsSummary.mockResolvedValue({
+      ticker: '006360', summary: null, validation_failed: true, report_count: 1,
+      message: '종합요약을 생성하지 못했습니다.',
+    })
+    render(<AnalystReportsSection ticker="006360" sessionId="s1" onConsult={() => {}} />)
+    await waitFor(() => screen.getByText('한화투자증권'))
+    fireEvent.click(screen.getByRole('button', { name: /종합요약 생성/ }))
+    await waitFor(() => expect(screen.getByText(/생성하지 못했습니다/)).toBeInTheDocument())
+  })
+
+  it('리포트 0개면 종합요약 영역 미표시(빈 상태만)', async () => {
+    fetchAnalystReports.mockResolvedValue({ ticker: '006360', reports: [] })
+    render(<AnalystReportsSection ticker="006360" sessionId="s1" onConsult={() => {}} />)
+    await waitFor(() => screen.getByText(/아직 저장된 애널리스트 리포트가 없어요/))
+    expect(screen.queryByRole('button', { name: /종합요약 생성/ })).toBeNull()
   })
 })

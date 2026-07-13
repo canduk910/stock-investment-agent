@@ -37,6 +37,7 @@
 
 ## 애널리스트 리포트 요약 + "이 리포트로 상담하기" (네이버 연계)
 - **`AnalystReportsSection.jsx`**: `StockReportView` 하단 섹션. `GET /api/detail/{ticker}/analyst-reports` **자체 조회**(환각 차단)로 그 종목 리포트 요약 카드 렌더 — 증권사·작성일·목표주가·**투자의견(‘리포트 의견 ·’ 접두로 출처 귀속**, 가격 방향색·주황/빨강 아님 = 에이전트 판정 아님)·핵심요지·리스크·면책·원문 PDF 링크. 빈 상태 + **"네이버 최신 리포트 가져오기"**(`POST /api/reports/fetch` → 재조회). 상담 CTA=**주황 채움**(`--c-emph`).
+- **최근 3개 종합요약(항목5)**: 개별 카드 **위**에 `CombinedSummary` 패널 — "종합요약 생성" 버튼(주황 CTA·리포트 ≥1일 때만 표시) → `fetchAnalystReportsSummary(ticker)`(`POST …/analyst-reports/summary`, 온디맨드) → 의견분포 칩(중립)·목표주가범위 칩(네이비)·리포트N개 칩 + **10줄 `<ol>` 종합요약**·면책 렌더. 로딩/생성실패(`validation_failed`)/0개는 안내(무한 스피너 금지). 종합=여러 리포트 인용(판정 아님)·면책. 저장 요약만으로 서버가 종합(프론트 신뢰전송 없음).
 - **"이 리포트로 상담하기"**(카드별) → `setReportContext(sessionId, ticker, reportId)`(서버가 store 에서 요약 조회해 세션 컨텍스트 세팅) → 성공 시 `onConsult(broker)` → 좌측 챗 상단 **주황 상담 배너**(`chat__consult`) "○○증권 리포트로 이어서 물어보세요" + **[상담 종료]**(App `endConsult`가 서버 컨텍스트 해제). 이후 후속 질문은 그 리포트 근거로 답(출처 귀속·면책, 백엔드 세션 핀).
 - **세션 id 는 `App` 이 단일 소유**(리팩터): 좌측 `ChatPanel`(대화)과 우측 리포트 "상담하기"가 **같은 session_id 를 공유**해야 컨텍스트가 대화에 반영된다 → `App` 이 `useRef`로 생성해 두 패널에 prop 전달. `ChatPanel`은 prop 우선, 미전달 시 자체 생성 폴백(구 테스트 호환). 프롭 경로: `App → RightPanel → RightPanelBody → PopupStockReport → StockReportView → AnalystReportsSection`(sessionId·onConsult).
 - `api.js`: `fetchAnalystReports(ticker)`·`fetchNaverReports(limit)`·`setReportContext(sessionId, ticker, reportId)`. 테스트는 jsdom + api.js mock(빈 상태·수집 재조회·상담 콜백·세션 없음 비활성).

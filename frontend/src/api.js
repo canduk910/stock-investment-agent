@@ -281,6 +281,19 @@ export async function fetchAnalystReports(ticker) {
   return res.json()
 }
 
+// POST /api/detail/{ticker}/analyst-reports/summary → {ticker, summary|null, validation_failed,
+//   report_count, message?}. 저장된 최근 3개 리포트를 서버가 LLM 으로 종합(10줄)해 반환(온디맨드,
+//   PDF 재다운로드 없음). summary={종목,의견분포,목표주가범위,종합요약[],면책고지}. 0개·검증실패는
+//   validation_failed=true(항상 200). throw 는 네트워크/HTTP 오류만.
+export async function fetchAnalystReportsSummary(ticker) {
+  const res = await fetch(
+    `/api/detail/${encodeURIComponent(ticker)}/analyst-reports/summary`,
+    { method: 'POST' },
+  )
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
 // POST /api/reports/fetch?limit=N → {fetched, new, skipped, failed}. 네이버 최신 리포트를 서버가
 // 수집·요약·저장(idempotent). 항상 200(수집/요약 실패는 graceful 카운트). 완료 후 fetchAnalystReports 재조회.
 export async function fetchNaverReports(limit = 20) {

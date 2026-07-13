@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   fetchAnalystReports,
+  fetchAnalystReportsSummary,
   fetchNaverStockReports,
   setReportContext,
   streamFetchStockReports,
@@ -28,6 +29,77 @@ function BulletList({ label, items, tone }) {
           <li key={i}>{it}</li>
         ))}
       </ul>
+    </div>
+  )
+}
+
+// 최근 3개 리포트 종합 10줄요약(항목5) — 온디맨드(버튼 클릭 시 서버가 저장 요약을 LLM 종합).
+// 여러 증권사 리포트 내용의 **종합·인용**(에이전트 판정 아님) — 의견은 분포로, 출처 복수 귀속·면책.
+function CombinedSummary({ ticker }) {
+  const [state, setState] = useState('idle') // idle | loading | done | error
+  const [data, setData] = useState(null)
+  const [errMsg, setErrMsg] = useState(null)
+
+  async function generate() {
+    setState('loading')
+    setErrMsg(null)
+    try {
+      const res = await fetchAnalystReportsSummary(ticker)
+      if (res.validation_failed || !res.summary) {
+        setState('error')
+        setErrMsg(res.message || '종합요약을 생성하지 못했습니다.')
+      } else {
+        setData(res)
+        setState('done')
+      }
+    } catch (e) {
+      setState('error')
+      setErrMsg(`종합요약 생성 실패(${e.message}).`)
+    }
+  }
+
+  const s = data?.summary ?? {}
+  return (
+    <div className="analyst-combined">
+      <div className="analyst-combined__head">
+        <span className="analyst-combined__title">최근 3개 리포트 종합요약</span>
+        <button
+          type="button"
+          className="analyst-combined__gen"
+          onClick={generate}
+          disabled={state === 'loading'}
+        >
+          {state === 'loading' ? '생성 중…' : state === 'done' ? '↻ 다시 생성' : '종합요약 생성'}
+        </button>
+      </div>
+      {state === 'error' ? (
+        <p className="analyst__err" role="alert">
+          {errMsg}
+        </p>
+      ) : null}
+      {state === 'done' && data ? (
+        <div className="analyst-combined__body">
+          <div className="analyst-combined__chips">
+            {s.의견분포 ? (
+              <span className="chip analyst__chip-opinion" title="리포트 투자의견 분포(출처 귀속)">
+                의견 · {s.의견분포}
+              </span>
+            ) : null}
+            {s.목표주가범위 ? (
+              <span className="chip chip--navy">목표주가 {s.목표주가범위}</span>
+            ) : null}
+            <span className="chip analyst__chip-opinion">리포트 {data.report_count}개 종합</span>
+          </div>
+          {Array.isArray(s.종합요약) && s.종합요약.length > 0 ? (
+            <ol className="analyst-combined__lines">
+              {s.종합요약.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ol>
+          ) : null}
+          {s.면책고지 ? <p className="analyst__fine">{s.면책고지}</p> : null}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -208,6 +280,7 @@ export default function AnalystReportsSection({ ticker, sessionId, onConsult }) 
         </div>
       ) : reports && reports.length > 0 ? (
         <>
+          <CombinedSummary ticker={ticker} />
           <div className="analyst__cards">
             {reports.map((r) => (
               <ReportCard

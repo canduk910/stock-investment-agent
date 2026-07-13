@@ -1134,6 +1134,65 @@ body {
   color: var(--c-text-muted);
 }
 
+/* ── 최근 3개 리포트 종합 10줄요약(항목5) — 개별 카드 위 종합 패널 ── */
+.analyst-combined {
+  margin: 12px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface-2);
+  border-radius: 12px;
+}
+.analyst-combined__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.analyst-combined__title {
+  font-weight: 800;
+  font-size: 13.5px;
+  color: var(--c-navy);
+}
+/* 종합요약 생성 = 주황 확정 CTA(강조). */
+.analyst-combined__gen {
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--c-emph);
+  color: var(--c-white);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.analyst-combined__gen:hover:not(:disabled) {
+  background: var(--c-emph-strong);
+}
+.analyst-combined__gen:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.analyst-combined__body {
+  margin-top: 10px;
+}
+.analyst-combined__chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.analyst-combined__lines {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--c-text);
+}
+.analyst-combined__lines li {
+  margin-bottom: 2px;
+}
+
 /* ── 시황 리포트: 일별 구분 + 컴팩트 3줄 카드 + 클릭 상세 오버레이(항목4) ── */
 .mo-groups {
   display: flex;
