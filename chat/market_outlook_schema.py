@@ -20,6 +20,8 @@ class MarketOutlookSummary(BaseModel):
     # 리포트가 밝힌 시장 스탠스(긍정적/중립/신중 등 자유 서술) — 에이전트 판정이 아니라 '리포트의 시황관'.
     시장전망: str = Field(min_length=1)
     요약: str = Field(min_length=1)
+    # 컴팩트 카드용 3줄 압축 요약(항목4) — 각 줄 짧은 한 문장. 최소 1·최대 3(과밀 방지). 리포트 내용 인용.
+    세줄요약: list[NonEmptyStr] = Field(min_length=1, max_length=3)
     # 핵심요지·리스크는 최소 1개 강제 — 장밋빛 일변도 방지, 과대나열 상한.
     핵심요지: list[NonEmptyStr] = Field(min_length=1, max_length=5)
     리스크요인: list[NonEmptyStr] = Field(min_length=1, max_length=5)

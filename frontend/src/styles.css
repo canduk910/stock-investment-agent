@@ -1133,6 +1133,169 @@ body {
   line-height: 1.6;
   color: var(--c-text-muted);
 }
+
+/* ── 시황 리포트: 일별 구분 + 컴팩트 3줄 카드 + 클릭 상세 오버레이(항목4) ── */
+.mo-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 12px;
+}
+.mo-group__date {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--c-navy);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--c-border);
+  margin-bottom: 8px;
+}
+.mo-group__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* 카드 전체가 버튼(클릭·키보드 → 상세 오버레이). 기본 버튼 스타일 리셋. */
+.mo-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--c-border);
+  border-radius: 12px;
+  background: var(--c-surface);
+  padding: 12px 14px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
+}
+.mo-card:hover {
+  border-color: var(--c-border-strong);
+  box-shadow: var(--shadow-raise);
+}
+.mo-card:active {
+  transform: translateY(1px);
+}
+.mo-card:focus-visible {
+  outline: 2px solid var(--c-emph);
+  outline-offset: 2px;
+}
+.mo-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.mo-card__broker {
+  font-weight: 800;
+  color: var(--c-navy);
+  font-size: 13.5px;
+}
+/* 시장전망 칩 = 리포트 출처 귀속(중립 회색). 가격 방향색·주황/빨강 아님(에이전트 판정 아님). */
+.mo-card__stance {
+  background: var(--c-surface-2);
+  color: var(--c-text-secondary);
+  border: 1px solid var(--c-border);
+}
+.mo-card__title {
+  margin: 8px 0 0;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--c-text);
+}
+.mo-card__three {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--c-text-secondary);
+}
+.mo-card__three-empty {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+.mo-card__more {
+  display: block;
+  margin-top: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--c-emph); /* 자세히 = 강조 주황 */
+  text-align: right;
+}
+
+/* 상세 오버레이 — 딤 배경 + 중앙 카드. 시황 상세 전용(범용 Modal 부활 아님). */
+.mo-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--c-overlay);
+  animation: mo-fade-in 0.14s ease;
+}
+@keyframes mo-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.mo-overlay__card {
+  width: 100%;
+  max-width: 460px;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-raise);
+  padding: 18px 20px;
+}
+.mo-overlay__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.mo-overlay__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mo-overlay__close {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--c-border);
+  background: var(--c-surface-2);
+  color: var(--c-text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.mo-overlay__close:hover {
+  background: var(--c-surface-3);
+  color: var(--c-navy);
+}
+.mo-overlay__close:focus-visible {
+  outline: 2px solid var(--c-emph);
+  outline-offset: 2px;
+}
+.mo-overlay__title {
+  margin: 10px 0 0;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--c-navy);
+}
+
 /* 대화 전환 바(대화 선택 + 새 대화) — 챗 헤더 우측. */
 .chat__convbar {
   display: flex;

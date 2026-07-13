@@ -23,3 +23,4 @@
 ## 대화기록·공동 리포트 DB (Phase 4~5)
 - **대화기록**(유저별): `history_models`(Conversation/ChatMessage)·`history_store.HistoryStore`(대화 CRUD·`add_turn`·`recent_messages`[hydrate용]). 챗 라우트가 세션 hydrate + 턴 write-through(api/CLAUDE). `Session.hydrate(msgs)`가 슬라이딩 히스토리만 교체(핀 불변).
 - **애널리스트·시황 요약 = 공동 DB**(전역 공유, user 무관): `report_models.AnalystReportRow`(scope_key=ticker|`__MARKET__`, `(scope,report_id)` 유니크)·`report_repo.ScopedReportRepo`(**세션 팩토리로 메서드마다 새 세션 → 병렬 수집 스레드 안전**). `analyst_store`·`market_outlook_store`는 thin SQL 어댑터(인터페이스 has/upsert/list/get 불변 → 라우트·service·view_context 무변경). `default_store()`는 앱 기본 세션팩토리, 테스트는 인메모리 sessionmaker 주입.
+- **시황 3줄요약(`세줄요약`, 항목4)**: `MarketOutlookSummary`에 `세줄요약: list[NonEmptyStr]`(min1·max3) 필드 추가 — 프론트 컴팩트 카드 미리보기용 3줄 압축. `market_outlook.py::_build_summary_prompt`가 "리포트 시황 3줄 압축(내용 인용)"을 지시. **기존 저장 레코드는 `세줄요약` 없음**(재검증 안 함) → 프론트가 `핵심요지[:3]`로 폴백, 재수집 시 신규 레코드에 채워짐. 안전(리포트 인용·출처 귀속·면책·시장판정 아님) 불변.

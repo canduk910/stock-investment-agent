@@ -36,6 +36,7 @@ _VALID = {
     "증권사": "KB증권", "제목": "7/10 모닝코멘트", "시장전망": "중립",
     "요약": "수급 개선 기대.", "핵심요지": ["외국인 순매수", "실적 시즌 진입"],
     "리스크요인": ["환율 변동성"], "면책고지": "이 요약은 시황 리포트 내용이며 자문이 아니다.",
+    "세줄요약": ["외국인 순매수 전환", "실적 시즌 기대", "환율은 변수"],
 }
 
 
@@ -74,6 +75,32 @@ def test_schema_rejects_empty_risks():
 def test_schema_rejects_empty_disclaimer():
     with pytest.raises(ValidationError):
         MarketOutlookSummary(**{**_VALID, "면책고지": ""})
+
+
+# ── 세줄요약(항목4: 3줄 압축 요약) ──
+def test_schema_세줄요약_present():
+    # 컴팩트 카드용 3줄요약 — list[str] 로 노출.
+    s = MarketOutlookSummary(**_VALID)
+    assert s.세줄요약 == ["외국인 순매수 전환", "실적 시즌 기대", "환율은 변수"]
+
+
+def test_schema_rejects_empty_세줄요약():
+    # 최소 1줄 강제(빈 3줄요약 방지).
+    with pytest.raises(ValidationError):
+        MarketOutlookSummary(**{**_VALID, "세줄요약": []})
+
+
+def test_schema_세줄요약_max_3():
+    # 3줄 상한 — 4개 이상은 거부(컴팩트 카드 과밀 방지).
+    with pytest.raises(ValidationError):
+        MarketOutlookSummary(**{**_VALID, "세줄요약": ["a", "b", "c", "d"]})
+
+
+def test_prompt_instructs_세줄요약():
+    # 요약 프롬프트가 세줄요약(3줄 압축)을 지시하고 JSON 키로 명시한다.
+    prompt = mo._build_summary_prompt("시황 원문", _META)
+    assert "세줄요약" in prompt
+    assert "3줄" in prompt or "3개" in prompt
 
 
 # ── 생성·폴백 ──
