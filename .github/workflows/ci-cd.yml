@@ -1,0 +1,81 @@
+name: CI/CD
+
+# 테스트(CI)는 main 푸시·모든 PR에서 실행. 통과 시 main 푸시만 Cloud Run 자동배포(CD).
+# 인증은 Workload Identity Federation(키리스) — GitHub에 장기 키 상주 0.
+# 시크릿 값은 워크플로에 없다: 런타임 시크릿은 GCP Secret Manager 참조(--set-secrets)로만 주입.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  id-token: write # WIF: google-github-actions/auth 가 OIDC 토큰을 발급받는 데 필요
+
+jobs:
+  backend:
+    name: 백엔드 테스트 (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: uv 설치 (+ Python 3.13)
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - name: 의존성 동기화(lock 고정)
+        run: uv sync --locked
+      - name: pytest (라이브 제외 — pyproject addopts="-m 'not live'", 시크릿 불필요)
+        run: uv run pytest -q
+
+  frontend:
+    name: 프론트 테스트 + 빌드 (vitest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test -- --run
+      - run: npm run build
+
+  deploy:
+    name: Cloud Run 배포 (main · WIF)
+    needs: [backend, frontend]
+    # main 푸시 + 테스트 통과 + WIF 변수 설정됨(미설정이면 skip=녹색, 실패 아님)일 때만 배포.
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      vars.WIF_PROVIDER != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: deploy-cloud-run # 동시 배포 직렬화(진행 중 배포를 취소하지 않음)
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: GCP 인증 (Workload Identity Federation — 키리스)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOY_SA }}
+      - name: gcloud 설정
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Cloud Run 배포 (소스 빌드 · DEPLOY_GCP.md 런북과 동일)
+        run: |
+          gcloud run deploy dk-invest-agent \
+            --source=. \
+            --project=dk-invest-agent-2607122107 \
+            --region=asia-northeast3 \
+            --allow-unauthenticated \
+            --add-cloudsql-instances=dk-invest-agent-2607122107:asia-northeast3:dk-invest-db \
+            --set-env-vars=KIS_ENV=real,KIS_ACNT_PRDT_CD_STK=01 \
+            --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest,FRED_API_KEY=FRED_API_KEY:latest,JWT_SECRET=JWT_SECRET:latest,KIS_ENC_KEY=KIS_ENC_KEY:latest,DATABASE_URL=DATABASE_URL:latest \
+            --memory=1Gi --cpu=1 --timeout=300 --min-instances=0 --max-instances=3 --quiet

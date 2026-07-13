@@ -91,3 +91,78 @@ gcloud run deploy dk-invest-agent \
   `min-instances=0` 이라 무트래픽 시 거의 0.
 - 전체 정리(과금 중단): `gcloud sql instances delete dk-invest-db` + `gcloud run services delete dk-invest-agent`
   (또는 프로젝트 삭제 `gcloud projects delete dk-invest-agent-2607122107`).
+
+## CI/CD (GitHub Actions + Workload Identity Federation)
+
+`.github/workflows/ci-cd.yml` 가 main 푸시·모든 PR에서 **테스트(pytest+vitest+build)**를 돌리고,
+**main 푸시가 테스트를 통과하면 Cloud Run 에 자동배포**한다. 인증은 **WIF(키리스)** — GitHub 에
+장기 SA 키를 두지 않고 GitHub Actions 의 OIDC 토큰으로 단기 인증한다. **워크플로에 시크릿 값은
+없다**(런타임 시크릿은 `--set-secrets` 로 Secret Manager `:latest` 참조).
+
+```
+GitHub Actions(OIDC 토큰) ─▶ WIF Pool/Provider(이 레포만) ─▶ 배포 SA ─▶ gcloud run deploy
+```
+
+### 일회 설정 — **사용자가 직접 실행**(SA·IAM·WIF 생성은 자동화하지 않음)
+
+본인 터미널(또는 `! bash`)에서 실행. 배포 SA·WIF 풀·프로바이더를 만들고 **이 레포만** SA 를
+임퍼스네이트하도록 제한한다.
+
+```bash
+PROJECT=dk-invest-agent-2607122107
+PROJECT_NUM=816686454504
+REPO=canduk910/stock-investment-agent
+SA=github-deployer
+SA_EMAIL=$SA@$PROJECT.iam.gserviceaccount.com
+
+# 0) 필요한 API 활성화
+gcloud services enable iamcredentials.googleapis.com sts.googleapis.com \
+  cloudbuild.googleapis.com run.googleapis.com artifactregistry.googleapis.com --project=$PROJECT
+
+# 1) 배포 서비스 계정
+gcloud iam service-accounts create $SA --project=$PROJECT --display-name="GitHub Actions deployer"
+
+# 2) 배포 역할(소스 빌드 → 이미지 push → Cloud Run 배포)
+for ROLE in roles/run.admin roles/cloudbuild.builds.editor roles/storage.admin roles/artifactregistry.writer; do
+  gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:$SA_EMAIL" --role="$ROLE" --condition=None
+done
+# 런타임 SA(compute)로 actAs — run.deploy 가 서비스 아이덴티티를 설정
+gcloud iam service-accounts add-iam-policy-binding \
+  $PROJECT_NUM-compute@developer.gserviceaccount.com --project=$PROJECT \
+  --member="serviceAccount:$SA_EMAIL" --role="roles/iam.serviceAccountUser"
+
+# 3) WIF 풀 + GitHub OIDC 프로바이더 (★ attribute-condition 으로 이 레포만 허용 — 보안 필수)
+gcloud iam workload-identity-pools create github-pool \
+  --project=$PROJECT --location=global --display-name="GitHub pool"
+gcloud iam workload-identity-pools providers create-oidc github-provider \
+  --project=$PROJECT --location=global --workload-identity-pool=github-pool \
+  --display-name="GitHub provider" \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --attribute-condition="assertion.repository=='$REPO'"
+
+# 4) 이 레포의 워크플로만 배포 SA 임퍼스네이트 허용
+gcloud iam service-accounts add-iam-policy-binding $SA_EMAIL --project=$PROJECT \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUM/locations/global/workloadIdentityPools/github-pool/attribute.repository/$REPO"
+
+# 5) GitHub 변수에 넣을 값 출력
+echo "WIF_PROVIDER=projects/$PROJECT_NUM/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
+echo "DEPLOY_SA=$SA_EMAIL"
+```
+
+### GitHub 저장소 변수 등록 — **사용자가 직접 실행**
+GitHub → 저장소 → **Settings → Secrets and variables → Actions → Variables** 탭 → **Variables**
+(비밀 아님)로 추가:
+- `WIF_PROVIDER` = 위 5) 출력값(프로바이더 리소스명)
+- `DEPLOY_SA` = 위 5) 출력값(`github-deployer@…`)
+
+> 둘 다 비밀이 아니라 식별자(프로젝트 번호·SA 이메일)다. 워크플로가 `vars.` 로 참조해 값·레포
+> 변경 시 워크플로 수정이 불필요하다. **`WIF_PROVIDER` 가 설정돼야** deploy job 이 동작한다
+> (미설정이면 skip=녹색 — 앱은 위 수동 `gcloud run deploy` 로 이미 배포됨).
+
+### 동작·확인
+- **PR** → 테스트만(deploy skip). **main 푸시** → 테스트 통과 시 자동배포(새 Cloud Run 리비전).
+- 설정 후: main 에 커밋 푸시 → GitHub **Actions** 탭에서 backend/frontend 녹색 → deploy 잡이
+  `gcloud run deploy` 실행 확인. **권한 부족 시** deploy 로그가 부족한 role 을 명시 → 배포 SA 에
+  해당 role 추가 후 재실행(Re-run jobs).
