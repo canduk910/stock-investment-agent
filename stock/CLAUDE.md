@@ -26,12 +26,12 @@
 
 ## 3중 일관성 (constants.py 단일 출처)
 - `VALUATION_BAND_PCT=10`(±10% 라벨, 경계 포함=적정), `MA_PERIOD=20`, `RSI_PERIOD=14`, `MIN_HISTORY_YEARS=3`, `MIN_CHART_CANDLES_*`, `STOCK_META_TTL_SECONDS`. `INDICATOR_CONFIG`={ma_period,rsi_period} 를 번들이 프론트(klinecharts)로 내려 **차트 지표 기간도 이 상수가 단일 출처**(klinecharts 가 4번째 진실이 되지 않게).
-- **REGIME_PARAMS 는 재정의 금지** — `macro.engine` 에서 import 만. 역발상 값(과열 per_max=None / 수축 per_max=20)의 SSOT 는 매크로 엔진.
+- **REGIME_PARAMS 는 재정의 금지** — `macro.engine` 에서 import 만. 역발상 현금비중(`cash`)의 SSOT 는 매크로 엔진. 국면은 **현금비중만** 관리한다(항목3 — `single_cap`/`per_max`/`pbr_max` 폐기).
 
-## regime_gate — 역발상 게이트 오해 방지
-- `judgement['params']`(= macro REGIME_PARAMS[regime])의 per_max/pbr_max/single_cap 소비.
-- **과열 per_max=None 은 '무조건 통과'가 아니라 `entry_blocked`(신규진입 차단)** — single_cap=0 동반. 이걸 통과로 오해하면 방어→공격 안전 반전. 수축 per_max=20 = 가장 느슨한 적극매수 게이트.
-- `note` 는 **사실 서술만**(매수/매도 명령형 금지, 조회전용·자문금지 톤). per_max None 일 때 'PER 상한 None' 렌더 금지(전용 분기).
+## 국면 진입게이트(regime_gate)는 폐기 — 항목3
+- `regime_gate`·`regime_entry_blocked`·`_gate_note` 는 "너무 보수적"(진입 차단·밸류에이션 부담 판정 과함)이라 **삭제**됐다. 종목 번들·워치리스트·리포트 어디도 국면 커트로 신규진입을 판정하지 않는다.
+- 국면은 현금비중(역발상)만 남는다(매크로 대시보드가 표시). 종목의 raw PER/PBR·`valuation_label`(자기과거 avg_per 기준)은 **정량 데이터로 그대로 유지**(국면 커트가 아니라 종목 자기 이력 기준).
+- 구조화 리포트의 `국면정합성` 필드는 **LLM 이 국면명 + 권장 현금비중을 제시받아 '최종 적합성'을 서술**(chat/report.py::_regime_block) — 게이트 상한 판정이 아니다.
 
 ## 기술적 지표
 - RSI = **Wilder 평활**(period=14) — 차트(klinecharts)의 RSI 와 같은 기법으로 마지막 값 일치. 캔들 < period+1 → None. 전량 상승→100 / 전량 하락→0.

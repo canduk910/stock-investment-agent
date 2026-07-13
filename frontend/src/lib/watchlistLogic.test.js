@@ -3,15 +3,15 @@ import {
   SORT_KEYS,
   SORT_LABELS,
   sortItems,
-  entrySignalLabel,
   detectTargetAlerts,
   addErrorMessage,
 } from './watchlistLogic.js'
 
 // 계약 근거(week-10 계획 §프론트 신규 watchlistLogic.js + 확정 API 계약):
-//   items[].current_price/target_price/change_rate/distance_to_target/target_status/entry_signal.
+//   items[].current_price/target_price/change_rate/distance_to_target/target_status.
 //   정렬 3종은 chat/tools.py show_watchlist enum(SSOT)과 일치 — registered/change_rate/near_target.
-//   진입 검토가능·목표가 도달/근접 = 강조(주황). 색은 컴포넌트가 토큰으로, 여기선 상태 문자열만.
+//   목표가 도달/근접 = 강조(주황). 색은 컴포넌트가 토큰으로, 여기선 상태 문자열만.
+//   국면별 종목 진입신호(entry_signal)는 폐기(항목3) — 관련 테스트 제거.
 
 describe('SORT_KEYS — chat/tools.py show_watchlist enum 과 일치(SSOT)', () => {
   it('정렬 키는 registered/change_rate/near_target 3종', () => {
@@ -64,42 +64,6 @@ describe('sortItems — 재조회 없이 프론트에서 재정렬(순수)', () 
   it('미지의 sort_by 또는 비배열은 안전 처리(registered 로 폴백·[])', () => {
     expect(sortItems([B, A], 'unknown').map((x) => x.ticker)).toEqual(['000001', '000002'])
     expect(sortItems(null, 'registered')).toEqual([])
-  })
-})
-
-describe('entrySignalLabel — 진입신호 배지 문구·톤(주황=검토가능, 회색=억제)', () => {
-  it('국면 억제(entry_blocked) → "신규 진입 억제" · tone=muted', () => {
-    const r = entrySignalLabel({ entry_blocked: true, entry_allowed: false })
-    expect(r.text).toContain('억제')
-    expect(r.tone).toBe('muted')
-  })
-
-  it('밸류에이션 초과(per_over/pbr_over) 이지만 국면 미차단 → "밸류에이션 부담" · tone=muted', () => {
-    const r = entrySignalLabel({
-      entry_blocked: false,
-      per_over: true,
-      pbr_over: false,
-      entry_allowed: false,
-    })
-    expect(r.text).toMatch(/밸류에이션|부담/)
-    expect(r.tone).toBe('muted')
-  })
-
-  it('국면 미차단 + 밸류에이션 이내(entry_allowed) → "검토 가능" · tone=emph(주황)', () => {
-    const r = entrySignalLabel({
-      entry_blocked: false,
-      per_over: false,
-      pbr_over: false,
-      entry_allowed: true,
-    })
-    expect(r.text).toContain('검토')
-    expect(r.tone).toBe('emph')
-  })
-
-  it('entry_signal 이 null(국면 판정 실패 등) → "판정 불가" · tone=muted(무한 스피너·임의 판단 금지)', () => {
-    const r = entrySignalLabel(null)
-    expect(r.tone).toBe('muted')
-    expect(r.text.length).toBeGreaterThan(0)
   })
 })
 

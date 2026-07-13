@@ -1,9 +1,12 @@
 """종목 번들 API 계약 테스트 — plan §5.1·§6.5·T8 (번들 오케스트레이터 + 라우트).
 
 collect_stock_bundle 은 KIS 조회 어댑터(client.get 경계)를 병렬 호출해 섹션을 모으고,
-순수 엔진(build_stock_summary·regime_gate)으로 정량요약·국면정합성을 조립한다. 여기서는
-client.get 을 tr_id 별 fixture 로 라우팅하는 stub 으로 대체(경계 mock)하고, 그 안쪽
-조립·partial_failure·캐시 게이트를 실제 코드로 통과시킨다(엔진도 실제 순수함수 사용).
+순수 엔진(build_stock_summary)으로 정량요약을 조립한다. 여기서는 client.get 을 tr_id 별
+fixture 로 라우팅하는 stub 으로 대체(경계 mock)하고, 그 안쪽 조립·partial_failure·캐시
+게이트를 실제 코드로 통과시킨다(엔진도 실제 순수함수 사용).
+
+국면정합성 게이트(regime_gate)는 폐기(항목3) — 번들은 judgement 를 소비하지 않는다(시그니처만
+유지, report.py 호환). 국면은 매크로 대시보드가 현금비중만 표시하고, 종목 번들은 국면과 무관하다.
 
 캐시 3원칙 고정:
 - 원칙1: valuation(현재가·PER·52주)은 어떤 키로도 저장되지 않는다.
@@ -17,10 +20,10 @@ from fastapi.testclient import TestClient
 import api.detail as detail
 import api.main as main
 
-# 번들 계약 최상위 키(프론트·QA 의존).
+# 번들 계약 최상위 키(프론트·QA 의존). regime_gate 는 폐기(항목3).
 BUNDLE_KEYS = {
     "ticker", "basic", "valuation", "financials", "chart",
-    "summary", "regime_gate", "forward_valuation", "indicator_config", "partial_failure",
+    "summary", "forward_valuation", "indicator_config", "partial_failure",
 }
 
 # 섹션 → 해당 섹션을 담당하는 KIS TR_ID(주입 실패용).
@@ -89,21 +92,11 @@ def bodies(load_fixture):
 
 
 def _judgement_contraction():
-    """수축 국면(per_max=20, 가장 느슨한 적극매수 게이트) — regime_gate 는 regime+params 소비."""
+    """수축 국면(현금비중 20%) — 번들은 judgement 를 소비하지 않지만 시그니처 호환용으로 전달."""
     return {
         "regime": "수축",
-        "params": {"cash": 20, "single_cap": 5, "per_max": 20, "pbr_max": 2.0},
+        "params": {"cash": 20},
         "recommended_cash_ratio": 20,
-        "confidence": "high",
-    }
-
-
-def _judgement_overheat():
-    """과열 국면(per_max=None) → entry_blocked True(신규진입 차단, 무조건 통과 아님)."""
-    return {
-        "regime": "과열",
-        "params": {"cash": 80, "single_cap": 0, "per_max": None, "pbr_max": None},
-        "recommended_cash_ratio": 80,
         "confidence": "high",
     }
 
@@ -170,25 +163,13 @@ def test_bundle_wires_sections_into_summary_engine(bodies):
     assert "rev_cagr" in summary and "valuation_label" in summary
 
 
-def test_bundle_regime_gate_uses_valuation_and_judgement(bodies):
+def test_bundle_has_no_regime_gate_key(bodies):
+    """항목3: 번들은 regime_gate 를 계산·노출하지 않는다(국면 커트 폐기, judgement 무관)."""
     client = RoutingStubClient(bodies)
     bundle = detail.collect_stock_bundle("005930", client, _judgement_contraction())
 
-    gate = bundle["regime_gate"]
-    assert gate["regime"] == "수축"
-    assert gate["per_max"] == 20
-    # 종목 PER 12.34 < 20 → 상한 이내.
-    assert gate["per_over"] is False
-    assert gate["entry_blocked"] is False
-
-
-def test_bundle_overheat_regime_blocks_entry(bodies):
-    """과열 per_max=None → entry_blocked True(안전 반전 방지 — 무조건 통과 아님)."""
-    client = RoutingStubClient(bodies)
-    bundle = detail.collect_stock_bundle("005930", client, _judgement_overheat())
-
-    assert bundle["regime_gate"]["entry_blocked"] is True
-    assert bundle["regime_gate"]["per_max"] is None
+    assert "regime_gate" not in bundle  # 국면정합성 게이트 키 없음
+    assert set(bundle.keys()) == BUNDLE_KEYS
 
 
 # ── collect_stock_bundle: 부분 실패 (4섹션 각각) ─────────────────────────────
@@ -223,13 +204,15 @@ def test_bundle_degraded_when_financials_output_empty(bodies, load_fixture):
     assert bundle["financials"] is not None
 
 
-def test_bundle_regime_none_records_partial_failure(bodies):
-    """judgement None(매크로 수집 실패) → regime_gate=None + partial_failure 에 'regime'."""
+def test_bundle_regime_none_is_decoupled_from_bundle(bodies):
+    """judgement None(매크로 수집 실패) → 번들은 국면과 무관하므로 정상(regime_gate 없음·regime 부분실패 없음)."""
     client = RoutingStubClient(bodies)
     bundle = detail.collect_stock_bundle("005930", client, judgement=None)
 
-    assert bundle["regime_gate"] is None
-    assert "regime" in bundle["partial_failure"]
+    assert "regime_gate" not in bundle
+    assert "regime" not in bundle["partial_failure"]  # 번들-국면 디커플(항목3)
+    assert bundle["valuation"]["price"] == 70500.0  # 종목 섹션 정상
+    assert set(bundle.keys()) == BUNDLE_KEYS
 
 
 # ── 캐시 3원칙 격리 (spy_cache) ──────────────────────────────────────────────
@@ -299,19 +282,19 @@ def test_route_returns_bundle_contract(monkeypatch, bodies):
     body = resp.json()
     assert set(body.keys()) == BUNDLE_KEYS
     assert body["valuation"]["price"] == 70500.0
-    assert body["regime_gate"]["regime"] == "수축"
+    assert "regime_gate" not in body  # 국면정합성 게이트 폐기(항목3)
     assert body["indicator_config"] == {"ma_period": 20, "rsi_period": 14}
     assert body["partial_failure"] == []
 
 
-def test_route_regime_failure_sets_partial_failure(monkeypatch, bodies):
-    """매크로 수집 실패 → 항상 200 + regime_gate=None + partial_failure 에 'regime'."""
+def test_route_regime_failure_does_not_affect_bundle(monkeypatch, bodies):
+    """매크로 수집 실패해도 종목 번들은 국면과 무관하므로 정상 200(항목3 — 번들-국면 디커플)."""
     client = _route_client(monkeypatch, bodies, judgement="raise")
     resp = client.get("/api/detail/005930/bundle")
 
     assert resp.status_code == 200
     body = resp.json()
-    assert body["regime_gate"] is None
-    assert "regime" in body["partial_failure"]
+    assert "regime_gate" not in body
+    assert "regime" not in body["partial_failure"]
     # 매크로가 죽어도 종목 섹션은 정상.
     assert body["valuation"]["price"] == 70500.0

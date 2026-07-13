@@ -102,16 +102,7 @@ export const sampleBundle = {
     sample_years: 4,
     notes: [],
   },
-  regime_gate: {
-    regime: '확장',
-    per_max: 25,
-    pbr_max: 3.0,
-    single_cap: 20,
-    per_over: false,
-    pbr_over: false,
-    entry_blocked: false,
-    note: '확장 국면 기준 이내 — PER 13.2 ≤ 25, PBR 1.42 ≤ 3.0. (사실 서술이며 매매 권유가 아님)',
-  },
+  // 국면정합성 게이트(regime_gate)는 폐기(항목3) — 번들은 국면과 무관.
   // 예측 PER(리서치 컨센서스) — 현재가 ÷ 예측 EPS. 후행 PER 13.2 대비 낮아짐(실적 성장 전망 반영).
   forward_valuation: {
     forward_per: [

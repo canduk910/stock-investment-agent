@@ -83,7 +83,7 @@ def test_get_empty(client):
     assert body["items"] == []
     assert body["sort_by"] == "registered"  # 기본
     assert body["partial_failure"] == []
-    assert body["regime"] == {"regime": "수축", "single_cap": 5, "entry_blocked": False}
+    assert body["regime"] == {"regime": "수축"}  # 국면명만(진입게이트 폐기 — 항목3)
 
 
 def test_get_returns_enriched_items(client):
@@ -94,7 +94,7 @@ def test_get_returns_enriched_items(client):
     it = body["items"][0]
     assert it["ticker"] == "005930"
     assert it["current_price"] == 80000
-    assert it["entry_signal"]["entry_allowed"] is True
+    assert "entry_signal" not in it  # 종목 진입신호 폐기(항목3) — 시세·목표가만
 
 
 def test_get_item_includes_spark(client):
@@ -139,9 +139,9 @@ def test_get_regime_degraded_when_judgement_fails(client, monkeypatch):
     body = client.get("/api/watchlist").json()
     assert body["regime"] is None
     assert "regime" in body["partial_failure"]
-    # 시세는 정상.
+    # 시세는 정상(진입신호 폐기 — entry_signal 필드 없음).
     assert body["items"][0]["current_price"] == 80000
-    assert body["items"][0]["entry_signal"] is None
+    assert "entry_signal" not in body["items"][0]
 
 
 # ── POST ─────────────────────────────────────────────────────────────────────

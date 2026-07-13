@@ -24,7 +24,8 @@ export async function fetchMacroRegime() {
 
 // 종목 종합리포트 번들(W08). GET /api/detail/{ticker}/bundle 을 1회 호출한다(N+1 금지).
 // 응답 계약(계획 "번들 계약"): {ticker, basic|null, valuation|null, financials|null, chart|null,
-//   summary|null, regime_gate|null, indicator_config:{ma_period,rsi_period}, partial_failure:[]}.
+//   summary|null, forward_valuation|null, indicator_config:{ma_period,rsi_period}, partial_failure:[]}.
+//   (국면정합성 게이트 regime_gate 는 폐기 — 항목3, 번들은 국면과 무관.)
 // 섹션 실패는 null + partial_failure 로 오고 항상 200 — 그건 정상 응답이라 throw 하지 않는다.
 // 여기서 throw 하는 건 네트워크/HTTP 오류(백엔드 미연결 등)뿐이다.
 // authFetch — 로그인 시 토큰을 실어 백엔드가 본인 KIS 키로 조회(미로그인/미등록은 공유 fallback).
@@ -118,11 +119,11 @@ export async function postChatStream(sessionId, message, handlers = {}) {
 
 // ── 워치리스트(W10) ─────────────────────────────────────────────────────────
 // 엔드포인트 계약은 api/watchlist.py 와 일치. 단일 로컬 사용자라 user_id 는 전달하지 않는다(기본 "local").
-// 시세·진입신호 등 실데이터는 여기(프론트)가 직접 조회한다(환각 차단) — LLM 응답에서 꺼내지 않는다.
+// 시세 등 실데이터는 여기(프론트)가 직접 조회한다(환각 차단) — LLM 응답에서 꺼내지 않는다.
 
 // GET /api/watchlist?sort_by= → {items:[{ticker, stock_name, reason, target_price, added_at,
-//   current_price, change_rate, per, pbr, distance_to_target, target_status, entry_signal}],
-//   regime:{regime, single_cap, entry_blocked}, sort_by, partial_failure:[]}.
+//   current_price, change_rate, per, pbr, spark, distance_to_target, target_status}],
+//   regime:{regime}, sort_by, partial_failure:[]}.  (국면별 종목 진입신호 entry_signal 폐기 — 항목3)
 // 시세 실패 종목은 값 null + partial_failure 에 ticker(부분실패 보존). 항상 200 — throw 는 네트워크/HTTP 오류만.
 // sort_by 는 서버가 에코만 하고 실제 정렬은 프론트(watchlistLogic.sortItems)가 재조회 없이 수행.
 export async function fetchWatchlist(sortBy) {

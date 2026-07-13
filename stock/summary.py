@@ -235,21 +235,6 @@ def build_stock_summary(basic, financials, valuation, chart):
     }
 
 
-# ── 국면정합성 게이트 (역발상 REGIME_PARAMS 소비) ────────────────────────────
-
-def _gate_note(regime, per_max, pbr_max, stock_per, stock_pbr, entry_blocked, per_over, pbr_over):
-    """사실 서술만 — 매수/매도 명령형 금지(조회전용·자문금지 톤, §10)."""
-    if entry_blocked:
-        return f"{regime} 국면 — 현금 비중 확대 국면이라 신규 진입 제안을 억제한다."
-    parts = []
-    if per_max is not None and stock_per is not None:
-        parts.append(f"PER 상한 {per_max:g} · 종목 {stock_per:g} → {'상한 초과' if per_over else '상한 이내'}")
-    if pbr_max is not None and stock_pbr is not None:
-        parts.append(f"PBR 상한 {pbr_max:g} · 종목 {stock_pbr:g} → {'상한 초과' if pbr_over else '상한 이내'}")
-    head = f"{regime} 국면 종목 판단 기준"
-    return f"{head}: {', '.join(parts)}" if parts else f"{head}."
-
-
 def forward_valuation(estimate, valuation):
     """예측 PER = 현재가 ÷ 예측 EPS (KIS 리서치 컨센서스 기반). 코드가 계산, LLM 미개입.
 
@@ -294,43 +279,5 @@ def forward_valuation(estimate, valuation):
     }
 
 
-def regime_entry_blocked(params: dict) -> bool:
-    """국면 실행 파라미터 → 신규진입 차단 여부. **진입차단 규칙 단일 출처**(IMP-15).
-
-    per_max=None(역발상 과열) = 신규 진입 억제 국면(single_cap=0 동반). regime_gate 와
-    watchlist.service.build_watchlist_view(regime 블록)가 이 한 함수를 공유해 규칙이 갈리지 않게 한다.
-    """
-    return (params or {}).get("per_max") is None
-
-
-def regime_gate(stock_valuation, judgement):
-    """종목 밸류에이션 × 현재 국면 → 국면정합성 판정(역발상 REGIME_PARAMS 게이트).
-
-    per_max is None(과열) → entry_blocked(신규진입 차단, single_cap=0 동반) — '무조건 통과'가
-    아니다(안전 반전 방지). 수축 per_max=20 은 가장 느슨한 적극매수 게이트. 임계값은 재정의하지
-    않고 judgement['params'](= macro.engine.REGIME_PARAMS[regime])를 그대로 소비한다.
-    """
-    stock_valuation = stock_valuation or {}
-    judgement = judgement or {}
-    regime = judgement.get("regime")
-    params = judgement.get("params") or {}
-    per_max = params.get("per_max")
-    pbr_max = params.get("pbr_max")
-    single_cap = params.get("single_cap")
-    stock_per = _num(stock_valuation.get("per"))
-    stock_pbr = _num(stock_valuation.get("pbr"))
-
-    entry_blocked = regime_entry_blocked(params)  # 진입차단 규칙 단일 출처(IMP-15)
-    per_over = per_max is not None and stock_per is not None and stock_per > per_max
-    pbr_over = pbr_max is not None and stock_pbr is not None and stock_pbr > pbr_max
-
-    return {
-        "regime": regime,
-        "per_max": per_max,
-        "pbr_max": pbr_max,
-        "single_cap": single_cap,
-        "per_over": per_over,
-        "pbr_over": pbr_over,
-        "entry_blocked": entry_blocked,
-        "note": _gate_note(regime, per_max, pbr_max, stock_per, stock_pbr, entry_blocked, per_over, pbr_over),
-    }
+# 국면별 종목 진입게이트(regime_gate·regime_entry_blocked)는 "너무 보수적"이라 폐기(항목3).
+# 국면은 현금비중만 관리한다 — 종목별 PER/PBR/편입 커트·진입차단·국면정합성 판정은 없다.

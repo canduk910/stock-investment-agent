@@ -91,7 +91,7 @@ def _fixed_judgement():
             ("장단기 금리차 역전", "경기", "악화"),
             ("변동성 급등", "심리", "공포"),
         ],
-        "params": {"cash": 20, "single_cap": 5, "per_max": 20, "pbr_max": 2.0},
+        "params": {"cash": 20},  # 국면은 현금비중만(항목3 — single_cap/per_max/pbr_max 폐기)
         "vix_panic": False,
         "missing_indicators": [],
         "raw_data": {"yield_spread": -0.1, "hy_spread": 4.0, "vix": 30.0, "fear_greed": 55},
@@ -156,7 +156,7 @@ def test_macro_regime_response_includes_judgement_indicators_used_and_partial_fa
     assert body["regime"] == "수축"
     assert body["recommended_cash_ratio"] == 20
     assert body["confidence"] == "high"
-    assert body["params"]["single_cap"] == 5
+    assert body["params"] == {"cash": 20}  # 현금비중만(항목3)
     # axes(dict)·vix_panic(bool) 그대로 전개. 구 votes·override 는 제거됐다.
     assert body["axes"]["cycle"] == {"score": -1, "sign": "악화"}
     assert body["axes"]["sentiment"] == {"score": -1, "sign": "공포"}
@@ -214,7 +214,7 @@ def test_macro_regime_passes_vix_panic_flag_through(monkeypatch):
             "sentiment": {"score": -1, "sign": "공포"},
         },
         "key_drivers": [("변동성 급등", "심리", "공포")],
-        "params": {"cash": 40, "single_cap": 4, "per_max": 15, "pbr_max": 1.5},
+        "params": {"cash": 40},  # 현금비중만(항목3)
         "vix_panic": True,
         "missing_indicators": ["yield_spread", "hy_spread", "fear_greed"],
         "raw_data": {"vix": 40.0},

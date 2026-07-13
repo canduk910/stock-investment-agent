@@ -66,9 +66,9 @@ def map_engine_input(snapshot: dict) -> tuple[dict, list[str]]:
 def build_judgement() -> dict:
     """실시간 수집 → 매핑 → judge_regime → 판정만 반환(partial_failure 불필요한 소비처용).
 
-    종목 번들·워치리스트·리포트가 최신 국면을 얻는 단일 출처. 실패는 호출부가 잡아
-    regime_gate=None 처리(부분실패 보존). (macro_regime·챗봇은 partial_failure 도 필요해
-    api/main.py::live_judgement 을 쓰며, 그 역시 이 모듈의 map_engine_input 을 소비한다.)
+    워치리스트·리포트가 최신 국면을 얻는 단일 출처. 실패는 호출부가 잡아 국면 degraded
+    처리(부분실패 보존). (macro_regime·챗봇은 partial_failure 도 필요해 api/main.py::
+    live_judgement 을 쓰며, 그 역시 이 모듈의 map_engine_input 을 소비한다.)
     """
     snapshot = collect_macro_indicators(fred_api_key())
     engine_input, _partial_failure = map_engine_input(snapshot)

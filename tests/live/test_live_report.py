@@ -34,17 +34,13 @@ _BUNDLE = {
         "per_vs_avg": 152.0, "valuation_label": "고평가", "rsi": 44.0,
         "ma20_gap_pct": -2.0, "pos_52w_pct": 71.0, "sample_years": 5, "notes": [],
     },
-    "regime_gate": {
-        "regime": "수축", "per_max": 20, "pbr_max": 2.0, "single_cap": 5,
-        "per_over": True, "pbr_over": False, "entry_blocked": False,
-        "note": "수축 국면 종목 판단 기준",
-    },
+    # regime_gate 폐기(항목3) — 번들에 없음. 국면 컨텍스트는 judgement 로 전달.
     "partial_failure": [],
 }
 _JUDGEMENT = {
     "regime": "수축",
     "recommended_cash_ratio": 20,
-    "params": {"single_cap": 5, "per_max": 20, "pbr_max": 2.0},
+    "params": {"cash": 20},  # 현금비중만(항목3)
 }
 
 

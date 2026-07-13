@@ -73,9 +73,9 @@ def test_watchlist_context(monkeypatch):
             "items": [
                 {"ticker": "005930", "stock_name": "삼성전자", "current_price": 78000,
                  "change_rate": 1.2, "per": 12.0, "target_price": 90000,
-                 "target_status": "far", "entry_signal": {"entry_allowed": True}},
+                 "target_status": "far"},
             ],
-            "regime": {"regime": "확장", "single_cap": 20, "entry_blocked": False},
+            "regime": {"regime": "확장"},  # 국면명만(진입게이트 폐기 — 항목3)
             "partial_failure": [],
         },
     )
@@ -99,7 +99,7 @@ def test_stock_context(monkeypatch):
     _stub_resolve(monkeypatch)
     monkeypatch.setattr(
         vc, "_safe_judgement",
-        lambda: {"regime": "확장", "params": {"per_max": 25, "pbr_max": 3, "single_cap": 20}},
+        lambda: {"regime": "확장", "params": {"cash": 60}},  # 현금비중만(항목3)
     )
     monkeypatch.setattr(
         "collectors.kis.inquire_price.inquire_price",

@@ -9,7 +9,6 @@ from __future__ import annotations
 from chat.build_prompt import build_criteria_text, build_prompt
 from macro.engine import (
     INDICATOR_LABELS,
-    REGIME_PARAMS,
     THRESHOLDS,
     VIX_PANIC,
     judge_regime,
@@ -78,11 +77,12 @@ def test_prompt_injects_confidence_and_vix_panic_flag():
     assert "패닉" in text
 
 
-def test_prompt_injects_regime_params_for_current_regime():
+def test_prompt_regime_params_are_cash_only():
+    # 국면 파라미터는 **현금비중만**(항목3 — single_cap/per_max/pbr_max 폐기).
     text = build_prompt(_JUDGEMENT)
     params = _JUDGEMENT["params"]
-    # per_max 등 국면 파라미터가 인용 근거로 주입(None 이 아닌 값은 문자열로 존재).
-    assert str(params["single_cap"]) in text
+    assert str(params["cash"]) in text  # 현금비중 값이 인용 근거로 주입
+    assert set(params.keys()) == {"cash"}  # cash 외 국면 커트 파라미터 없음
 
 
 def test_prompt_reflects_regime_change_on_reinjection():
@@ -93,47 +93,33 @@ def test_prompt_reflects_regime_change_on_reinjection():
     assert su["regime"] in text
 
 
-# ── 관심종목 진입신호 서술 지침 (W10) — REGIME_PARAMS 파생, 하드코딩 금지 ────────
+# ── 국면 = 현금비중만 (항목3) — 종목별 진입게이트(single_cap/per_max/pbr_max) 폐기 ────
 
-# 과열: single_cap=0(진입 억제) / 회복: single_cap>0(검토 가능) — 두 국면으로 파생 검증.
+# 과열: 현금비중 높음(방어) / 회복: 현금비중 낮음(적극) — 국면별 현금비중 파생만 남는다.
 _OVERHEAT = judge_regime(
     {"yield_spread": -0.2, "hy_spread": 6.0, "vix": 40.0, "fear_greed": 80}
-)  # 과열 (single_cap=0)
+)  # 과열
 _RECOVERY = judge_regime(
     {"yield_spread": 0.6, "hy_spread": 2.0, "vix": 30.0}
-)  # 회복 (single_cap>0)
+)  # 회복
 
 
-def test_prompt_contains_entry_signal_guidance_block():
-    # 진입신호 서술 규칙 블록이 프롬프트에 존재(변수명으로 규칙을 서술).
+def test_prompt_manages_cash_ratio_only__no_entry_gate_cuts():
+    # 국면은 현금비중만 관리한다는 규칙이 명시되고, 종목별 진입게이트 커트 판정은 하지 않는다.
     text = build_prompt(_OVERHEAT)
-    assert "진입" in text  # 진입신호 지침 블록 존재
-    assert "single_cap" in text  # 규칙을 변수명으로 참조(숫자 아님)
-    assert "per_max" in text and "pbr_max" in text  # 게이트 조건 변수명
-    assert "검토 가능" in text  # 서술 라벨(명령형 아님)
+    assert "현금비중만" in text  # 국면 = 현금비중만 관리
+    assert "진입을 판정하지 않는다" in text  # PER/PBR 상한·편입비중 커트 없음
+    assert "참고 데이터" in text  # 개별 종목 PER/PBR 은 참고용
 
 
-def test_entry_signal_guidance_is_regime_agnostic__no_hardcoded_numbers():
-    # 핵심 3중 일관성 회귀: 진입신호 지침 '문구' 자체는 국면과 무관하게 동일해야 한다.
-    # 국면별로 달라지는 숫자(single_cap/per_max 값)는 이미 ④ REGIME_PARAMS 주입 블록에서만
-    # 나온다. 지침 문구에 국면별 숫자를 하드코딩하면 두 국면에서 문구가 달라져 여기서 잡힌다.
-    guidance_overheat = _extract_entry_guidance(build_prompt(_OVERHEAT))
-    guidance_recovery = _extract_entry_guidance(build_prompt(_RECOVERY))
-    assert guidance_overheat == guidance_recovery  # 동일 문구(regime-agnostic)
-
-
-def test_entry_signal_guidance_has_no_hardcoded_regime_param_values():
-    # 지침 문구에 REGIME_PARAMS 의 구체 숫자(per_max=15/20, pbr_max=1.5/2.0, single_cap 값들)가
-    # 타이핑돼 있지 않은지 직접 확인 — single_cap>0 은 부등호 서술이라 허용, 특정 값은 금지.
-    guidance = _extract_entry_guidance(build_prompt(_OVERHEAT))
-    for regime, params in REGIME_PARAMS.items():
-        for key in ("per_max", "pbr_max"):
-            value = params.get(key)
-            if value is not None:
-                # per_max=15 같은 구체 상한값이 지침 문구에 하드코딩되면 안 됨.
-                assert str(value) not in guidance, (
-                    f"진입신호 지침에 {regime}.{key}={value} 가 하드코딩됨"
-                )
+def test_prompt_regime_param_block_is_regime_agnostic__cash_only():
+    # 과열/회복 두 국면 모두 '현금비중만' 규칙 문구는 동일(값만 다름) — 커트 문구 하드코딩 없음.
+    overheat = build_prompt(_OVERHEAT)
+    recovery = build_prompt(_RECOVERY)
+    assert "현금비중만" in overheat and "현금비중만" in recovery
+    # 폐기된 게이트 변수명이 어느 국면 프롬프트에도 등장하지 않는다.
+    for stale in ("per_max", "pbr_max", "entry_blocked", "per_over", "pbr_over"):
+        assert stale not in overheat and stale not in recovery
 
 
 # ── 잔고(포트폴리오) 팝업 규칙 (UX3) — 판정·조언은 텍스트, 데이터는 코드 ────────────
@@ -156,12 +142,11 @@ def test_prompt_says_rebalance_advice_is_text_only():
 
 
 def test_prompt_has_portfolio_consultation_block():
-    # 코드 근거 자문 블록: 잔고 근거 조정 방향 + 추가편입 후보(게이트 통과) + 새 아이디어 + 면책.
+    # 코드 근거 자문 블록: 잔고 근거 조정 방향 + 추가편입 후보(국면·분산 관점) + 새 아이디어 + 면책.
     text = build_prompt(_JUDGEMENT)
     assert "포트폴리오 상담" in text
     assert "추가편입" in text
-    assert "entry_allowed" in text or "게이트를 통과" in text  # 코드 게이트 근거
-    assert "single_cap" in text  # 종목당 상한 근거(값 아님, 변수명)
+    assert "현금비중" in text  # 국면 권장 현금비중 근거(진입게이트 커트 아님)
 
 
 def test_prompt_consultation_keeps_no_certainty_and_disclaimer():
@@ -182,22 +167,3 @@ def test_prompt_allows_actionable_recommendation():
     # 완화의 핵심: 후보를 구체적으로 제시(actionable) 허용 문구가 있어야 한다.
     text = build_prompt(_JUDGEMENT)
     assert "후보" in text  # 편입 검토 후보 제시
-
-
-def _extract_entry_guidance(prompt: str) -> str:
-    """진입신호 지침 블록만 잘라낸다(마커 [관심종목 진입 신호] ~ 다음 블록 경계).
-
-    지침 문구만 비교하기 위해, judgement 주입값(regime/현금비중 등)이 섞인 ④ 블록과
-    분리해 지침 서술만 추출한다. 마커가 없으면 테스트가 명확히 실패하도록 빈 문자열.
-    """
-    marker = "[관심종목 진입 신호"
-    start = prompt.find(marker)
-    if start == -1:
-        return ""
-    rest = prompt[start:]
-    # 다음 블록(원문자 ⑤/⑥ 등)에서 끊는다.
-    for boundary in ("⑤", "⑥", "⑦"):
-        idx = rest.find(boundary)
-        if idx != -1:
-            rest = rest[:idx]
-    return rest.strip()

@@ -30,15 +30,7 @@ _BUNDLE = {
         "valuation_label": "저평가",
         "rev_cagr": 8.0,
     },
-    "regime_gate": {
-        "regime": "확장",
-        "per_max": 15,
-        "pbr_max": 1.5,
-        "single_cap": 3,
-        "entry_blocked": False,
-        "per_over": False,
-        "pbr_over": False,
-    },
+    # regime_gate 는 폐기(항목3) — 번들에 없음. 국면 컨텍스트는 judgement 로 별도 전달.
 }
 
 _VALID_REPORT = {
@@ -46,7 +38,7 @@ _VALID_REPORT = {
     "요약": "현재 국면과 밸류에이션을 고려한 참고용 요약입니다.",
     "투자포인트": ["실적 개선 추세"],
     "리스크요인": ["밸류에이션 부담"],
-    "국면정합성": "현재 국면 PER 상한 이내입니다.",
+    "국면정합성": "현재 국면·권장 현금비중 스탠스에 부합합니다.",
     "면책고지": "이 설명은 참고용이며 면허 있는 투자자문이 아닙니다.",
 }
 

@@ -8,15 +8,15 @@ import {
   SORT_KEYS,
   SORT_LABELS,
   sortItems,
-  entrySignalLabel,
   addErrorMessage,
 } from '../lib/watchlistLogic.js'
 
 // 워치리스트 본문 — 팝업(PopupWatchlist)과 독립 패널(App)이 공유하는 단일 컴포넌트.
-// 원칙: 시세·진입신호 등 실데이터는 여기가 API 로 직접 조회한다(환각 차단). LLM 응답은 "무엇을 띄울지"만.
+// 원칙: 시세 등 실데이터는 여기가 API 로 직접 조회한다(환각 차단). LLM 응답은 "무엇을 띄울지"만.
 //   - 정렬은 재조회 없이 프론트 순수 로직(watchlistLogic.sortItems)으로 재배열한다.
 //   - 부분 실패(partial_failure)는 섹션별 조용한 안내로 표시하고 나머지는 정상 렌더(전체 에러 화면 금지).
-//   - 색은 theme.css 토큰만. 상승=파랑/하락=회색, 진입 검토가능·목표가 도달/근접=강조 주황(빨강 금지).
+//   - 색은 theme.css 토큰만. 상승=빨강/하락=파랑, 목표가 도달/근접=강조 주황(빨강 금지).
+//   - 국면별 종목 진입신호(entry_signal)는 폐기(항목3 — 국면은 현금비중만).
 //
 // props(모두 옵션):
 //   initialSortBy  : 팝업이 show_watchlist args.sort_by 를 주입(기본 'registered').
@@ -137,22 +137,16 @@ export default function WatchlistView({ initialSortBy, refreshKey, onView }) {
 
   return (
     <div className="wl">
-      {/* ── 국면 배너: 현재 국면 + 신규진입 억제 여부(과열 등). 국면명은 주황(강조). ── */}
+      {/* ── 국면 배너: 현재 국면명만(국면명은 주황=강조). 국면은 현금비중만 관리(항목3 —
+             종목별 진입게이트 폐기). 현금비중 스탠스는 시장 국면 패널이 표시한다. ── */}
       {regime && !regimeFailed ? (
-        <div className={`wl__regime ${regime.entry_blocked ? 'is-blocked' : ''}`} role="note">
+        <div className="wl__regime" role="note">
           <span className="wl__regime-label">현재 국면</span>
           <span className="wl__regime-name">{regime.regime ?? '—'}</span>
-          {regime.entry_blocked ? (
-            <span className="wl__regime-flag">신규 진입 억제 국면 · 진입 신호 미표시</span>
-          ) : (
-            <span className="wl__regime-note">
-              신규 진입 검토 가능 국면 (권장 비중 한도 {num(regime.single_cap)}%)
-            </span>
-          )}
         </div>
       ) : (
         <div className="wl__regime wl__regime--fail" role="note">
-          국면 정보 일시 조회 불가 · 진입 신호는 표시하지 않습니다(시세는 정상 표시).
+          국면 정보 일시 조회 불가 (시세는 정상 표시).
         </div>
       )}
 
@@ -269,7 +263,6 @@ function gaugeWidth(distance) {
 function WatchlistRow({ item, onRemove, onSetTarget }) {
   const dir = changeDir(item.change_rate)
   const priceFailed = item.current_price == null
-  const entry = entrySignalLabel(item.entry_signal)
   const targetBadge = TARGET_BADGE[item.target_status] ?? null
 
   return (
@@ -305,7 +298,6 @@ function WatchlistRow({ item, onRemove, onSetTarget }) {
           PER {item.per == null ? '—' : Number(item.per).toFixed(1)} · PBR{' '}
           {item.pbr == null ? '—' : Number(item.pbr).toFixed(2)}
         </span>
-        <span className={`badge badge--${entry.tone}`}>{entry.text}</span>
         <TargetCell
           targetPrice={item.target_price}
           distance={item.distance_to_target}

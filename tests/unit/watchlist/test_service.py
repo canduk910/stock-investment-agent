@@ -2,15 +2,13 @@
 
 build_watchlist_view(store, user_id, kis_client, judgement) -> dict.
 핵심 계약(테스트가 스펙):
-- 종목별 inquire_price 병렬 조회(캐시 없음, 원칙1) → 종목별 regime_gate(valuation, judgement) 재사용.
-- entry_signal 은 regime_gate 파생(entry_blocked/per_over/pbr_over/single_cap/entry_allowed/note).
-- **regime-agnostic 회귀(핵심)**: 과열 judgement(single_cap=0→per_max None→entry_blocked)와
-  수축 judgement(single_cap=5,per_max=20→미차단) 둘 다 검증. 국면명 하드코딩 0 — 엔진이
-  계산한 single_cap/entry_blocked 를 소비만.
+- 종목별 inquire_price 병렬 조회(캐시 없음, 원칙1) → 시세·등락·목표가 상태·스파크라인 조립.
+- 국면별 종목 진입게이트(entry_signal)는 폐기(항목3) — 국면은 현금비중만 관리하고 종목별
+  PER/PBR/편입비중 커트는 없다. item 에 entry_signal 필드 없음, regime 블록은 {regime} 만.
 - distance_to_target=(current-target)/target*100(target 없으면 None).
 - target_status ∈ {reached(current≤target), near(≤target*(1+thr)), far, none(target 없음)}.
 - 시세 실패 종목 → 값 None + partial_failure 에 ticker(번들 철학, 나머지 정상).
-- judgement=None → 모든 entry_signal=None + partial_failure 에 "regime".
+- judgement=None → regime=None + partial_failure 에 "regime"(국면명 degraded).
 """
 from __future__ import annotations
 
@@ -23,15 +21,15 @@ from watchlist.store import InMemoryWatchlistStore
 from watchlist import service as svc
 
 
-# ── judgement fixture(엔진 계약: regime + params) ────────────────────────────
+# ── judgement fixture(엔진 계약: regime + params[cash]) ──────────────────────
 
 def _judgement(regime: str) -> dict:
-    """judge_regime 반환의 최소 부분집합(service·regime_gate 가 쓰는 키만)."""
+    """judge_regime 반환의 최소 부분집합(service 가 쓰는 regime + params[cash])."""
     return {"regime": regime, "params": dict(REGIME_PARAMS[regime])}
 
 
-OVERHEAT = _judgement("과열")   # single_cap=0, per_max=None → entry_blocked
-CONTRACTION = _judgement("수축")  # single_cap=5, per_max=20, pbr_max=2.0 → 미차단
+OVERHEAT = _judgement("과열")   # 현금비중 80%
+CONTRACTION = _judgement("수축")  # 현금비중 20%
 
 
 # ── StubClient + inquire_price 스텁(경계만 mock) ─────────────────────────────
@@ -133,7 +131,8 @@ def test_returns_fixed_keys(patch_prices):
     store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00"))
     view = svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION)
     assert set(view.keys()) == {"items", "regime", "partial_failure"}
-    assert view["regime"] == {"regime": "수축", "single_cap": 5, "entry_blocked": False}
+    assert view["regime"] == {"regime": "수축"}  # 국면명만(진입게이트 폐기 — single_cap/entry_blocked 제거)
+    assert "entry_signal" not in _by_ticker(view)["005930"]  # 종목 진입신호 없음
 
 
 def test_empty_watchlist(patch_prices):
@@ -174,55 +173,8 @@ def test_items_ordered_registered(patch_prices):
     assert [i["ticker"] for i in view["items"]] == ["005930", "000660"]  # added_at 오름차순
 
 
-# ── entry_signal — 수축(미차단) ──────────────────────────────────────────────
-
-def test_entry_signal_contraction_within_limits(patch_prices):
-    # per 10 ≤ 20, pbr 1.0 ≤ 2.0 → 진입 검토 가능.
-    patch_prices({"005930": _valuation(80000, 1.0, 10.0, 1.0)})
-    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00"))
-    view = svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION)
-    sig = _by_ticker(view)["005930"]["entry_signal"]
-    assert sig["single_cap"] == 5
-    assert sig["entry_blocked"] is False
-    assert sig["per_over"] is False
-    assert sig["pbr_over"] is False
-    assert sig["entry_allowed"] is True
-    assert isinstance(sig["note"], str) and sig["note"]
-
-
-def test_entry_signal_contraction_per_over(patch_prices):
-    # per 25 > 20 → per_over → 미허용(차단은 아님).
-    patch_prices({"005930": _valuation(80000, 1.0, 25.0, 1.0)})
-    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00"))
-    view = svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION)
-    sig = _by_ticker(view)["005930"]["entry_signal"]
-    assert sig["entry_blocked"] is False
-    assert sig["per_over"] is True
-    assert sig["entry_allowed"] is False
-
-
-# ── entry_signal — 과열(entry_blocked) : regime-agnostic 회귀 ────────────────
-
-def test_entry_signal_overheat_blocks_regardless_of_valuation(patch_prices):
-    # 과열 국면은 밸류에이션과 무관하게 entry_blocked=True(single_cap=0). 매우 싼 종목도 차단.
-    patch_prices({"005930": _valuation(80000, 1.0, 3.0, 0.5)})
-    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00"))
-    view = svc.build_watchlist_view(store, "local", StubClient(), OVERHEAT)
-    sig = _by_ticker(view)["005930"]["entry_signal"]
-    assert sig["single_cap"] == 0
-    assert sig["entry_blocked"] is True
-    assert sig["entry_allowed"] is False
-    assert view["regime"] == {"regime": "과열", "single_cap": 0, "entry_blocked": True}
-
-
-def test_entry_signal_regime_agnostic_no_hardcoded_regime_name(patch_prices):
-    # 같은 종목이 국면만 바꿔도 결과가 엔진 single_cap 을 따라간다(국면명 하드코딩 아님).
-    patch_prices({"005930": _valuation(80000, 1.0, 10.0, 1.0)})
-    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00"))
-    overheat = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), OVERHEAT))["005930"]
-    contraction = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
-    assert overheat["entry_signal"]["entry_blocked"] is True
-    assert contraction["entry_signal"]["entry_blocked"] is False
+# 국면별 진입신호(entry_signal)는 폐기(항목3) — 관련 테스트 제거. 국면은 현금비중만, 종목별 커트 없음.
+# regime 블록은 국면명만, item 에는 entry_signal 필드가 없다(위 test_returns_fixed_keys 로 커버).
 
 
 # ── distance_to_target · target_status ───────────────────────────────────────
@@ -315,7 +267,6 @@ def test_price_failure_preserves_partial(patch_prices):
     assert items["005930"]["current_price"] == 80000
     assert items["000660"]["current_price"] is None
     assert items["000660"]["per"] is None
-    assert items["000660"]["entry_signal"] is None  # 시세 없으면 게이트 불가
     assert "000660" in view["partial_failure"]
     assert "005930" not in view["partial_failure"]
     # 실패 종목도 저장 필드(이름/사유)는 유지 — 목록에서 사라지지 않는다.
@@ -329,9 +280,7 @@ def test_no_judgement_degrades_regime(patch_prices):
     store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00"))
     view = svc.build_watchlist_view(store, "local", StubClient(), None)
     it = _by_ticker(view)["005930"]
-    # 시세는 정상(진입신호만 판정 불가).
-    assert it["current_price"] == 80000
-    assert it["entry_signal"] is None
+    assert it["current_price"] == 80000  # 시세는 정상
     assert "regime" in view["partial_failure"]
     assert view["regime"] is None
 
@@ -392,7 +341,6 @@ def test_spark_none_on_chart_failure(patch_prices, patch_charts):
     it = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
     assert it["spark"] is None
     assert it["current_price"] == 80000  # 시세는 정상
-    assert it["entry_signal"]["entry_allowed"] is True
 
 
 def test_spark_none_on_empty_candles(patch_prices, patch_charts):

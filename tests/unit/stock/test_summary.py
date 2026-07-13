@@ -1,8 +1,8 @@
 """종목 정량요약 엔진 경계 테스트 — plan §6.5a, quant-engine-rules §4·§5 (TDD Red).
 
 이 목록이 곧 스펙이다(tdd-workflow §정량 엔진). 테스트 이름 접미사(__keyset/__cagr/
-__sorting/__valuation_label/__avg_per_gate/__rsi/__ma/__pos52w/__regime_gate/__safety)로
-스펙 근거를 추적한다.
+__sorting/__valuation_label/__avg_per_gate/__rsi/__ma/__pos52w/__safety)로 스펙 근거를
+추적한다. 국면 진입게이트(regime_gate)는 폐기(항목3).
 
 절대 규칙: 테스트가 실패하면 구현을 고친다. 임계값 상수(VALUATION_BAND_PCT 등)를
 테스트에 맞춰 바꾸지 않는다. avg_per/valuation_label 은 AVG_PER_VERIFIED 게이트가
@@ -21,10 +21,7 @@ from stock.summary import (
     _valuation_label,
     build_stock_summary,
     forward_valuation,
-    regime_entry_blocked,
-    regime_gate,
 )
-from macro.engine import REGIME_PARAMS
 
 CORE_KEYS = {
     "rev_cagr", "op_cagr", "current_per", "avg_per", "per_vs_avg",
@@ -279,50 +276,8 @@ def test_pos_52w_zero_range_is_none__pos52w():
     assert r["pos_52w_pct"] is None
 
 
-# ── regime_gate 역발상 소비 (macro.engine REGIME_PARAMS import 값) ────────────
-
-def _judgement(regime):
-    return {"regime": regime, "params": REGIME_PARAMS[regime]}
-
-
-def test_regime_gate_overheat_blocks_entry__regime_gate():
-    # 과열: per_max=None → entry_blocked(신규진입 차단, 무조건통과 아님), single_cap=0
-    g = regime_gate(_valuation(per=8.0, pbr=0.9), _judgement("과열"))
-    assert g["entry_blocked"] is True
-    assert g["single_cap"] == 0
-    assert g["per_over"] is False  # 상한 자체가 없으니 초과 플래그 아님
-    assert "None" not in (g["note"] or "")  # 'PER 상한 None' 같은 렌더 금지
-
-
-def test_regime_gate_contraction_is_loose_buy_gate__regime_gate():
-    # 수축: per_max=20 (가장 느슨=적극매수). 종목 PER 18 → 상한 이내
-    g = regime_gate(_valuation(per=18.0, pbr=1.8), _judgement("수축"))
-    assert g["entry_blocked"] is False
-    assert g["per_max"] == 20
-    assert g["per_over"] is False
-
-
-def test_regime_gate_recovery_per_over__regime_gate():
-    # 회복: per_max=15. 종목 PER 18 → 상한 초과 플래그
-    g = regime_gate(_valuation(per=18.0, pbr=1.6), _judgement("회복"))
-    assert g["per_max"] == 15
-    assert g["per_over"] is True
-
-
-def test_regime_gate_note_has_no_order_imperative__regime_gate():
-    for regime in ("회복", "확장", "과열", "수축"):
-        note = regime_gate(_valuation(per=18.0, pbr=1.6), _judgement(regime))["note"] or ""
-        assert "매수" not in note and "매도" not in note  # 조회전용·자문금지 톤
-
-
-def test_regime_entry_blocked_single_source__regime_gate():
-    # 진입차단 규칙 단일 출처(IMP-15) — per_max None(과열)만 True. regime_gate·watchlist 가 공유.
-    assert regime_entry_blocked(REGIME_PARAMS["과열"]) is True   # per_max None → 억제
-    assert regime_entry_blocked(REGIME_PARAMS["수축"]) is False  # per_max 20 → 미차단
-    assert regime_entry_blocked(REGIME_PARAMS["회복"]) is False
-    assert regime_entry_blocked({}) is True  # 결측(과열과 동형) — 안전측(진입 억제)
-    # regime_gate.entry_blocked 가 이 헬퍼와 일치.
-    assert regime_gate(_valuation(per=8.0, pbr=0.9), _judgement("과열"))["entry_blocked"] is True
+# 국면 진입게이트(regime_gate·regime_entry_blocked)는 폐기(항목3) — 관련 테스트 제거.
+# 국면은 현금비중만 관리하며 종목별 PER/PBR/편입 커트가 없다(REGIME_PARAMS 는 cash 만).
 
 
 # ── forward_valuation — 예측 PER = 현재가 ÷ 예측 EPS (KIS 리서치 컨센서스) ────

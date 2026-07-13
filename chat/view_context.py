@@ -152,10 +152,7 @@ def _watchlist_context(user, db) -> str:
     regime = view.get("regime") or {}
     lines = ["[관심종목]"]
     if regime.get("regime"):
-        lines.append(
-            f"국면 {regime.get('regime')} · 종목당상한 {_pct(regime.get('single_cap'))}% · "
-            f"진입차단 {'예' if regime.get('entry_blocked') else '아니오'}"
-        )
+        lines.append(f"현재 국면 {regime.get('regime')}")  # 국면은 현금비중만 관리(종목별 진입게이트 없음)
     if not items:
         lines.append("관심종목이 비어 있음")
     for it in items[:_TOP_WATCHLIST]:
@@ -165,12 +162,10 @@ def _watchlist_context(user, db) -> str:
             if target is not None
             else "목표가 미설정"
         )
-        es = it.get("entry_signal") or {}
-        entry = "진입검토가능" if es.get("entry_allowed") else "진입주의"
         lines.append(
             f"- {it.get('stock_name') or it.get('ticker')}({it.get('ticker')}): "
             f"현재가 {_num(it.get('current_price'))}원({_signed_pct(it.get('change_rate'))}%) · "
-            f"PER {_pct(it.get('per'))} · {target_s} · {entry}"
+            f"PER {_pct(it.get('per'))} · {target_s}"
         )
     if len(items) > _TOP_WATCHLIST:
         lines.append(f"…외 {len(items) - _TOP_WATCHLIST}종목")
@@ -190,7 +185,7 @@ def _stock_context(args: dict, user, db) -> str | None:
         return None  # 불량 ticker → 컨텍스트 없음(잘못된 조회 트리거 방지)
 
     from collectors.kis import inquire_price as ip
-    from stock.summary import _pos_52w, regime_gate
+    from stock.summary import _pos_52w
 
     name = args.get("stock_name") or ticker
     lines = [f"[종목 상세 · {name}({ticker})]"]
@@ -200,14 +195,11 @@ def _stock_context(args: dict, user, db) -> str | None:
     except Exception:
         val = None
     if val:
-        gate = regime_gate(val, _safe_judgement())
         pos = _pos_52w(val.get("price"), val.get("week52_high"), val.get("week52_low"))
         lines.append(
             f"현재가 {_num(val.get('price'))}원({_signed_pct(val.get('change_rate'))}%) · "
             f"PER {_pct(val.get('per'))} · PBR {_pct(val.get('pbr'))} · 52주위치 {_pct(pos)}%"
         )
-        if gate.get("note"):
-            lines.append(f"국면정합성: {gate.get('note')}")
     else:
         lines.append("종목 시세 일시 조회 불가")
 

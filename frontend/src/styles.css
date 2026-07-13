@@ -791,48 +791,8 @@ body {
   color: var(--c-down);
 }
 
-/* ── 국면 정합성 패널 — 주황 소프트 카드(현재 국면 강조, "여기를 보라"). ── */
-.regime-fit {
-  margin-top: 14px;
-  padding: 14px 16px;
-  background: var(--c-emph-soft);
-  border: 1px solid var(--c-emph-border);
-  border-radius: var(--radius);
-}
-.regime-fit__head {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--c-navy);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-/* 현재 국면명 = 주황(강조) */
-.regime-fit__name {
-  color: var(--c-emph);
-  font-weight: 700;
-}
-.regime-fit__flag {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--c-surface);
-  border: 1px solid var(--c-border-strong);
-  color: var(--c-text-secondary);
-}
-.regime-fit__note {
-  margin: 8px 0 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--c-text);
-}
-.regime-fit__meta {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--c-text-secondary);
-}
+/* 국면정합성 패널(.regime-fit*)은 폐기(항목3) — 종목 번들은 국면 커트를 판정하지 않는다.
+   국면·현금비중 스탠스 대비 최종 적합성은 AI 리포트의 '국면정합성' 서술이 담당한다. */
 
 /* ── 재무 추이 테이블 ── */
 .ftable-wrap {
@@ -1583,10 +1543,6 @@ body {
   box-shadow: var(--shadow-card);
   font-size: 13px;
 }
-.wl__regime.is-blocked {
-  border-color: var(--c-border-strong);
-  background: var(--c-surface-2);
-}
 .wl__regime--fail {
   border-style: dashed;
   color: var(--c-text-secondary);
@@ -1600,13 +1556,8 @@ body {
   font-weight: 700;
   color: var(--c-emph); /* 국면명 = 강조 주황 */
 }
-.wl__regime-flag {
-  color: var(--c-text-secondary);
-  font-weight: 600;
-}
-.wl__regime-note {
-  color: var(--c-text-secondary);
-}
+/* 국면 배너의 진입억제 플래그·검토가능 노트(.is-blocked/.wl__regime-flag/.wl__regime-note)는
+   폐기(항목3) — 국면 배너는 국면명만 표시(종목별 진입게이트 없음). */
 
 /* 툴바(정렬 드롭다운) */
 .wl__toolbar {

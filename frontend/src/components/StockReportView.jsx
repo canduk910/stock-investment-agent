@@ -45,7 +45,7 @@ function failed(bundle, section) {
 export default function StockReportView({ bundle, sessionId, onConsult }) {
   if (!bundle) return null
 
-  const { ticker, basic, valuation, financials, chart, summary, regime_gate } = bundle
+  const { ticker, basic, valuation, financials, chart, summary } = bundle
   const indicatorConfig = bundle.indicator_config ?? { ma_period: 20, rsi_period: 14 }
   const sampleYears = summary?.sample_years
   const yearsLabel = sampleYears ? `${sampleYears}년` : 'N년'
@@ -184,7 +184,7 @@ export default function StockReportView({ bundle, sessionId, onConsult }) {
         </p>
       ) : null}
 
-      {/* ── 중단(focus): 기술적(캔들차트+국면정합성) · 기본적(재무추이) ── */}
+      {/* ── 중단(focus): 기술적(캔들차트) · 기본적(재무추이) ── */}
       <h3 className="report__section-label">기술적 분석</h3>
       {chartFailed ? (
         <div className="card card--failed report__section-fail">
@@ -208,25 +208,9 @@ export default function StockReportView({ bundle, sessionId, onConsult }) {
         </div>
       )}
 
-      {/* 국면 정합성 — regime_gate.note(사실 서술), 국면명은 주황(강조). 매매 명령형 아님. */}
-      {regime_gate && !failed(bundle, 'regime_gate') ? (
-        <div className="regime-fit">
-          <div className="regime-fit__head">
-            국면 정합성 · 현재 국면 <span className="regime-fit__name">{regime_gate.regime}</span>
-            {regime_gate.entry_blocked ? (
-              <span className="regime-fit__flag">신규 진입 주의</span>
-            ) : null}
-          </div>
-          {regime_gate.note ? <p className="regime-fit__note">{regime_gate.note}</p> : null}
-          <div className="regime-fit__meta">
-            {regime_gate.per_max != null ? `PER 기준 ≤ ${regime_gate.per_max}` : 'PER 기준 —'}
-            {' · '}
-            {regime_gate.pbr_max != null ? `PBR 기준 ≤ ${regime_gate.pbr_max}` : 'PBR 기준 —'}
-            {regime_gate.per_over ? ' · PER 기준 초과' : ''}
-            {regime_gate.pbr_over ? ' · PBR 기준 초과' : ''}
-          </div>
-        </div>
-      ) : null}
+      {/* 국면정합성 카드(regime_gate)는 폐기(항목3) — 국면은 현금비중만 관리하고 종목별
+          PER/PBR 상한 커트로 판정하지 않는다. 국면·현금비중 스탠스 대비 최종 적합성은 AI
+          리포트(AiReportPanel)의 '국면정합성' 서술이 담당한다. */}
 
       <h3 className="report__section-label">기본적 분석 · 재무 추이</h3>
       {financialsFailed ? (

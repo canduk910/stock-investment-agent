@@ -32,7 +32,7 @@ def client(monkeypatch):
             "ticker": ticker,
             "basic": {"name": "삼성전자"},
             "summary": {"current_per": 12.0, "valuation_label": "적정"},
-            "regime_gate": {"regime": "확장", "single_cap": 3},
+            # regime_gate 폐기(항목3) — 번들에 없음.
             "partial_failure": [],
         },
     )

@@ -51,7 +51,7 @@
 
 ## 워치리스트 + 구조화 리포트 (W10)
 - **`WatchlistView`는 단일 본문 컴포넌트** — `PopupWatchlist`가 래핑, 우측 패널(랜딩 기본)·챗 트리거가 같은 본문을 공유(UX 개편으로 모달→우측 인라인). 실데이터는 프론트가 `/api/watchlist`로 직접 조회(환각 차단). `popupRouter`의 `show_watchlist→watchlist` 계약 유지.
-- **리디자인: 테이블→카드 로우**(`.wl__row`) — 종목명·코드/사유 + **스파크라인**(`Sparkline`, watchlist 응답 `spark:number[]|null` SVG, 선색=방향색 `--c-up/--c-down`, 결측 시 생략) + 등락 칩(소프트 배경) + 현재가 + PER/PBR + **목표가 근접 게이지**(`gaugeWidth(distance)`, 도달/근접=주황 `is-near`/여유=회색, 매수 관점) + 진입 배지 + [제거]. `TargetCell` 인라인 편집(브라우저 prompt 금지)·정렬·partial 배너 유지.
+- **리디자인: 테이블→카드 로우**(`.wl__row`) — 종목명·코드/사유 + **스파크라인**(`Sparkline`, watchlist 응답 `spark:number[]|null` SVG, 선색=방향색 `--c-up/--c-down`, 결측 시 생략) + 등락 칩(소프트 배경) + 현재가 + PER/PBR + **목표가 근접 게이지**(`gaugeWidth(distance)`, 도달/근접=주황 `is-near`/여유=회색, 매수 관점) + [제거]. 국면별 종목 진입 배지(`entrySignalLabel`)는 폐기(항목3 — 국면은 현금비중만), 국면 배너는 국면명만. `TargetCell` 인라인 편집(브라우저 prompt 금지)·정렬·partial 배너 유지.
 - **정렬은 순수 로직**(`lib/watchlistLogic.js`: `sortItems`·`distanceToTarget`·`classifyTargetStatus`·`detectTargetAlerts`) — 드롭다운 재정렬 시 재조회 없음. `SORT_KEYS`는 백엔드·`chat/tools.py` enum과 **SSOT 일치**. `classifyTargetStatus`는 **매수(진입가) 관점**(current≤target=도달)으로 백엔드 `_target_status`와 동일 — sell 관점으로 뒤집지 말 것.
 - **능동 목표가 알림은 `App.jsx` 앱 레벨**: `far→near/reached` **전이 시에만** 주황 배너 + 브라우저 `Notification`(권한 최초 1회). 60s `setInterval` refresh(언마운트 clear). 알림은 "안내"만(주문 자동실행 금지). 목표가 도달/근접·진입 검토가능 = **주황(`--c-emph`)**, 빨강 금지.
 - **[P2] `AiReportPanel`**: "AI 리포트 생성"→`POST /api/detail/{ticker}/report`→구조화 6필드 렌더(종합의견 배지 긍정적=파랑/중립=회색/**신중=주황**, 투자포인트·리스크요인·국면정합성·면책 상시). `validation_failed`면 정량요약 폴백 + "AI 서술 생성 실패" 안내. `lib/reportFormat.js::opinionTone`(순수)이 종합의견→토큰 매핑.

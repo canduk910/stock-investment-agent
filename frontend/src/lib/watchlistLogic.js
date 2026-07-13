@@ -1,7 +1,8 @@
 // 워치리스트 표현·정렬 로직(순수) — 브라우저 없이 테스트 가능(watchlistLogic.test.js).
-// 원칙: 숫자·판정(target_status·distance_to_target·entry_signal)은 백엔드(watchlist/service.py +
-//   stock/summary.py::regime_gate)가 확정해 item 에 실어 내려준다. 프론트는 그 값을 "어떻게 정렬·표시할지"만
-//   결정한다 — 백엔드 판정을 복제하지 않는다(IMP-01: 죽은 복제 classifyTargetStatus/distanceToTarget 제거).
+// 원칙: 숫자·판정(target_status·distance_to_target)은 백엔드(watchlist/service.py)가 확정해 item 에
+//   실어 내려준다. 프론트는 그 값을 "어떻게 정렬·표시할지"만 결정한다 — 백엔드 판정을 복제하지 않는다
+//   (IMP-01: 죽은 복제 classifyTargetStatus/distanceToTarget 제거). 국면별 종목 진입신호(entry_signal)는
+//   폐기(항목3 — 국면은 현금비중만 관리, 종목별 커트 없음).
 //
 // 정렬 3종은 chat/tools.py show_watchlist enum(LLM-facing SSOT) = watchlist/constants.py SORT_KEYS 와 일치.
 
@@ -59,29 +60,6 @@ export function sortItems(items, sortBy) {
   const cmp = COMPARATORS[sortBy] ?? COMPARATORS.registered
   // Array.prototype.sort 는 안정 정렬(ES2019+) → 동률은 원본 순서 유지.
   return [...items].sort(cmp)
-}
-
-// 진입신호(entry_signal) → 배지 문구·톤. tone: 'emph'(주황=검토가능) | 'muted'(회색=억제/부담/불가).
-// 위험(빨강) 은 쓰지 않는다 — 진입 억제는 위험이 아니라 "지금은 아님". 색은 컴포넌트가 토큰으로 매핑.
-// 계약: entry_signal = {entry_blocked, per_over, pbr_over, single_cap, entry_allowed, note} | null.
-export function entrySignalLabel(signal) {
-  if (!signal) {
-    // judgement 실패 등으로 진입 판정 불가(임의 판단·무한 스피너 금지).
-    return { text: '진입 판정 불가', tone: 'muted' }
-  }
-  if (signal.entry_blocked) {
-    // 국면 게이트(single_cap=0 등)로 신규진입 억제.
-    return { text: '신규 진입 억제', tone: 'muted' }
-  }
-  if (signal.per_over || signal.pbr_over) {
-    // 국면은 열려 있으나 종목 밸류에이션이 상한 초과.
-    return { text: '밸류에이션 부담', tone: 'muted' }
-  }
-  if (signal.entry_allowed) {
-    // 국면 미차단 + 밸류에이션 이내 → 검토 가능(강조 주황).
-    return { text: '진입 검토 가능', tone: 'emph' }
-  }
-  return { text: '진입 판정 불가', tone: 'muted' }
 }
 
 // 목표가 능동 알림 — 이전 관측(prevMap: {ticker: target_status}) 대비 이번 items 에서

@@ -45,14 +45,14 @@ CYCLE_KEYS = ("yield_spread", "hy_spread")
 # 심리(변동성·심리) 축 지표.
 SENTIMENT_KEYS = ("vix", "fear_greed")
 
-# 국면별 실행 파라미터 — "현금비중(%)" 관점 단일 출처(recommended_cash_ratio 의 유일 출처).
-# 역발상 배분: 과열(고평가·탐욕)일수록 현금을 늘리고, 수축(급락·공포)일수록 현금을 줄여
-# 적극 매수한다. single_cap=0(과열)은 "신규 진입 제안 자체 안 함" 게이트.
+# 국면별 실행 파라미터 — **현금비중(%)만** 관리(recommended_cash_ratio 의 유일 출처).
+# 역발상 배분: 과열(고평가·탐욕)일수록 현금을 늘리고, 수축(급락·공포)일수록 현금을 줄여 적극 매수한다.
+# (종목별 진입게이트[single_cap·per_max·pbr_max]는 "너무 보수적"이라 폐기 — 국면은 현금비중만 다룬다.)
 REGIME_PARAMS = {
-    "회복": {"cash": 40, "single_cap": 4, "per_max": 15, "pbr_max": 1.5},
-    "확장": {"cash": 60, "single_cap": 3, "per_max": 15, "pbr_max": 1.5},
-    "과열": {"cash": 80, "single_cap": 0, "per_max": None, "pbr_max": None},
-    "수축": {"cash": 20, "single_cap": 5, "per_max": 20, "pbr_max": 2.0},
+    "회복": {"cash": 40},
+    "확장": {"cash": 60},
+    "과열": {"cash": 80},
+    "수축": {"cash": 20},
 }
 
 # 지표별 구간 표기 — score_axes 와 정확히 1:1 일치(리뷰어·W09 프롬프트 기준표용).
