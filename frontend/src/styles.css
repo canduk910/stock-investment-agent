@@ -2728,6 +2728,13 @@ body {
   display: flex;
   gap: 8px;
 }
+/* 종목명 자동완성(항목6) — 입력을 감싸 드롭다운(.autocomplete) 앵커. 좁은 입력 대비 드롭다운 최소폭 확보. */
+.right-panel__search-box {
+  position: relative;
+}
+.right-panel__search-box .autocomplete {
+  min-width: 230px;
+}
 /* 형식 불량 안내 — 뉴트럴 회색(빨강은 위험 전용, 폼 힌트엔 금지). */
 .right-panel__search-hint {
   margin: 0;

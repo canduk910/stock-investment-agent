@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { isValidTicker } from '../lib/ticker.js'
+import { searchStocks } from '../api.js'
 import PopupStockReport from './PopupStockReport.jsx'
 import PopupWatchlist from './PopupWatchlist.jsx'
 import ManageWatchlistConfirm from './ManageWatchlistConfirm.jsx'
@@ -77,38 +78,138 @@ function RightPanelBody({ spec, onClose, sessionId, onConsult }) {
   }
 }
 
-// 종목검색 인라인 폼 — 툴바 우측 상시 노출(브라우저 prompt 금지). 유효 ticker 만 onSubmit.
-// 형식 불량(6자 영숫자 아님)이면 조회하지 않고(잘못된 백엔드 조회 방지) 짧은 안내를 띄운다 —
-//   안내 색은 뉴트럴 회색(--c-text-secondary) — 빨강은 위험(손실·패닉) 전용이라 폼 힌트엔 쓰지 않는다.
+// 종목검색 인라인 폼 — 툴바 우측 상시 노출(브라우저 prompt 금지). **종목명 자동완성 원복(항목6)**:
+//   종목명/코드 입력 → KIS 마스터 검색(/api/stocks/search, StockReport.jsx 패턴) → 후보 드롭다운 →
+//   선택 시 유효 ticker 로 onSubmit(ticker, 종목명). 코드 직접입력은 isValidTicker(ticker.js SSOT).
+//   후보 없는 이름·부분입력은 조회하지 않고(잘못된 백엔드 조회 방지) 짧은 안내만 —
+//   안내 색은 뉴트럴 회색(--c-text-secondary), 검색 실패는 조용히(코드 직접입력 경로 보존).
 function TickerSearch({ onSubmit }) {
   const [draft, setDraft] = useState('')
   const [error, setError] = useState('')
+  const [suggestions, setSuggestions] = useState([])
+  const [open, setOpen] = useState(false)
+  const [activeIdx, setActiveIdx] = useState(-1)
+  const skipSearchRef = useRef(false) // 선택 직후 1회 재검색 방지
+  const boxRef = useRef(null)
+
+  // 디바운스 자동완성 검색(180ms). 검색 실패는 조용히(코드 직접입력 경로 보존).
+  useEffect(() => {
+    if (skipSearchRef.current) {
+      skipSearchRef.current = false
+      return
+    }
+    const q = draft.trim()
+    if (!q) {
+      setSuggestions([])
+      setOpen(false)
+      return
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const results = await searchStocks(q, 8)
+        setSuggestions(results)
+        setOpen(results.length > 0)
+        setActiveIdx(-1)
+      } catch {
+        setSuggestions([]) // 검색 실패는 조용히 — 코드 직접 입력 가능
+        setOpen(false)
+      }
+    }, 180)
+    return () => clearTimeout(timer)
+  }, [draft])
+
+  // 바깥 클릭 시 드롭다운 닫기.
+  useEffect(() => {
+    function onDocMouseDown(e) {
+      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    return () => document.removeEventListener('mousedown', onDocMouseDown)
+  }, [])
+
+  function pick(stock) {
+    skipSearchRef.current = true
+    setDraft('')
+    setSuggestions([])
+    setOpen(false)
+    setError('')
+    onSubmit(stock.ticker, stock.name) // 후보는 유효 ticker 확정 + 종목명(패널 제목용)
+  }
+
   function submit(e) {
     e.preventDefault()
     const t = draft.trim()
-    if (!isValidTicker(t)) {
-      // ticker.js SSOT — 불량이면 조회 없이 안내만(onSubmit 미호출). 잘못된 백엔드 조회 방지.
-      setError('종목코드는 숫자·영문 6자리입니다 (예: 005930).')
-      return
+    if (open && activeIdx >= 0 && suggestions[activeIdx]) {
+      pick(suggestions[activeIdx]) // 키보드/활성 후보 확정
+    } else if (isValidTicker(t)) {
+      setError('')
+      onSubmit(t) // 6자 코드 직접 조회(ticker.js SSOT — 팝업 라우팅과 동일 규칙)
+      setDraft('')
+      setOpen(false)
+    } else if (suggestions.length) {
+      pick(suggestions[0]) // 이름 입력 → 첫 후보
+    } else {
+      // 이름·부분입력인데 후보 없음 → 조회 없이 안내만(잘못된 백엔드 조회 방지).
+      setError('종목명 또는 코드(6자리)로 검색하세요 (예: 삼성전자, 005930).')
     }
-    setError('')
-    onSubmit(t)
-    setDraft('')
   }
+
+  function onKeyDown(e) {
+    if (!open || !suggestions.length) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveIdx((i) => Math.min(i + 1, suggestions.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveIdx((i) => Math.max(i - 1, 0))
+    } else if (e.key === 'Escape') {
+      setOpen(false)
+    }
+  }
+
   return (
     <form className="right-panel__search" onSubmit={submit} autoComplete="off">
       <div className="right-panel__search-row">
-        <input
-          className="right-panel__search-input"
-          value={draft}
-          onChange={(e) => {
-            setDraft(e.target.value)
-            if (error) setError('') // 다시 타이핑하면 안내 해제(자기치유)
-          }}
-          placeholder="종목코드 6자리(예: 005930)"
-          aria-label="종목코드 입력"
-          aria-invalid={error ? 'true' : undefined}
-        />
+        <div className="right-panel__search-box" ref={boxRef}>
+          <input
+            className="right-panel__search-input"
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              if (error) setError('') // 다시 타이핑하면 안내 해제(자기치유)
+            }}
+            onKeyDown={onKeyDown}
+            onFocus={() => suggestions.length > 0 && setOpen(true)}
+            placeholder="종목명 또는 코드 (예: 삼성전자, 005930)"
+            aria-label="종목 검색"
+            role="combobox"
+            aria-expanded={open}
+            aria-autocomplete="list"
+            aria-invalid={error ? 'true' : undefined}
+          />
+          {open && (
+            <ul className="autocomplete" role="listbox" aria-label="종목 검색 결과">
+              {suggestions.map((s, i) => (
+                <li
+                  key={s.ticker}
+                  role="option"
+                  aria-selected={i === activeIdx}
+                  className={`autocomplete__item ${i === activeIdx ? 'is-active' : ''}`}
+                  onMouseDown={(e) => {
+                    e.preventDefault() // input blur 로 닫히기 전에 선택
+                    pick(s)
+                  }}
+                  onMouseEnter={() => setActiveIdx(i)}
+                >
+                  <span className="autocomplete__name">{s.name}</span>
+                  <span className="autocomplete__meta">
+                    {s.ticker} · {s.market}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <button type="submit" className="refresh right-panel__search-go" disabled={!draft.trim()}>
           조회
         </button>
@@ -182,7 +283,13 @@ export default function RightPanel({ spec, onSelect, onClose, sessionId, onConsu
           ))}
         </div>
         <TickerSearch
-          onSubmit={(ticker) => onSelect({ kind: 'stock_report', args: { ticker }, valid: true })}
+          onSubmit={(ticker, stockName) =>
+            onSelect({
+              kind: 'stock_report',
+              args: stockName ? { ticker, stock_name: stockName } : { ticker },
+              valid: true,
+            })
+          }
         />
       </div>
 
