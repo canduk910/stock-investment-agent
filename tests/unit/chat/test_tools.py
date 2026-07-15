@@ -104,6 +104,14 @@ def test_manage_watchlist_action_enum_and_required():
     assert "target_price" in _props("manage_watchlist")
 
 
+def test_manage_watchlist_has_sell_target_price():
+    # 매수/매도 목표가 분리 — set_target 이 매수(target_price)·매도(sell_target_price) 둘 다 수용.
+    props = _props("manage_watchlist")
+    assert "target_price" in props and "sell_target_price" in props
+    # 둘 다 required 는 아님(set_target 시 최소 1개면 됨 — 프론트 popupRouter 가 검증).
+    assert "sell_target_price" not in _tool("manage_watchlist")["parameters"]["required"]
+
+
 def test_show_balance_has_no_parameters():
     # UX3: 잔고 조회는 파라미터 없음(단일 사용자 계좌 — 프론트가 /api/balance 자체조회).
     # LLM 은 "잔고를 띄워라"만 지시하고, 어떤 계좌·필드인지는 코드가 정한다.

@@ -307,6 +307,73 @@ def test_patch_negative_target_rejected(client):
     assert r.status_code == 422  # Pydantic 검증(ge=0)
 
 
+# ── PATCH/POST 매도 목표가(sell) ─────────────────────────────────────────────
+
+def test_patch_updates_sell_target(client):
+    client.post("/api/watchlist", json={"ticker": "005930", "stock_name": "삼성전자"})
+    r = client.patch("/api/watchlist/005930", json={"sell_target_price": 120000.0})
+    assert r.status_code == 200
+    assert r.json()["item"]["sell_target_price"] == 120000.0
+    assert client.store.get("1", "005930").sell_target_price == 120000.0
+
+
+def test_patch_sell_only_preserves_buy(client):
+    # 매수 목표가 설정 후, 매도만 PATCH → 매수는 그대로(부분 갱신).
+    client.post("/api/watchlist", json={"ticker": "005930", "stock_name": "삼성전자", "target_price": 80000.0})
+    r = client.patch("/api/watchlist/005930", json={"sell_target_price": 120000.0})
+    assert r.status_code == 200
+    item = r.json()["item"]
+    assert item["target_price"] == 80000.0        # 미제공 → 보존
+    assert item["sell_target_price"] == 120000.0
+
+
+def test_patch_buy_only_preserves_sell(client):
+    client.post("/api/watchlist", json={
+        "ticker": "005930", "stock_name": "삼성전자", "sell_target_price": 120000.0,
+    })
+    r = client.patch("/api/watchlist/005930", json={"target_price": 70000.0})
+    assert r.status_code == 200
+    item = r.json()["item"]
+    assert item["target_price"] == 70000.0
+    assert item["sell_target_price"] == 120000.0  # 미제공 → 보존
+
+
+def test_patch_negative_sell_rejected(client):
+    client.post("/api/watchlist", json={"ticker": "005930", "stock_name": "삼성전자"})
+    r = client.patch("/api/watchlist/005930", json={"sell_target_price": -5.0})
+    assert r.status_code == 422
+
+
+def test_post_stores_both_targets(client):
+    r = client.post("/api/watchlist", json={
+        "ticker": "005930", "stock_name": "삼성전자",
+        "target_price": 80000.0, "sell_target_price": 120000.0,
+    })
+    assert r.status_code == 200
+    item = r.json()["item"]
+    assert item["target_price"] == 80000.0
+    assert item["sell_target_price"] == 120000.0
+
+
+def test_post_upsert_preserves_sell_when_omitted(client):
+    client.post("/api/watchlist", json={
+        "ticker": "005930", "stock_name": "삼성전자", "sell_target_price": 120000.0,
+    })
+    r = client.post("/api/watchlist", json={"ticker": "005930"})  # 매도 미제공
+    assert r.json()["item"]["sell_target_price"] == 120000.0  # 보존(IMP-03 패턴)
+
+
+def test_get_item_carries_sell_status(client):
+    # GET enriched 응답에 매도 상태 키가 실린다(프론트 의존 계약).
+    client.post("/api/watchlist", json={
+        "ticker": "005930", "stock_name": "삼성전자", "sell_target_price": 120000.0,
+    })
+    item = client.get("/api/watchlist").json()["items"][0]
+    assert "sell_target_price" in item
+    assert "sell_target_status" in item
+    assert "sell_distance_to_target" in item
+
+
 # ── 유저 격리(인증 스코프) ────────────────────────────────────────────────────
 
 def test_watchlist_scoped_to_authed_user(client):

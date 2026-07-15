@@ -19,21 +19,34 @@ export default function ManageWatchlistConfirm({ args, valid, onClose }) {
     )
   }
 
-  const { action, ticker, stock_name, target_price } = args
+  const { action, ticker, stock_name, target_price, sell_target_price } = args
   const name = stock_name || ticker
+
+  // set_target: 제공된 side 만 반영·표시(popupRouter 가 매수/매도 중 최소 1개 유효를 이미 보장).
+  const hasBuy = target_price != null && Number.isFinite(Number(target_price))
+  const hasSell = sell_target_price != null && Number.isFinite(Number(sell_target_price))
+  const targetParts = []
+  if (hasBuy) targetParts.push(`매수 목표가 ${num(target_price)}원`)
+  if (hasSell) targetParts.push(`매도 목표가 ${num(sell_target_price)}원`)
+
   const question =
     action === 'add'
       ? `‘${name}(${ticker})’을(를) 관심종목에 추가할까요?`
       : action === 'remove'
         ? `‘${name}(${ticker})’을(를) 관심종목에서 제거할까요?`
-        : `‘${name}(${ticker})’의 목표가를 ${num(target_price)}원으로 설정할까요?`
+        : `‘${name}(${ticker})’의 ${targetParts.join(' · ')}(으)로 설정할까요?`
 
   async function confirm() {
     setState('saving')
     try {
       if (action === 'add') await addWatchlist({ ticker, stockName: stock_name })
       else if (action === 'remove') await removeWatchlist(ticker)
-      else await updateWatchlistTarget(ticker, target_price)
+      else {
+        const targets = {}
+        if (hasBuy) targets.target_price = Number(target_price)
+        if (hasSell) targets.sell_target_price = Number(sell_target_price)
+        await updateWatchlistTarget(ticker, targets)
+      }
       setState('done')
       setMsg('반영했습니다. 관심종목 화면에서 확인할 수 있어요.')
     } catch (e) {

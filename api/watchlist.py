@@ -5,13 +5,15 @@ detail 은 api.main 을 import 하지 않으므로 사이클 없음. **api.main 
 라우트는 얇게: client·judgement·store 조합 → 순수 서비스(watchlist.service)로 조립.
 
 ## 계약(frontend 의존 — 임의 변경 금지)
-- GET  /api/watchlist?sort_by=&user_id= → {items, regime, sort_by, partial_failure}
-- POST /api/watchlist {ticker, stock_name?, reason?, target_price?, user_id?} → {ok, item}
-- DELETE /api/watchlist/{ticker}?user_id= → {ok}
-- PATCH  /api/watchlist/{ticker} {target_price, user_id?} → {ok, item}
+- GET  /api/watchlist?sort_by= → {items, regime, sort_by, partial_failure}
+  (item 에 매수 target_price/target_status/distance_to_target + 매도 sell_target_price/
+   sell_target_status/sell_distance_to_target)
+- POST /api/watchlist {ticker, stock_name?, reason?, target_price?, sell_target_price?} → {ok, item}
+- DELETE /api/watchlist/{ticker} → {ok}
+- PATCH  /api/watchlist/{ticker} {target_price?, sell_target_price?} → {ok, item}(바디에 온 필드만 갱신)
 
-조회 전용(order/buy/sell 없음). judgement 실패 → regime degraded(항상 200, service 내부에서
-partial_failure 에 'regime'). ticker 불량 → 400(저장 안 함). target 음수 → 422(Pydantic ge=0).
+목표가는 매수/매도 저장·추적만(order/매매 API 없음 — 자동 체결 금지). judgement 실패 → regime
+degraded(항상 200, partial_failure 에 'regime'). ticker 불량 → 400. 목표가 음수 → 422(Pydantic ge=0).
 """
 from __future__ import annotations
 
@@ -54,11 +56,14 @@ class AddRequest(BaseModel):
     ticker: str
     stock_name: str | None = None
     reason: str | None = None
-    target_price: float | None = Field(default=None, ge=0)
+    target_price: float | None = Field(default=None, ge=0)  # 매수 목표가
+    sell_target_price: float | None = Field(default=None, ge=0)  # 매도 목표가
 
 
 class PatchRequest(BaseModel):
+    # 매수/매도 목표가 부분 갱신 — 바디에 온 필드만 반영(model_fields_set 로 '미제공' vs 'null' 구분).
     target_price: float | None = Field(default=None, ge=0)
+    sell_target_price: float | None = Field(default=None, ge=0)
 
 
 # ── stock_name 해석 ──────────────────────────────────────────────────────────
@@ -148,6 +153,8 @@ def add_watchlist(
         # upsert 시 added_at 은 store 가 최초값으로 보존 → 여기선 신규 시각을 준다.
         target_price=req.target_price if req.target_price is not None
         else (existing.target_price if existing else None),
+        sell_target_price=req.sell_target_price if req.sell_target_price is not None
+        else (existing.sell_target_price if existing else None),
         added_at=_now_iso(),
     )
     stored = store.put(item)
@@ -184,9 +191,19 @@ def patch_watchlist(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    """목표가 갱신. 불량 ticker 는 400. 미등록 종목은 404. 음수는 Pydantic 이 422."""
+    """매수/매도 목표가 부분 갱신. 불량 ticker 400·미등록 404·음수 422(Pydantic ge=0).
+
+    바디에 실제로 온 필드만 반영한다(`model_fields_set`) — 매도만 보내면 매수는 그대로,
+    명시적 null 은 해제. 둘 다 생략이면 변경 없이 현재 item 을 돌려준다.
+    """
     assert_valid_ticker(ticker)  # IMP-02
-    updated = _get_store(db).update_target(str(user.id), ticker, req.target_price)
+    provided = req.model_fields_set  # 실제 전송된 필드만(기본값과 명시적 null 구분)
+    changes = {}
+    if "target_price" in provided:
+        changes["target_price"] = req.target_price
+    if "sell_target_price" in provided:
+        changes["sell_target_price"] = req.sell_target_price
+    updated = _get_store(db).update_targets(str(user.id), ticker, **changes)
     if updated is None:
         raise HTTPException(status_code=404, detail="watchlist item not found")
     return {"ok": True, "item": updated.model_dump()}

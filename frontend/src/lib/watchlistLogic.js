@@ -38,10 +38,18 @@ function cmpChangeRate(a, b) {
   return bv - av
 }
 
+// 매수·매도 중 목표선에 더 가까운 쪽의 |거리%|(둘 다 없으면 null). '목표가 근접순'은 이 값 오름차순.
+function _proximity(it) {
+  const cands = []
+  if (isFiniteNum(it?.distance_to_target)) cands.push(Math.abs(it.distance_to_target))
+  if (isFiniteNum(it?.sell_distance_to_target)) cands.push(Math.abs(it.sell_distance_to_target))
+  return cands.length ? Math.min(...cands) : null
+}
+
 function cmpNearTarget(a, b) {
-  // distance_to_target 오름차순(매수관점: 더 하락한=강한 신호 먼저). 목표가 없는(null) 종목은 후순위.
-  const av = isFiniteNum(a?.distance_to_target) ? a.distance_to_target : null
-  const bv = isFiniteNum(b?.distance_to_target) ? b.distance_to_target : null
+  // 매수·매도 중 더 가까운 목표선 기준 근접순(작은 |거리|=곧 도달 먼저). 목표가 없는 종목은 후순위.
+  const av = _proximity(a)
+  const bv = _proximity(b)
   if (av === null && bv === null) return 0
   if (av === null) return 1
   if (bv === null) return -1
@@ -62,35 +70,38 @@ export function sortItems(items, sortBy) {
   return [...items].sort(cmp)
 }
 
-// 목표가 능동 알림 — 이전 관측(prevMap: {ticker: target_status}) 대비 이번 items 에서
-// far → near/reached 로 "개선 전이"한 종목만 골라 알림 대상으로 반환한다.
-//   - 발화 조건: 이전이 far(또는 미관측=far 간주) 이고 이번이 near/reached.
-//   - near → reached 승격도 전이로 본다(더 강한 매수 신호 도달).
+// 목표가 능동 알림 — 이전 관측(prevMap: {ticker: {buy, sell}}) 대비 이번 items 에서 매수·매도 각각
+// far → near/reached 로 "개선 전이"한 신호만 골라 알림 대상으로 반환한다(side 부여).
+//   - 발화 조건: 이전이 far/none(또는 미관측) 이고 이번이 near/reached.
+//   - near → reached 승격도 전이로 본다(더 강한 신호 도달).
 //   - 유지(near→near, reached→reached)·악화(→far)·none 은 발화 안 함(스팸 방지).
-//   - prevMap 이 없으면(초기 로드) 알림 0 — 마운트 직후 전 종목이 무더기로 울리는 걸 막는다.
-// 반환: [{ticker, stock_name, status}] (App 이 배너·브라우저 Notification 발화에 사용).
+//   - prevMap 이 없으면(초기 로드) 알림 0. 신규 관측(prev 미기록)도 발화 안 함(초기 스팸 방지).
+// 반환: [{ticker, stock_name, side:'buy'|'sell', status}] (App 이 배너·브라우저 Notification 에 사용).
 const ALERT_STATUSES = new Set(['near', 'reached'])
+
+// 한 side 의 이전(prev)→이번(status) 상태가 '개선 전이'인지. prev undefined=신규 관측(발화 안 함).
+function _isImprovement(prev, status) {
+  if (!ALERT_STATUSES.has(status)) return false // 이번이 near/reached 아니면 알림 대상 아님
+  if (prev === undefined) return false // 신규 관측 — 초기 스팸 방지(far 취급하지 않고 억제)
+  if (ALERT_STATUSES.has(prev)) return prev === 'near' && status === 'reached' // 승격만
+  return true // far/none → near/reached
+}
+
 export function detectTargetAlerts(items, prevMap) {
   if (!Array.isArray(items)) return []
   if (!prevMap) return [] // 초기 로드(비교 기준 없음) — 무더기 발화 방지.
   const out = []
   for (const it of items) {
-    const status = it?.target_status
-    if (!ALERT_STATUSES.has(status)) continue // none/far 는 애초에 알림 대상 아님.
-    // 이전 상태가 이미 near/reached 였으면 재알림 안 함(유지). 미관측(prev 없음)은 far 로 간주.
     const prev = Object.prototype.hasOwnProperty.call(prevMap, it.ticker)
       ? prevMap[it.ticker]
       : undefined
-    if (prev === undefined) continue // 신규 관측 — 초기 스팸 방지(far 취급).
-    if (ALERT_STATUSES.has(prev)) {
-      // near → reached 승격만 전이로 인정. near→near, reached→reached, reached→near 는 무시.
-      if (prev === 'near' && status === 'reached') {
-        out.push({ ticker: it.ticker, stock_name: it.stock_name ?? it.ticker, status })
-      }
-      continue
+    const name = it?.stock_name ?? it.ticker
+    if (_isImprovement(prev?.buy, it?.target_status)) {
+      out.push({ ticker: it.ticker, stock_name: name, side: 'buy', status: it.target_status })
     }
-    // prev 가 far(또는 none) → near/reached: 개선 전이.
-    out.push({ ticker: it.ticker, stock_name: it.stock_name ?? it.ticker, status })
+    if (_isImprovement(prev?.sell, it?.sell_target_status)) {
+      out.push({ ticker: it.ticker, stock_name: name, side: 'sell', status: it.sell_target_status })
+    }
   }
   return out
 }

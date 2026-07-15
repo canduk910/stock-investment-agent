@@ -40,12 +40,13 @@ const changeDir = (v) => {
   return Number(v) > 0 ? 'up' : Number(v) < 0 ? 'down' : 'flat'
 }
 
-// 목표가 상태 배지 문구·톤. reached/near = 강조 주황(매수 관점 신호), far/none = 회색. 위험(빨강) 아님.
-const TARGET_BADGE = {
-  reached: { text: '목표가 도달', tone: 'emph' },
-  near: { text: '목표가 근접', tone: 'emph' },
-  far: { text: '목표가까지 여유', tone: 'muted' },
-  none: null,
+// 목표가 상태 배지 — 매수/매도를 라벨로 구분(색은 동일: 도달/근접=강조 주황, 여유=회색, 위험 빨강 아님).
+// sideLabel = '매수' | '매도'. status ∈ {reached, near, far, none}.
+function targetBadge(status, sideLabel) {
+  if (status === 'reached') return { text: `${sideLabel} 목표가 도달`, tone: 'emph' }
+  if (status === 'near') return { text: `${sideLabel} 목표가 근접`, tone: 'emph' }
+  if (status === 'far') return { text: `${sideLabel} 목표가까지 여유`, tone: 'muted' }
+  return null // none — 배지 없음
 }
 
 // partial_failure(문자열 리스트/객체 둘 다 방어) 에 값이 있는지.
@@ -104,12 +105,14 @@ export default function WatchlistView({ initialSortBy, refreshKey, onView }) {
     }
   }
 
-  async function onSetTarget(ticker, current) {
-    // 브라우저 prompt 금지 규칙 준수 위해 인라인 편집을 쓴다(아래 TargetCell). 이 핸들러는 확정값만 받는다.
+  async function onSetTarget(ticker, targets) {
+    // 브라우저 prompt 금지 규칙 준수 위해 인라인 편집을 쓴다(아래 TargetCell). targets = {target_price?}
+    // 또는 {sell_target_price?}(값 null=해제). 바디에 온 필드만 부분 갱신(백엔드 model_fields_set).
     try {
-      await updateWatchlistTarget(ticker, current)
+      await updateWatchlistTarget(ticker, targets)
       await load()
-      setActionNote(current == null ? '목표가를 해제했습니다.' : '목표가를 저장했습니다.')
+      const cleared = Object.values(targets).every((v) => v == null)
+      setActionNote(cleared ? '목표가를 해제했습니다.' : '목표가를 저장했습니다.')
     } catch (e) {
       setActionError(addErrorMessage(e?.status))
     }
@@ -209,7 +212,7 @@ export default function WatchlistView({ initialSortBy, refreshKey, onView }) {
       )}
 
       <p className="wl__legend" role="note">
-        상승 빨강 · 하락 파랑 — 한국 시장 관습 · 목표가 게이지는 매수 관점 근접도
+        상승 빨강 · 하락 파랑 — 한국 시장 관습 · 목표가 게이지는 매수·매도 근접도(주황=신호)
       </p>
     </div>
   )
@@ -263,7 +266,6 @@ function gaugeWidth(distance) {
 function WatchlistRow({ item, onRemove, onSetTarget }) {
   const dir = changeDir(item.change_rate)
   const priceFailed = item.current_price == null
-  const targetBadge = TARGET_BADGE[item.target_status] ?? null
 
   return (
     <div className="wl__row">
@@ -298,12 +300,7 @@ function WatchlistRow({ item, onRemove, onSetTarget }) {
           PER {item.per == null ? '—' : Number(item.per).toFixed(1)} · PBR{' '}
           {item.pbr == null ? '—' : Number(item.pbr).toFixed(2)}
         </span>
-        <TargetCell
-          targetPrice={item.target_price}
-          distance={item.distance_to_target}
-          badge={targetBadge}
-          onSetTarget={onSetTarget}
-        />
+        <TargetCell item={item} onSetTarget={onSetTarget} />
         <button type="button" className="wl__remove" onClick={onRemove} aria-label="관심종목 제거">
           제거
         </button>
@@ -312,23 +309,50 @@ function WatchlistRow({ item, onRemove, onSetTarget }) {
   )
 }
 
-// 목표가 셀 — 표시 + 인라인 편집(브라우저 prompt 금지 규칙 준수). 비어있으면 "설정" 버튼.
-function TargetCell({ targetPrice, distance, badge, onSetTarget }) {
+// 목표가 셀 — 매수/매도 2행(각 행 독립 인라인 편집). 매수·매도를 라벨로 구분(색은 동일 주황 강조).
+function TargetCell({ item, onSetTarget }) {
+  return (
+    <div className="wl__target">
+      <TargetRow
+        sideLabel="매수"
+        field="target_price"
+        targetPrice={item.target_price}
+        distance={item.distance_to_target}
+        status={item.target_status}
+        onSetTarget={onSetTarget}
+      />
+      <TargetRow
+        sideLabel="매도"
+        field="sell_target_price"
+        targetPrice={item.sell_target_price}
+        distance={item.sell_distance_to_target}
+        status={item.sell_target_status}
+        onSetTarget={onSetTarget}
+      />
+    </div>
+  )
+}
+
+// 목표가 1행(매수 또는 매도) — 표시 + 인라인 편집(브라우저 prompt 금지 규칙 준수). commit 은
+// {field: 값} 형태로 부모에 올려 백엔드가 그 필드만 부분 갱신하게 한다(다른 side 는 불변).
+function TargetRow({ sideLabel, field, targetPrice, distance, status, onSetTarget }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(targetPrice != null ? String(targetPrice) : '')
+  const badge = targetBadge(status, sideLabel)
 
   function commit(e) {
     e.preventDefault()
     const raw = draft.trim()
     const val = raw === '' ? null : Number(raw)
     if (raw !== '' && (!Number.isFinite(val) || val < 0)) return // 불량 입력 무시(음수·비수치)
-    onSetTarget(val)
+    onSetTarget({ [field]: val })
     setEditing(false)
   }
 
   if (editing) {
     return (
       <form className="wl__target-edit" onSubmit={commit}>
+        <span className="wl__target-label">{sideLabel}</span>
         <input
           className="wl__target-input"
           type="number"
@@ -336,7 +360,7 @@ function TargetCell({ targetPrice, distance, badge, onSetTarget }) {
           step="1"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          aria-label="목표가 입력(원)"
+          aria-label={`${sideLabel} 목표가 입력(원)`}
           autoFocus
         />
         <button type="submit" className="wl__target-save">저장</button>
@@ -355,17 +379,18 @@ function TargetCell({ targetPrice, distance, badge, onSetTarget }) {
   }
 
   return (
-    <div className="wl__target">
+    <div className="wl__target-row">
+      <span className="wl__target-label">{sideLabel}</span>
       {targetPrice != null ? (
         <div className="wl__target-body">
           <div className="wl__target-head">
-            <span className="wl__target-val">목표가 {num(targetPrice)}원</span>
+            <span className="wl__target-val">{num(targetPrice)}원</span>
             {Number.isFinite(distance) ? (
               <span className="wl__target-dist">({signedPct(distance, 1)}%)</span>
             ) : null}
             {badge ? <span className={`badge badge--${badge.tone}`}>{badge.text}</span> : null}
           </div>
-          {/* 근접 게이지 — 도달/근접(주황) vs 여유(회색). 매수 관점 근접도(색만 아닌 폭으로도 표현). */}
+          {/* 근접 게이지 — 도달/근접(주황) vs 여유(회색). 근접도(색만 아닌 폭으로도 표현). */}
           <div className="wl__gauge" aria-hidden="true">
             <span
               className={`wl__gauge-fill ${badge?.tone === 'emph' ? 'is-near' : ''}`}
@@ -374,7 +399,7 @@ function TargetCell({ targetPrice, distance, badge, onSetTarget }) {
           </div>
         </div>
       ) : (
-        <span className="wl__target-none">목표가 미설정</span>
+        <span className="wl__target-none">미설정</span>
       )}
       <button type="button" className="wl__target-edit-btn" onClick={() => setEditing(true)}>
         {targetPrice != null ? '변경' : '설정'}

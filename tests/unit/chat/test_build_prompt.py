@@ -64,6 +64,17 @@ def test_prompt_contains_all_six_required_blocks():
     assert "팝업" in text or "도구" in text  # 팝업 도구 규칙
 
 
+def test_prompt_has_target_recommendation_block():
+    # ⑨ 목표가 추천 블록 — 매수/매도 참고 범위, 근거(애널리스트/52주/PER), 단정 금지·면책·확인 반영.
+    text = build_prompt(_JUDGEMENT)
+    assert "목표가 추천" in text
+    assert "참고 범위" in text
+    assert "애널리스트 목표주가" in text  # 우선 근거
+    assert "set_target" in text  # 사용자 확인 반영 경로(자동 저장 아님)
+    # 매수/매도 목표가를 각각 제안(툴 파라미터 노출).
+    assert "sell_target_price" in text
+
+
 def test_prompt_injects_judgement_regime_and_cash_ratio():
     text = build_prompt(_JUDGEMENT)
     assert _JUDGEMENT["regime"] in text  # "과열"

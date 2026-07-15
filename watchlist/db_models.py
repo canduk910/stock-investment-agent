@@ -22,5 +22,6 @@ class WatchlistItemRow(Base):
     ticker: Mapped[str] = mapped_column(String(16), nullable=False)
     stock_name: Mapped[str] = mapped_column(String(128), nullable=False)
     reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    target_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    target_price: Mapped[float | None] = mapped_column(Float, nullable=True)  # 매수 목표가
+    sell_target_price: Mapped[float | None] = mapped_column(Float, nullable=True)  # 매도 목표가
     added_at: Mapped[str] = mapped_column(String(40), nullable=False)  # ISO8601

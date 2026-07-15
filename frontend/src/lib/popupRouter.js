@@ -21,12 +21,18 @@ export const POPUP_KIND = {
 // manage_watchlist 유효 action(워치리스트 편집만 — buy/sell 등 매매 어휘는 애초에 매핑되지 않음).
 const MANAGE_ACTIONS = new Set(['add', 'remove', 'set_target'])
 
+function isValidTargetNumber(v) {
+  if (v == null) return false // 미제공 side 는 유효로 치지 않음
+  const n = Number(v)
+  return Number.isFinite(n) && n >= 0
+}
+
 function isValidManage(args) {
   if (!MANAGE_ACTIONS.has(args.action)) return false
   if (!isValidTicker(args.ticker)) return false
   if (args.action === 'set_target') {
-    const n = Number(args.target_price)
-    return Number.isFinite(n) && n >= 0 // 목표가 설정은 유효 수치(>=0) 필수
+    // 매수(target_price)·매도(sell_target_price) 중 최소 1개가 유효 수치(>=0)면 valid.
+    return isValidTargetNumber(args.target_price) || isValidTargetNumber(args.sell_target_price)
   }
   return true
 }

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from watchlist.db_models import WatchlistItemRow
 from watchlist.models import WatchlistItem
+from watchlist.store import _UNSET  # 부분 갱신 sentinel(단일 출처)
 
 
 def _to_item(row: WatchlistItemRow) -> WatchlistItem:
@@ -20,6 +21,7 @@ def _to_item(row: WatchlistItemRow) -> WatchlistItem:
         stock_name=row.stock_name,
         reason=row.reason,
         target_price=row.target_price,
+        sell_target_price=row.sell_target_price,
         added_at=row.added_at,
     )
 
@@ -58,6 +60,7 @@ class SqlWatchlistStore:
                 stock_name=item.stock_name,
                 reason=item.reason,
                 target_price=item.target_price,
+                sell_target_price=item.sell_target_price,
                 added_at=item.added_at,
             )
             self._db.add(row)
@@ -65,6 +68,7 @@ class SqlWatchlistStore:
             row.stock_name = item.stock_name
             row.reason = item.reason
             row.target_price = item.target_price
+            row.sell_target_price = item.sell_target_price
         self._db.commit()
         return _to_item(row)
 
@@ -74,12 +78,20 @@ class SqlWatchlistStore:
             self._db.delete(row)
             self._db.commit()
 
-    def update_target(
-        self, user_id: str, ticker: str, target_price: float | None
+    def update_targets(
+        self, user_id, ticker, *, target_price=_UNSET, sell_target_price=_UNSET
     ) -> WatchlistItem | None:
         row = self._row(user_id, ticker)
         if row is None:
             return None
-        row.target_price = target_price
+        if target_price is not _UNSET:
+            row.target_price = target_price
+        if sell_target_price is not _UNSET:
+            row.sell_target_price = sell_target_price
         self._db.commit()
         return _to_item(row)
+
+    def update_target(
+        self, user_id: str, ticker: str, target_price: float | None
+    ) -> WatchlistItem | None:
+        return self.update_targets(user_id, ticker, target_price=target_price)

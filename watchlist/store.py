@@ -18,6 +18,10 @@ from typing import Protocol
 from infra.json_store import AtomicJsonFile
 from watchlist.models import WatchlistItem
 
+# 부분 갱신 sentinel — 목표가 필드 '미제공(변경 안 함)'을 None(해제)과 구분한다.
+# 예: PATCH 가 매도 목표가만 보내면 매수 목표가는 _UNSET → 그대로 둔다.
+_UNSET = object()
+
 
 class WatchlistStore(Protocol):
     """스왑 가능한 저장소 계약(DynamoDB/파일/인메모리 교체는 구현체만)."""
@@ -30,9 +34,22 @@ class WatchlistStore(Protocol):
 
     def delete(self, user_id: str, ticker: str) -> None: ...
 
+    def update_targets(
+        self,
+        user_id: str,
+        ticker: str,
+        *,
+        target_price=_UNSET,
+        sell_target_price=_UNSET,
+    ) -> WatchlistItem | None:
+        """매수/매도 목표가 부분 갱신(sentinel `_UNSET`=변경 안 함, `None`=해제). 미등록→None."""
+        ...
+
     def update_target(
         self, user_id: str, ticker: str, target_price: float | None
-    ) -> WatchlistItem | None: ...
+    ) -> WatchlistItem | None:
+        """(하위호환) 매수 목표가만 갱신 — update_targets 로 위임."""
+        ...
 
 
 def _sorted_by_added_at(items: list[WatchlistItem]) -> list[WatchlistItem]:
@@ -68,15 +85,25 @@ class InMemoryWatchlistStore:
     def delete(self, user_id: str, ticker: str) -> None:
         self._data.get(user_id, {}).pop(ticker, None)
 
-    def update_target(
-        self, user_id: str, ticker: str, target_price: float | None
+    def update_targets(
+        self, user_id, ticker, *, target_price=_UNSET, sell_target_price=_UNSET
     ) -> WatchlistItem | None:
         current = self.get(user_id, ticker)
         if current is None:
             return None
-        updated = current.model_copy(update={"target_price": target_price})
+        changes = {}
+        if target_price is not _UNSET:
+            changes["target_price"] = target_price
+        if sell_target_price is not _UNSET:
+            changes["sell_target_price"] = sell_target_price
+        updated = current.model_copy(update=changes)
         self._data[user_id][ticker] = updated
         return updated
+
+    def update_target(
+        self, user_id: str, ticker: str, target_price: float | None
+    ) -> WatchlistItem | None:
+        return self.update_targets(user_id, ticker, target_price=target_price)
 
 
 class JsonFileWatchlistStore:
@@ -119,15 +146,25 @@ class JsonFileWatchlistStore:
             if bucket and bucket.pop(ticker, None) is not None:
                 self._file.write(raw)
 
-    def update_target(
-        self, user_id: str, ticker: str, target_price: float | None
+    def update_targets(
+        self, user_id, ticker, *, target_price=_UNSET, sell_target_price=_UNSET
     ) -> WatchlistItem | None:
         with self._file.lock():
             raw = self._file.read()
             d = raw.get(user_id, {}).get(ticker)
             if not d:
                 return None
-            updated = WatchlistItem(**d).model_copy(update={"target_price": target_price})
+            changes = {}
+            if target_price is not _UNSET:
+                changes["target_price"] = target_price
+            if sell_target_price is not _UNSET:
+                changes["sell_target_price"] = sell_target_price
+            updated = WatchlistItem(**d).model_copy(update=changes)
             raw[user_id][ticker] = updated.model_dump()
             self._file.write(raw)
             return updated
+
+    def update_target(
+        self, user_id: str, ticker: str, target_price: float | None
+    ) -> WatchlistItem | None:
+        return self.update_targets(user_id, ticker, target_price=target_price)

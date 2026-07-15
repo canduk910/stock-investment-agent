@@ -41,16 +41,23 @@ def _distance_to_target(current, target):
     return (current - target) / target * 100.0
 
 
-def _target_status(current, target, threshold_pct: float) -> str:
-    """매수 진입 관점: 목표가는 '사고 싶은 가격'. 현재가가 내려와 목표가에 근접·도달할수록 신호.
+def _target_status(current, target, threshold_pct: float, side: str = "buy") -> str:
+    """목표가 상태 판정. 매수/매도는 서로 거울(방향만 반대) — 둘 다 도달·근접일수록 신호.
 
-    - none:   target 없음/≤0(또는 현재가 결측) — _distance_to_target·프론트와 동일 가드(IMP-01)
-    - reached: current <= target(목표가 이하로 도달)
-    - near:    current <= target*(1+threshold%)(목표가보다 threshold% 이내로 근접)
-    - far:     그 외(아직 멀다)
+    - none: target 없음/≤0(또는 현재가 결측) — _distance_to_target·프론트와 동일 가드(IMP-01)
+    - side="buy"(매수, '사고 싶은 가격', 현재가가 내려올수록 신호):
+        reached: current <= target · near: current <= target*(1+thr%) · far: 그 외
+    - side="sell"(매도, '팔고 싶은 가격', 현재가가 올라갈수록 신호):
+        reached: current >= target · near: current >= target*(1-thr%) · far: 그 외
     """
     if target is None or target <= 0 or current is None:
         return "none"
+    if side == "sell":
+        if current >= target:
+            return "reached"
+        if current >= target * (1.0 - threshold_pct / 100.0):
+            return "near"
+        return "far"
     if current <= target:
         return "reached"
     if current <= target * (1.0 + threshold_pct / 100.0):
@@ -69,20 +76,28 @@ def _enrich_item(item: WatchlistItem, valuation, judgement, spark) -> dict:
     """
     valuation = valuation or {}
     current = valuation.get("price")
-    target = item.target_price
+    target = item.target_price  # 매수 목표가
+    sell_target = item.sell_target_price  # 매도 목표가
     return {
         "user_id": item.user_id,
         "ticker": item.ticker,
         "stock_name": item.stock_name,
         "reason": item.reason,
         "target_price": target,
+        "sell_target_price": sell_target,
         "added_at": item.added_at,
         "current_price": current,
         "change_rate": valuation.get("change_rate"),
         "per": valuation.get("per"),  # 정량 데이터(국면 커트 아님)
         "pbr": valuation.get("pbr"),
+        # 매수(사고 싶은 가격) — 기존 키 유지(하위호환).
         "distance_to_target": _distance_to_target(current, target),
-        "target_status": _target_status(current, target, NEAR_TARGET_THRESHOLD_PCT),
+        "target_status": _target_status(current, target, NEAR_TARGET_THRESHOLD_PCT, side="buy"),
+        # 매도(팔고 싶은 가격) — 매수의 거울, 신규 키.
+        "sell_distance_to_target": _distance_to_target(current, sell_target),
+        "sell_target_status": _target_status(
+            current, sell_target, NEAR_TARGET_THRESHOLD_PCT, side="sell"
+        ),
         # 스파크라인 종가 시계열(선택적) — 시세와 독립 조회, 실패·부재는 None.
         "spark": spark,
     }

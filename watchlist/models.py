@@ -21,5 +21,6 @@ class WatchlistItem(BaseModel):
     ticker: str = Field(pattern=TICKER_PATTERN)
     stock_name: str
     reason: str | None = None
-    target_price: float | None = Field(default=None, ge=0)
+    target_price: float | None = Field(default=None, ge=0)  # 매수 목표가('사고 싶은 가격')
+    sell_target_price: float | None = Field(default=None, ge=0)  # 매도 목표가('팔고 싶은 가격')
     added_at: str  # ISO8601(datetime.now(timezone.utc).isoformat())

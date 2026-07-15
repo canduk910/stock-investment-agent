@@ -22,9 +22,11 @@ def store():
     return SqlWatchlistStore(db)
 
 
-def _item(uid, ticker, *, name="종목", reason=None, target=None, at="2026-07-12T00:00:00+00:00"):
+def _item(uid, ticker, *, name="종목", reason=None, target=None, sell_target=None,
+          at="2026-07-12T00:00:00+00:00"):
     return WatchlistItem(
-        user_id=uid, ticker=ticker, stock_name=name, reason=reason, target_price=target, added_at=at
+        user_id=uid, ticker=ticker, stock_name=name, reason=reason, target_price=target,
+        sell_target_price=sell_target, added_at=at,
     )
 
 
@@ -63,6 +65,55 @@ def test_update_target(store):
     updated = store.update_target("1", "005930", 200)
     assert updated.target_price == 200
     assert store.update_target("1", "999999", 1) is None  # 미등록 → None
+
+
+# ── 매수/매도 목표가 — 프로덕션 저장소(SqlWatchlistStore) ORM 컬럼 read/write + 부분갱신 ───────
+# InMemory/JsonFile 와 별개 구현이라 여기서 직접 검증(회귀 시 매수↔매도 소실=프로덕션 데이터 유실).
+
+def test_put_get_roundtrips_sell_target(store):
+    store.put(_item("1", "005930", target=80000, sell_target=120000))
+    got = store.get("1", "005930")
+    assert got.target_price == 80000 and got.sell_target_price == 120000
+
+
+def test_upsert_updates_sell_target(store):
+    store.put(_item("1", "005930", sell_target=100000, at="2026-07-01T00:00:00+00:00"))
+    store.put(_item("1", "005930", sell_target=130000, at="2026-07-12T00:00:00+00:00"))  # 갱신
+    got = store.get("1", "005930")
+    assert got.sell_target_price == 130000
+    assert got.added_at == "2026-07-01T00:00:00+00:00"  # 최초 시각 보존
+
+
+def test_update_targets_sell_only_leaves_buy(store):
+    # 매도만 PATCH → 매수는 그대로(sentinel _UNSET). 프로덕션 경로 데이터 유실 방지 회귀.
+    store.put(_item("1", "005930", target=80000, sell_target=None))
+    updated = store.update_targets("1", "005930", sell_target_price=120000)
+    assert updated.sell_target_price == 120000
+    assert updated.target_price == 80000  # 미제공 → 불변
+    got = store.get("1", "005930")
+    assert (got.target_price, got.sell_target_price) == (80000, 120000)
+
+
+def test_update_targets_buy_only_leaves_sell(store):
+    store.put(_item("1", "005930", target=None, sell_target=120000))
+    updated = store.update_targets("1", "005930", target_price=70000)
+    assert updated.target_price == 70000
+    assert updated.sell_target_price == 120000  # 미제공 → 불변
+
+
+def test_update_targets_none_clears_only_that_side(store):
+    # None 은 '해제'(sentinel 과 구분). 매수만 해제, 매도는 미제공 → 유지.
+    store.put(_item("1", "005930", target=80000, sell_target=120000))
+    updated = store.update_targets("1", "005930", target_price=None)
+    assert updated.target_price is None
+    assert updated.sell_target_price == 120000
+
+
+def test_update_targets_both_and_missing(store):
+    store.put(_item("1", "005930"))
+    updated = store.update_targets("1", "005930", target_price=70000, sell_target_price=120000)
+    assert (updated.target_price, updated.sell_target_price) == (70000, 120000)
+    assert store.update_targets("1", "999999", sell_target_price=1) is None  # 미등록 → None
 
 
 def test_user_isolation(store):

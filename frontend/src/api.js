@@ -143,11 +143,12 @@ export async function fetchWatchlistMembership(ticker) {
 // POST /api/watchlist {ticker, stock_name?, reason?, target_price?} → {ok, item}. upsert(중복=갱신, added_at 보존).
 // stock_name 없으면 백엔드가 KIS 마스터/시세로 해석. 상태코드: 불량 ticker=400(api.deps.assert_valid_ticker),
 // 상한 초과=409, target 음수=422(Pydantic ge=0) — err.status 로 실어 addErrorMessage 가 분기 안내.
-export async function addWatchlist({ ticker, stockName, reason, targetPrice } = {}) {
+export async function addWatchlist({ ticker, stockName, reason, targetPrice, sellTargetPrice } = {}) {
   const body = { ticker }
   if (stockName != null) body.stock_name = stockName
   if (reason != null) body.reason = reason
   if (targetPrice != null) body.target_price = targetPrice
+  if (sellTargetPrice != null) body.sell_target_price = sellTargetPrice
   const res = await authFetch('/api/watchlist', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -176,12 +177,14 @@ export async function removeWatchlist(ticker) {
   return res.json()
 }
 
-// PATCH /api/watchlist/{ticker} {target_price} → {ok, item}. 목표가 설정/변경(null 이면 해제).
-export async function updateWatchlistTarget(ticker, targetPrice) {
+// PATCH /api/watchlist/{ticker} {target_price?, sell_target_price?} → {ok, item}.
+// targets 객체에 있는 키만 전송(백엔드가 model_fields_set 로 부분 갱신) — 매수/매도를 독립 설정.
+// 값 null 은 '해제', 키 부재는 '변경 안 함'. 매수만: {target_price}, 매도만: {sell_target_price}.
+export async function updateWatchlistTarget(ticker, targets) {
   const res = await authFetch(`/api/watchlist/${encodeURIComponent(ticker)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target_price: targetPrice }),
+    body: JSON.stringify(targets || {}),
   })
   if (!res.ok) _throwWithStatus(res)
   return res.json()

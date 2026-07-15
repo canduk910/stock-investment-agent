@@ -25,9 +25,13 @@ import { detectTargetAlerts } from './lib/watchlistLogic.js'
 const REFRESH_MS = 60_000
 
 // 능동 알림 배너 문구(주황=강조). 손실경고 아님 → 빨강 아님. "안내"만(주문 자동실행 없음).
+// 매수/매도를 라벨로 구분(가격 방향색 오용 금지 — 색이 아니라 텍스트로).
 function alertMessage(alerts) {
-  const names = alerts.map((a) => `${a.stock_name}(${a.status === 'reached' ? '도달' : '근접'})`)
-  return `목표가 ${names.join(', ')} — 관심종목을 확인해 보세요.`
+  const names = alerts.map((a) => {
+    const side = a.side === 'sell' ? '매도' : '매수'
+    return `${a.stock_name} ${side}목표가 ${a.status === 'reached' ? '도달' : '근접'}`
+  })
+  return `${names.join(', ')} — 관심종목을 확인해 보세요.`
 }
 
 // 랜딩(기본) 우측 패널 = 관심종목(사용자 확정). valid:true(watchlist 는 항상 유효).
@@ -252,9 +256,9 @@ export default function App() {
         setAlertBanner(alertMessage(alerts))
         fireBrowserNotification(alerts)
       }
-      // 다음 비교를 위해 현재 상태 스냅샷 저장(ticker→target_status).
+      // 다음 비교를 위해 현재 상태 스냅샷 저장(ticker→{buy, sell} 목표가 상태).
       prevStatusRef.current = Object.fromEntries(
-        items.map((it) => [it.ticker, it.target_status]),
+        items.map((it) => [it.ticker, { buy: it.target_status, sell: it.sell_target_status }]),
       )
     },
     [fireBrowserNotification],

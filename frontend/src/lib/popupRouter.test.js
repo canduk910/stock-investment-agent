@@ -122,17 +122,35 @@ describe('routePopup — manage_watchlist(IMP-08: 편집 확인 팝업)', () => 
       }).valid,
     ).toBe(true)
   })
-  it('set_target 인데 target_price 결측/음수 → valid false', () => {
+  it('set_target 인데 매수·매도 목표가 모두 결측 → valid false', () => {
     expect(
       routePopup({ name: 'manage_watchlist', args: { action: 'set_target', ticker: '005930' } })
         .valid,
     ).toBe(false)
+  })
+  it('set_target 매수 음수만 → valid false(유효 side 없음)', () => {
     expect(
       routePopup({
         name: 'manage_watchlist',
         args: { action: 'set_target', ticker: '005930', target_price: -1 },
       }).valid,
     ).toBe(false)
+  })
+  it('set_target 매도 목표가만 유효(>=0) → valid true(매수 없이 매도만 설정 허용)', () => {
+    expect(
+      routePopup({
+        name: 'manage_watchlist',
+        args: { action: 'set_target', ticker: '005930', sell_target_price: 120000 },
+      }).valid,
+    ).toBe(true)
+  })
+  it('set_target 매수+매도 둘 다 유효 → valid true', () => {
+    expect(
+      routePopup({
+        name: 'manage_watchlist',
+        args: { action: 'set_target', ticker: '005930', target_price: 80000, sell_target_price: 120000 },
+      }).valid,
+    ).toBe(true)
   })
   it('알 수 없는 action(예: buy) → valid false(자동 매매 아님)', () => {
     expect(

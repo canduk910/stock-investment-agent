@@ -156,16 +156,20 @@ def _watchlist_context(user, db) -> str:
     if not items:
         lines.append("관심종목이 비어 있음")
     for it in items[:_TOP_WATCHLIST]:
-        target = it.get("target_price")
-        target_s = (
-            f"목표가 {_num(target)}원[{it.get('target_status')}]"
-            if target is not None
-            else "목표가 미설정"
+        buy = it.get("target_price")
+        sell = it.get("sell_target_price")
+        buy_s = (
+            f"매수목표 {_num(buy)}원[{it.get('target_status')}]"
+            if buy is not None else "매수목표 미설정"
+        )
+        sell_s = (
+            f"매도목표 {_num(sell)}원[{it.get('sell_target_status')}]"
+            if sell is not None else "매도목표 미설정"
         )
         lines.append(
             f"- {it.get('stock_name') or it.get('ticker')}({it.get('ticker')}): "
             f"현재가 {_num(it.get('current_price'))}원({_signed_pct(it.get('change_rate'))}%) · "
-            f"PER {_pct(it.get('per'))} · {target_s}"
+            f"PER {_pct(it.get('per'))} · {buy_s} · {sell_s}"
         )
     if len(items) > _TOP_WATCHLIST:
         lines.append(f"…외 {len(items) - _TOP_WATCHLIST}종목")
@@ -196,9 +200,11 @@ def _stock_context(args: dict, user, db) -> str | None:
         val = None
     if val:
         pos = _pos_52w(val.get("price"), val.get("week52_high"), val.get("week52_low"))
+        # 52주 고/저 원값도 실어 준다 — 에이전트 목표가 참고 범위(매수는 저가권·매도는 고가권) 근거.
         lines.append(
             f"현재가 {_num(val.get('price'))}원({_signed_pct(val.get('change_rate'))}%) · "
-            f"PER {_pct(val.get('per'))} · PBR {_pct(val.get('pbr'))} · 52주위치 {_pct(pos)}%"
+            f"PER {_pct(val.get('per'))} · PBR {_pct(val.get('pbr'))} · "
+            f"52주 고 {_num(val.get('week52_high'))}·저 {_num(val.get('week52_low'))}(위치 {_pct(pos)}%)"
         )
     else:
         lines.append("종목 시세 일시 조회 불가")

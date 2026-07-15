@@ -17,7 +17,9 @@
 ## 계약·상수 (constants.py 단일 출처)
 - **`SORT_KEYS`는 `chat/tools.py::show_watchlist` enum과 일치**(`registered`/`change_rate`/`near_target`) — 일치 테스트(`test_sort_keys_consistency.py`)로 3중 강제. 정렬 자체는 프론트 순수 로직(`watchlistLogic.js`)이 하고 백엔드는 `registered` 순으로 반환 + `sort_by` 에코.
 - **`WATCHLIST_MAX_ITEMS=30`**: POST에서 **신규** 종목이 상한 도달이면 409(`watchlist full`)로 거부·미저장. 기존 ticker 갱신(upsert)은 개수를 안 늘리므로 허용(`existing is None`일 때만 상한 검사). KIS 레이트리밋·저장 폭주 방어.
-- **`target_status`는 매수(진입가) 관점**: `current ≤ target`→`reached`(도달), `≤ target*(1+NEAR_TARGET_THRESHOLD_PCT%)`→`near`(근접), 그 외 `far`, target 없으면 `none`. `distance_to_target=(current-target)/target*100`. 프론트 `classifyTargetStatus`가 이 semantics를 복제한다(sell 관점으로 뒤집지 말 것).
+- **목표가는 매수/매도 분리**(항목): `target_price`(=매수 목표가, 기존 필드·기존 데이터 그대로)+`sell_target_price`(신규). 응답 매수 키(`target_price`/`target_status`/`distance_to_target`)는 그대로 두고 매도 키(`sell_target_price`/`sell_target_status`/`sell_distance_to_target`)를 **추가만**(하위호환·무손실). `_target_status(current, target, thr, side)`로 일반화.
+- **`target_status` = side 별 관점**(둘 다 도달·근접일수록 신호): **매수**(side="buy", '사고 싶은 가격') `current ≤ target`→`reached`, `≤ target*(1+thr%)`→`near`, 그 외 `far`. **매도**(side="sell", '팔고 싶은 가격') **거울** `current ≥ target`→`reached`, `≥ target*(1-thr%)`→`near`, 그 외 `far`. target 없음/≤0/현재가 결측→`none`. `distance_to_target=(current-target)/target*100`(매수·매도 공용, 부호 해석은 side). `NEAR_TARGET_THRESHOLD_PCT` 매수·매도 공용.
+- **store 부분 갱신**: `update_targets(user_id, ticker, *, target_price=_UNSET, sell_target_price=_UNSET)`(sentinel `_UNSET`=미제공 불변, `None`=해제) — PATCH 가 준 side 만 갱신. `update_target`(매수만)은 하위호환 위임으로 유지. `_UNSET` 은 `store.py` 단일 출처(sql_store 가 import).
 
 ## 스파크라인 시계열 (Phase D — `spark:number[]|null`)
 - 각 item에 `spark` = 종목별 일봉 종가 시계열(최근 `WATCHLIST_SPARK_POINTS=20`개, **date 오름차순**). 프론트 미니차트 원천.
@@ -25,4 +27,4 @@
 - **선택적 시각화**: 시세(주 데이터)와 **독립 병렬** 조회(`_fetch_sparks_parallel`, 동시성 상한 공유). spark 실패·빈 candles·전량 종가결측 → `spark=None`(빈 리스트 아님). **spark 실패는 `partial_failure`를 오염시키지 않는다**(시세 실패 semantics 보존) — 시세 실패 종목도 spark는 독립 성공 가능. 종가 결측 candle은 제외(None 섞이면 프론트 스케일 깨짐).
 
 ## 서비스 반환 계약 (api/watchlist.py·프론트 WatchlistView 소비)
-- `build_watchlist_view` → `{items:[{...저장필드, current_price, change_rate, per, pbr, distance_to_target, target_status, spark:number[]|null}], regime:{regime}|null, partial_failure:[ticker…/"regime"]}`. (진입신호 `entry_signal`·regime `single_cap`/`entry_blocked` 는 폐기 — 항목3.)
+- `build_watchlist_view` → `{items:[{...저장필드(target_price·sell_target_price 포함), current_price, change_rate, per, pbr, distance_to_target, target_status, sell_distance_to_target, sell_target_status, spark:number[]|null}], regime:{regime}|null, partial_failure:[ticker…/"regime"]}`. (진입신호 `entry_signal`·regime `single_cap`/`entry_blocked` 는 폐기 — 항목3.)

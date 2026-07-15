@@ -95,8 +95,10 @@ TOOLS = [
         "function": {
             "name": "manage_watchlist",
             "description": (
-                "관심종목을 추가/제거하거나 목표가를 설정해 달라고 할 때 호출한다"
-                "(예 '삼성전자 관심종목에 담아줘', '005930 목표가 8만원', '카카오 관심목록에서 빼줘'). "
+                "관심종목을 추가/제거하거나 매수/매도 목표가를 설정해 달라고 할 때 호출한다"
+                "(예 '삼성전자 관심종목에 담아줘', '005930 매수 목표가 8만원', "
+                "'매도 목표가 12만원으로 잡아줘', '카카오 관심목록에서 빼줘'). "
+                "네가 근거와 함께 추천한 목표가를 사용자가 반영하려 할 때도 set_target 으로 제안한다. "
                 "단순 목록 조회(show_watchlist)나 종목 분석(show_stock_report)에는 호출하지 않는다. "
                 "이 도구는 '무엇을 할지 제안'만 하며, 실제 변경은 사용자가 화면에서 확인(confirm)해야 "
                 "반영된다 — 네가 직접 매매하거나 자동 실행하지 않는다."
@@ -111,7 +113,14 @@ TOOLS = [
                     },
                     "ticker": {"type": "string", "description": "6자리 종목코드"},
                     "stock_name": {"type": "string", "description": "종목명(있으면)"},
-                    "target_price": {"type": "number", "description": "set_target 시 목표가(원)"},
+                    "target_price": {
+                        "type": "number",
+                        "description": "set_target 시 매수 목표가(원) — '사고 싶은 가격'. 매도만 설정하면 생략.",
+                    },
+                    "sell_target_price": {
+                        "type": "number",
+                        "description": "set_target 시 매도 목표가(원) — '팔고 싶은 가격'. 매수만 설정하면 생략.",
+                    },
                 },
                 "required": ["action", "ticker"],
             },

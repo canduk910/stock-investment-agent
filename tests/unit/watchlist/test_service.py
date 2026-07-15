@@ -250,6 +250,89 @@ def test_target_status_near_exact_threshold_boundary(patch_prices):
     assert far["target_status"] == "far"
 
 
+# ── 매도 목표가(sell) 상태 — 매수의 거울(current ≥ sell_target = 도달) ─────────
+
+def test_sell_target_status_none_when_no_sell_target(patch_prices):
+    patch_prices({"005930": _valuation(80000, 1.0, 10.0, 1.0)})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00", sell_target_price=None))
+    it = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
+    assert it["sell_distance_to_target"] is None
+    assert it["sell_target_status"] == "none"
+
+
+def test_sell_target_status_reached_when_at_or_above(patch_prices):
+    # 매도 목표가 = '팔고 싶은 가격'. current 101000 ≥ sell 100000 → reached(익절 신호).
+    patch_prices({"005930": _valuation(101000, 1.0, 10.0, 1.0)})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00", sell_target_price=100000.0))
+    it = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
+    assert it["sell_target_status"] == "reached"
+
+
+def test_sell_target_status_reached_at_exact_target(patch_prices):
+    patch_prices({"005930": _valuation(100000, 1.0, 10.0, 1.0)})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00", sell_target_price=100000.0))
+    it = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
+    assert it["sell_target_status"] == "reached"
+
+
+def test_sell_target_status_near_within_threshold(patch_prices):
+    # thr=3%. current 97500 ≥ sell*(1-3%)=97000 이고 < sell → near.
+    patch_prices({"005930": _valuation(97500, 1.0, 10.0, 1.0)})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00", sell_target_price=100000.0))
+    it = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
+    assert it["sell_target_status"] == "near"
+
+
+def test_sell_target_status_far_below_threshold(patch_prices):
+    # current 90000 < sell*(1-3%)=97000 → far(아직 멀다).
+    patch_prices({"005930": _valuation(90000, 1.0, 10.0, 1.0)})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00", sell_target_price=100000.0))
+    it = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
+    assert it["sell_target_status"] == "far"
+
+
+def test_sell_target_status_near_exact_threshold_boundary(patch_prices):
+    # 정확히 -3%(100000*0.97=97000)는 near(경계 포함), 한 틱 아래(96999)는 far.
+    patch_prices({"005930": _valuation(97000, 1.0, 10.0, 1.0)})
+    near = _by_ticker(svc.build_watchlist_view(
+        _store_with(_item("005930", "2026-01-01T00:00:00+00:00", sell_target_price=100000.0)),
+        "local", StubClient(), CONTRACTION))["005930"]
+    assert near["sell_target_status"] == "near"
+    patch_prices({"005930": _valuation(96999, 1.0, 10.0, 1.0)})
+    far = _by_ticker(svc.build_watchlist_view(
+        _store_with(_item("005930", "2026-01-01T00:00:00+00:00", sell_target_price=100000.0)),
+        "local", StubClient(), CONTRACTION))["005930"]
+    assert far["sell_target_status"] == "far"
+
+
+def test_sell_target_status_zero_is_none(patch_prices):
+    patch_prices({"005930": _valuation(80000, 1.0, 10.0, 1.0)})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00", sell_target_price=0.0))
+    it = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
+    assert it["sell_distance_to_target"] is None
+    assert it["sell_target_status"] == "none"
+
+
+def test_sell_distance_computed(patch_prices):
+    # current 110000, sell 100000 → (110000-100000)/100000*100 = +10%.
+    patch_prices({"005930": _valuation(110000, 1.0, 10.0, 1.0)})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00", sell_target_price=100000.0))
+    it = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
+    assert it["sell_distance_to_target"] == pytest.approx(10.0)
+
+
+def test_buy_and_sell_targets_independent(patch_prices):
+    # 매수·매도 둘 다 설정 — 88000: 매수 far(80000*1.03=82400 위), 매도 far(100000*0.97=97000 아래).
+    patch_prices({"005930": _valuation(88000, 1.0, 10.0, 1.0)})
+    store = _store_with(_item("005930", "2026-01-01T00:00:00+00:00",
+                              target_price=80000.0, sell_target_price=100000.0))
+    it = _by_ticker(svc.build_watchlist_view(store, "local", StubClient(), CONTRACTION))["005930"]
+    assert it["target_price"] == 80000.0
+    assert it["sell_target_price"] == 100000.0
+    assert it["target_status"] == "far"
+    assert it["sell_target_status"] == "far"
+
+
 # ── 부분 실패 보존 ───────────────────────────────────────────────────────────
 
 def test_price_failure_preserves_partial(patch_prices):

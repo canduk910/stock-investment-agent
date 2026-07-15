@@ -73,7 +73,8 @@ def test_watchlist_context(monkeypatch):
             "items": [
                 {"ticker": "005930", "stock_name": "삼성전자", "current_price": 78000,
                  "change_rate": 1.2, "per": 12.0, "target_price": 90000,
-                 "target_status": "far"},
+                 "target_status": "far", "sell_target_price": 110000,
+                 "sell_target_status": "far"},
             ],
             "regime": {"regime": "확장"},  # 국면명만(진입게이트 폐기 — 항목3)
             "partial_failure": [],
@@ -81,7 +82,8 @@ def test_watchlist_context(monkeypatch):
     )
     out = vc.build_view_context("watchlist", {})
     assert "관심종목" in out and "삼성전자" in out
-    assert "국면 확장" in out and "목표가" in out
+    # 매수·매도 목표가를 모두 인용(분리 저장).
+    assert "국면 확장" in out and "매수목표" in out and "매도목표" in out
 
 
 def test_watchlist_empty_note(monkeypatch):
@@ -115,7 +117,9 @@ def test_stock_context(monkeypatch):
     monkeypatch.setattr("chat.analyst_store.default_store", lambda: _Store())
     out = vc.build_view_context("stock_report", {"ticker": "005930", "stock_name": "삼성전자"})
     assert out is not None
-    assert "삼성전자" in out and "현재가" in out and "PER" in out and "52주위치" in out
+    # 52주 고/저 원값 + 위치 — 에이전트 목표가 추천 근거(범위 앵커). 원값을 직접 핀(죽은 단정 방지).
+    assert "삼성전자" in out and "현재가" in out and "PER" in out
+    assert "52주 고" in out and "90,000" in out and "60,000" in out  # fixture high/low 원값 노출
     # 애널리스트 의견은 출처 귀속(판정 아님).
     assert "한화투자증권" in out and "리포트가 밝힌 의견" in out
 

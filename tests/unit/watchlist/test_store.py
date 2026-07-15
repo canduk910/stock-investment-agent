@@ -101,6 +101,43 @@ def test_update_target_missing_returns_none(store):
     assert store.update_target("local", "999999", 100.0) is None
 
 
+# ── update_targets(매수/매도 부분 갱신, sentinel) ─────────────────────────────
+
+def test_update_targets_sell_only_leaves_buy(store):
+    store.put(_item(target_price=80000.0, sell_target_price=None))
+    updated = store.update_targets("local", "005930", sell_target_price=120000.0)
+    assert updated.sell_target_price == 120000.0
+    assert updated.target_price == 80000.0  # 매수는 미제공 → 그대로
+    got = store.get("local", "005930")
+    assert got.sell_target_price == 120000.0
+    assert got.target_price == 80000.0
+
+
+def test_update_targets_buy_only_leaves_sell(store):
+    store.put(_item(target_price=None, sell_target_price=120000.0))
+    updated = store.update_targets("local", "005930", target_price=70000.0)
+    assert updated.target_price == 70000.0
+    assert updated.sell_target_price == 120000.0  # 매도는 미제공 → 그대로
+
+
+def test_update_targets_both(store):
+    store.put(_item(target_price=None, sell_target_price=None))
+    updated = store.update_targets("local", "005930", target_price=70000.0, sell_target_price=120000.0)
+    assert (updated.target_price, updated.sell_target_price) == (70000.0, 120000.0)
+
+
+def test_update_targets_none_clears_that_field(store):
+    # None 은 '해제'(sentinel 과 구분). 매수만 해제하고 매도는 미제공 → 유지.
+    store.put(_item(target_price=80000.0, sell_target_price=120000.0))
+    updated = store.update_targets("local", "005930", target_price=None)
+    assert updated.target_price is None
+    assert updated.sell_target_price == 120000.0
+
+
+def test_update_targets_missing_returns_none(store):
+    assert store.update_targets("local", "999999", sell_target_price=100.0) is None
+
+
 # ── (user_id, ticker) 격리 ───────────────────────────────────────────────────
 
 def test_user_isolation(store):
