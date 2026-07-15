@@ -229,8 +229,8 @@ describe('톱바 리브랜딩 — 디케이 브랜드 + 상태 칩(자체 조회
     await act(async () => {})
     expect(screen.getByText('연세대학교 AI핀테크')).toBeInTheDocument()
     expect(screen.getByText('[AI핀테크Agent분석과 설계]')).toBeInTheDocument()
-    // 연세 엠블럼(자체 제작 SVG) 접근성 라벨.
-    expect(screen.getByLabelText('연세대학교 로고')).toBeInTheDocument()
+    // 연세 엠블럼(공식 CI 이미지) — alt 로 접근성 확인.
+    expect(screen.getByAltText('연세대학교 로고')).toBeInTheDocument()
   })
 
   it('regime 조회 성공 시 국면·현금비중 상태 칩 렌더', async () => {

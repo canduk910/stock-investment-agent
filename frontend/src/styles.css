@@ -2402,6 +2402,8 @@ body {
 .app__yonsei {
   flex: 0 0 auto;
   display: block;
+  height: 34px; /* DK 모노그램과 정렬 */
+  width: auto; /* 공식 CI 비율 유지(228x97) */
 }
 .app__affiliation-text {
   display: flex;

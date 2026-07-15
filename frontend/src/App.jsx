@@ -13,6 +13,7 @@ import {
 } from './api.js'
 import { fetchMe, logout } from './auth.js'
 import { detectTargetAlerts } from './lib/watchlistLogic.js'
+import yonseiCi from './assets/yonsei-ci.png' // 연세대 공식 CI(과제 소속 표기)
 
 // UX 개편 — 좌측 상시 채팅 + 우측 맥락형 동적 패널(모달 폐기). 2컬럼 그리드(.app__main).
 //   우측 패널은 두 경로로 구동: (a) 챗봇 tool_call(ChatPanel.onShowPanel→setRightPanelSpec),
@@ -80,42 +81,10 @@ function DkMonogram() {
   )
 }
 
-// 연세대 소속 엠블럼 — 자체 제작 타이포 배지(연세 블루 원형 + 얇은 링 + 흰 "연세").
-// 공식 상표 엠블럼의 복제가 아니라, 과제 소속 표기용 원본 마크(DkMonogram 과 동일한 인라인 SVG 방식).
-// 색은 theme.css 토큰(--c-yonsei/--c-white). 정확한 공식 CI 파일이 생기면 이 컴포넌트만 교체하면 된다.
+// 연세대 소속 엠블럼 — 연세대학교 공식 CI 이미지(사용자 제공 파일, 과제 소속 표기용).
+// 자체 제작 SVG 배지를 공식 CI 로 교체. 크기는 styles.css .app__yonsei(높이 고정·비율 유지).
 function YonseiEmblem() {
-  return (
-    <svg
-      className="app__yonsei"
-      width="30"
-      height="30"
-      viewBox="0 0 30 30"
-      role="img"
-      aria-label="연세대학교 로고"
-    >
-      <circle cx="15" cy="15" r="14" fill="var(--c-yonsei)" />
-      <circle
-        cx="15"
-        cy="15"
-        r="11.4"
-        fill="none"
-        stroke="var(--c-white)"
-        strokeOpacity="0.5"
-        strokeWidth="1"
-      />
-      <text
-        x="15"
-        y="15.5"
-        textAnchor="middle"
-        dominantBaseline="central"
-        fill="var(--c-white)"
-        fontSize="9.5"
-        fontWeight="800"
-      >
-        연세
-      </text>
-    </svg>
-  )
+  return <img className="app__yonsei" src={yonseiCi} alt="연세대학교 로고" />
 }
 
 export default function App() {
