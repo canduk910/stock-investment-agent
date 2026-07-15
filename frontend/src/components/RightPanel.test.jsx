@@ -19,7 +19,12 @@ vi.mock('./RegimeGauge.jsx', () => ({
   default: () => <div data-testid="regime-gauge">regime-gauge</div>,
 }))
 vi.mock('./PopupWatchlist.jsx', () => ({
-  default: ({ args }) => <div data-testid="watchlist">watchlist:{args?.sort_by ?? ''}</div>,
+  default: ({ args, onOpenStock }) => (
+    <div data-testid="watchlist">
+      watchlist:{args?.sort_by ?? ''}
+      <button type="button" onClick={() => onOpenStock('005930', '삼성전자')}>wl-open</button>
+    </div>
+  ),
 }))
 vi.mock('./ManageWatchlistConfirm.jsx', () => ({
   default: ({ valid, onClose }) => (
@@ -30,7 +35,12 @@ vi.mock('./ManageWatchlistConfirm.jsx', () => ({
   ),
 }))
 vi.mock('./BalancePanel.jsx', () => ({
-  default: () => <div data-testid="balance">balance</div>,
+  default: ({ onOpenStock }) => (
+    <div data-testid="balance">
+      balance
+      <button type="button" onClick={() => onOpenStock('000660', 'SK하이닉스')}>bal-open</button>
+    </div>
+  ),
 }))
 // macro_dashboard·settings 본문은 자체 api 조회형 — 이 테스트는 라우팅만 보므로 스텁으로 대체.
 vi.mock('./MarketOutlookSection.jsx', () => ({
@@ -101,6 +111,28 @@ describe('RightPanel 본문 라우팅(spec.kind → 인라인 컴포넌트)', ()
     expect(screen.getByTestId('manage')).toHaveTextContent('manage:true')
     fireEvent.click(screen.getByText('manage-close'))
     expect(onClose).toHaveBeenCalled() // confirm 카드의 닫기 → 패널 비우기(onClose)로 연결
+  })
+
+  it('관심종목에서 onOpenStock → onSelect(stock_report spec) 리프팅(종목 클릭→상세)', () => {
+    const onSelect = vi.fn()
+    render(<RightPanel spec={spec({ kind: 'watchlist' })} onSelect={onSelect} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('wl-open'))
+    expect(onSelect).toHaveBeenCalledWith({
+      kind: 'stock_report',
+      args: { ticker: '005930', stock_name: '삼성전자' },
+      valid: true,
+    })
+  })
+
+  it('잔고에서 onOpenStock → onSelect(stock_report spec) 리프팅(종목 클릭→상세)', () => {
+    const onSelect = vi.fn()
+    render(<RightPanel spec={spec({ kind: 'balance' })} onSelect={onSelect} onClose={() => {}} />)
+    fireEvent.click(screen.getByText('bal-open'))
+    expect(onSelect).toHaveBeenCalledWith({
+      kind: 'stock_report',
+      args: { ticker: '000660', stock_name: 'SK하이닉스' },
+      valid: true,
+    })
   })
 
   it('null spec → 빈 상태 안내(전체 에러 화면 아님)', () => {

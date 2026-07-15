@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import BalancePanel from './BalancePanel.jsx'
 
 // BalancePanel 렌더 스모크(IMP-17 jsdom) — /api/balance 자체조회 → 요약카드 + 보유종목표.
@@ -17,10 +17,12 @@ const OK_VIEW = {
     {
       ticker: '005930', name: '삼성전자', qty: 10, avg_price: 70000,
       current_price: 80000, eval_amount: 800000, pnl_amount: 100000, pnl_pct: 14.28,
+      spark: [70000, 74000, 80000], // 상승 추세
     },
     {
       ticker: '000660', name: 'SK하이닉스', qty: 5, avg_price: 130000,
       current_price: 120000, eval_amount: 600000, pnl_amount: -50000, pnl_pct: -7.69,
+      spark: [130000, 125000, 120000], // 하락 추세
     },
   ],
   summary: {
@@ -64,6 +66,41 @@ describe('BalancePanel 렌더 스모크(IMP-17)', () => {
     expect(container.querySelector('.balance__pnl.down')).toBeTruthy() // 하이닉스 -
     // 빨강(danger) 방향색 오용 없음(손익은 파랑/회색만).
     expect(container.querySelector('.balance__pnl.danger')).toBeFalsy()
+  })
+
+  it('각 보유종목 우측에 미니 스파크라인(관심종목과 동일 SVG) 렌더', async () => {
+    mockFetchOk(OK_VIEW)
+    const { container } = render(<BalancePanel />)
+    await waitFor(() => expect(screen.getByText('삼성전자')).toBeInTheDocument())
+    // 차트 열 헤더 + 보유종목 수만큼 스파크라인 SVG.
+    expect(screen.getByText('추세')).toBeInTheDocument()
+    const sparks = container.querySelectorAll('.balance__chart-col .wl__spark')
+    expect(sparks.length).toBe(2)
+    // dir 미지정이므로 스파크 추세로 자동 색: 삼성(상승)=--c-up, 하이닉스(하락)=--c-down.
+    const strokes = [...container.querySelectorAll('.balance__chart-col path')].map((p) =>
+      p.getAttribute('stroke'),
+    )
+    expect(strokes).toContain('var(--c-up)')
+    expect(strokes).toContain('var(--c-down)')
+  })
+
+  it('보유종목 행 클릭 → onOpenStock(ticker, name) 호출(종목 상세 전환)', async () => {
+    const onOpenStock = vi.fn()
+    mockFetchOk(OK_VIEW)
+    render(<BalancePanel onOpenStock={onOpenStock} />)
+    await waitFor(() => expect(screen.getByText('삼성전자')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('삼성전자').closest('tr'))
+    expect(onOpenStock).toHaveBeenCalledWith('005930', '삼성전자')
+  })
+
+  it('spark 결측 홀딩 → 스파크라인 렌더 생략(전체 표는 정상)', async () => {
+    mockFetchOk({
+      ...OK_VIEW,
+      holdings: [{ ...OK_VIEW.holdings[0], spark: null }],
+    })
+    const { container } = render(<BalancePanel />)
+    await waitFor(() => expect(screen.getByText('삼성전자')).toBeInTheDocument())
+    expect(container.querySelector('.balance__chart-col .wl__spark')).toBeFalsy() // 조용히 생략
   })
 
   it('부분실패(holdings=null, partial_failure:[balance]) → "일시 조회 불가" 안내(전체 에러 화면 아님)', async () => {

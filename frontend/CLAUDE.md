@@ -23,6 +23,7 @@
 - **우측 패널은 두 경로로 구동**: (a) 챗봇 tool_call(`onShowPanel(routePopups(popups)[0])`), (b) `RightPanel` 상단 **세그먼트 탭**(관심종목·시장 국면·내 잔고 — 활성=네이비 채움) + 우측 **인라인 종목검색**(`TickerSearch`). kind 전환 시 **450ms 스켈레톤**(초기 마운트 제외). 상태는 `App`의 `rightPanelSpec`(`{kind,args,valid}`) 단일 소유, **랜딩=관심종목**(`{kind:'watchlist'}`).
 - **종목명 자동완성(항목6 원복)**: `TickerSearch`는 종목명/코드 입력 → `searchStocks(q,8)`(`GET /api/stocks/search`, KIS 마스터·`StockReport.jsx` 패턴) 디바운스(180ms) → `.autocomplete` 드롭다운(name·`{ticker}·{market}`, 키보드 ↑↓·Esc·바깥클릭 닫힘) → 선택 시 `onSubmit(ticker, 종목명)` → `{kind:'stock_report', args:{ticker, stock_name}, valid:true}`(종목명이 패널 제목에 반영). 제출 우선순위: 활성후보→`isValidTicker` 코드직접→첫후보→(후보 없으면)안내만(잘못된 백엔드 조회 방지). 검색 실패는 조용히(코드 직접입력 경로 보존). 백엔드·`.autocomplete*` CSS 재사용(변경 0), `.right-panel__search-box`(relative 앵커)만 신규.
 - **`RightPanel.jsx`의 `RightPanelBody` switch = 렌더 SSOT**: `stock_report→PopupStockReport`·`macro_dashboard→RegimeGauge`·`watchlist→PopupWatchlist`·`manage_watchlist→ManageWatchlistConfirm`·**`balance→BalancePanel`**·**`settings→KisSettingsPanel`**. 팝업 컴포넌트는 전부 모달 비종속·자체조회형이라 **재작성 0**으로 인라인 재사용.
+- **종목 클릭 → 상세 이동**: `RightPanelBody` 가 `openStock(ticker, name) = onSelect({kind:'stock_report', args:{ticker, stock_name:name}, valid:true})`(TickerSearch 와 동일 spec SSOT)를 만들어 `PopupWatchlist`·`BalancePanel` 에 **`onOpenStock`** 으로 내려준다 → 관심종목 `.wl__row-top`(정보 영역만)·잔고 `<tr>` 클릭 시 상세 패널로 전환(App 이 `setRightPanelSpec` 소유). 관심종목은 **정보/액션 분리**(row-bottom 목표가 편집·제거는 클릭 대상 아님 — 충돌 회피). `onOpenStock` 미전달이면 순수 표시(옵셔널). role/tabIndex/Enter·Space·hover(토큰).
 - **'설정' 탭(`KisSettingsPanel`)** — 유저별 KIS API 키 등록/상태/삭제. **탭 전용**(챗 `POPUP_KIND` 아님 — popupRouter 무관). 시크릿은 서버로만(응답에 원문 없음), 상태는 마스킹만(`app_key_masked`·`account_masked`·source). 저장=주황 `--c-emph` CTA(서버가 실제 KIS 토큰 발급으로 검증 후 저장, 실패 시 파랑 배너). `api.js` `set/fetch/deleteKisCredentials`. **KIS 데이터 fetch(`fetchBalance`·`fetchStockBundle`·`generateStockReport`·`fetchReportHistory`)는 authFetch로 전환** — 로그인 시 토큰 전송 → 백엔드가 본인 KIS 키 사용(미로그인은 공유 fallback).
 - **목표가 능동 알림은 `App` 레벨로 이관**: WatchlistView가 이제 온디맨드(상시 마운트 아님)라, 60s 폴링을 `App`이 직접(`fetchWatchlist`+`detectTargetAlerts`) 수행 → 패널 내용과 **무관하게** 앱레벨 배너+`Notification` 동작.
 
@@ -34,7 +35,8 @@
 - 챗 신규 UI도 `theme.css` 토큰만(hex/초록/황색 0), 면책 고지 상시 노출.
 
 ## 잔고 패널 (UX 개편 · 리디자인)
-- **`BalancePanel.jsx`**: `/api/balance` **자체 조회**(환각 차단) → **네이비 히어로 카드**(순자산 큰 값 + 평가손익 pill: 수익=`--c-up-onnavy` 밝은 빨강/손실=`--c-blue-soft` 밝은 파랑) + 보조 카드 4(예수금·매입액·평가액·보유종목) + 보유종목 표. **조회 전용**(주문/매매 없음), 현재가 포함이라 무캐시. `partial_failure:['balance']`(KIS 실패)는 **dashed 카드** "일시 조회 불가"·재시도 graceful, 네트워크/HTTP 오류도 재시도 버튼(무한 스피너 금지). 면책 상시.
+- **`BalancePanel.jsx`**: `/api/balance` **자체 조회**(환각 차단) → **네이비 히어로 카드**(순자산 큰 값 + 평가손익 pill: 수익=`--c-up-onnavy` 밝은 빨강/손실=`--c-blue-soft` 밝은 파랑) + 보조 카드 4(예수금·매입액·평가액·보유종목) + 보유종목 표. **조회 전용**(주문/매매 없음), 현재가 포함이라 무캐시. `partial_failure:['balance']`(KIS 실패)는 **dashed 카드** "일시 조회 불가"·재시도 graceful, 네트워크/HTTP 오류도 재시도 버튼(무한 스피너 금지). 면책 상시. **보유종목 표 우측에 "추세" 열 = 미니 스파크라인**(공용 `Sparkline`, `h.spark`, dir 미지정→스파크 자체 추세색) + **행 클릭 → 종목 상세**(`onOpenStock`).
+- **`Sparkline.jsx` = 공용 미니차트**(관심종목·잔고 공유): `points:number[]|null` → 90×28 SVG, 선색=방향색 토큰. **`dir` 명시 시 그 방향(관심종목=등락률, null=회색), 미지정(undefined) 시 스파크 추세**(마지막 vs 첫 종가)로 자동. 2점 미만·비수치 필터 후 <2면 렌더 생략. WatchlistView 로컬 함수에서 추출(동작 불변).
 - **손익 색 = 글로벌 팔레트(수익=빨강 `--c-up`/손실=파랑 `--c-down`/보합=회색 `--c-flat`)** — WatchlistView 등락률과 동일 규칙(리디자인 반영). 손실은 파랑이며 빨강 경보(`--c-danger`) 금지(경보는 채움 배너/칩 전용). 색만으로 구분 안 하도록 ▲▼─ 글리프 병기.
 
 ## 애널리스트 리포트 요약 + "이 리포트로 상담하기" (네이버 연계)

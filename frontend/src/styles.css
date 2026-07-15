@@ -1905,6 +1905,19 @@ body {
   align-items: center;
   gap: 12px;
 }
+/* 종목 상세로 전환하는 클릭 영역(정보 영역만) — 커서·은은한 hover(토큰만). */
+.wl__row-top--clickable {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  margin: -4px -6px;
+  padding: 4px 6px;
+  transition: background 0.15s ease;
+}
+.wl__row-top--clickable:hover,
+.wl__row-top--clickable:focus-visible {
+  background: var(--c-surface-3);
+  outline: none;
+}
 .wl__row-id {
   display: flex;
   flex-direction: column;
@@ -3115,6 +3128,23 @@ body {
   text-align: right;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+/* 미니 스파크라인 열(관심종목과 동일 차트) — 우측 정렬, SVG 90×28 수용. */
+.balance__chart-col {
+  text-align: right;
+  white-space: nowrap;
+}
+.balance__chart-col .wl__spark {
+  margin-left: auto;
+}
+/* 종목 상세로 전환하는 클릭 가능한 보유종목 행 — 커서·은은한 hover(토큰만). */
+.balance__row--clickable {
+  cursor: pointer;
+}
+.balance__row--clickable:hover,
+.balance__row--clickable:focus-visible {
+  background: var(--c-surface-3);
+  outline: none;
 }
 .balance__name-cell {
   display: flex;

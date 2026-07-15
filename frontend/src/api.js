@@ -212,8 +212,9 @@ export async function fetchReportHistory(ticker) {
 }
 
 // ── 잔고(포트폴리오, UX 개편) ────────────────────────────────────────────────
-// GET /api/balance → {holdings:[{ticker,name,qty,avg_price,current_price,eval_amount,pnl_amount,pnl_pct}],
-//   summary:{deposit,purchase_amount,eval_amount,pnl_amount,total_eval,net_asset}, partial_failure:[]}.
+// GET /api/balance → {holdings:[{ticker,name,qty,avg_price,current_price,eval_amount,pnl_amount,pnl_pct,
+//   spark:number[]|null}], summary:{deposit,purchase_amount,eval_amount,pnl_amount,total_eval,net_asset},
+//   partial_failure:[]}. spark 는 관심종목과 동일한 미니 스파크라인(일봉 종가 시계열, 실패 시 null).
 // 조회 전용(주문/매매 없음). 현재가 포함 → 캐시 없음(원칙1) — 팝업 열 때마다 조회. KIS 실패 시
 // holdings=null·summary=null·partial_failure:['balance'](항상 200) → 컴포넌트가 graceful 안내.
 // 여기서 throw 하는 건 네트워크/HTTP 오류(백엔드 미연결 등)뿐이다.

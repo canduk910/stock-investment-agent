@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchBalance } from '../api.js'
+import Sparkline from './Sparkline.jsx'
 
 // 잔고(포트폴리오) 패널 — 우측 동적 패널에서 /api/balance 를 자체 조회한다(환각 차단).
 // 조회 전용(주문/매매 없음). 현재가 포함 → 무캐시(팝업 열 때마다 조회, 원칙1).
@@ -71,7 +72,7 @@ function Pnl({ amount, pct }) {
   )
 }
 
-export default function BalancePanel() {
+export default function BalancePanel({ onOpenStock } = {}) {
   const [view, setView] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -175,12 +176,31 @@ export default function BalancePanel() {
                 <th scope="col" className="balance__num">현재가</th>
                 <th scope="col" className="balance__num">평가금액</th>
                 <th scope="col" className="balance__num">평가손익</th>
+                <th scope="col" className="balance__chart-col">추세</th>
               </tr>
             </thead>
             <tbody>
-              {holdings.map((h) => (
-                <tr key={h.ticker}>
-                  <th scope="row" className="balance__name-cell">
+              {holdings.map((h) => {
+                // 보유종목 클릭 → 종목 상세 전환. onOpenStock 미전달이면 순수 표시(옵셔널).
+                const open = () => onOpenStock?.(h.ticker, h.name ?? h.ticker)
+                const rowProps = onOpenStock
+                  ? {
+                      className: 'balance__row--clickable',
+                      role: 'button',
+                      tabIndex: 0,
+                      'aria-label': `${h.name ?? h.ticker} 종목 상세 보기`,
+                      onClick: open,
+                      onKeyDown: (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          open()
+                        }
+                      },
+                    }
+                  : {}
+                return (
+                  <tr key={h.ticker} {...rowProps}>
+                    <th scope="row" className="balance__name-cell">
                     <span className="balance__name">{h.name ?? h.ticker}</span>
                     <span className="balance__ticker">{h.ticker}</span>
                   </th>
@@ -191,8 +211,13 @@ export default function BalancePanel() {
                   <td className="balance__num">
                     <Pnl amount={h.pnl_amount} pct={h.pnl_pct} />
                   </td>
-                </tr>
-              ))}
+                  {/* 미니 스파크라인(관심종목과 동일) — 선색=스파크 추세 자동(dir 미지정). 결측이면 렌더 생략. */}
+                  <td className="balance__chart-col">
+                    <Sparkline points={h.spark} />
+                  </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

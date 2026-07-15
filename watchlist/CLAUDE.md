@@ -24,7 +24,8 @@
 ## 스파크라인 시계열 (Phase D — `spark:number[]|null`)
 - 각 item에 `spark` = 종목별 일봉 종가 시계열(최근 `WATCHLIST_SPARK_POINTS=20`개, **date 오름차순**). 프론트 미니차트 원천.
 - 원천은 기존 일봉 어댑터 `chart.inquire_daily_itemchartprice`(FHKST03010100) 재사용 — **현재가 캐시 신설 금지(원칙1)**, 요청 시점 라이브 조회(캐시 배선 없음). 수정주가(`adj_price="0"`, 액면분할 갭 제거 → 추세 연속성). 룩백 `WATCHLIST_SPARK_LOOKBACK_DAYS=40`일(주말·공휴일 감안 20pt 확보).
-- **선택적 시각화**: 시세(주 데이터)와 **독립 병렬** 조회(`_fetch_sparks_parallel`, 동시성 상한 공유). spark 실패·빈 candles·전량 종가결측 → `spark=None`(빈 리스트 아님). **spark 실패는 `partial_failure`를 오염시키지 않는다**(시세 실패 semantics 보존) — 시세 실패 종목도 spark는 독립 성공 가능. 종가 결측 candle은 제외(None 섞이면 프론트 스케일 깨짐).
+- **선택적 시각화**: 시세(주 데이터)와 **독립 병렬** 조회(`fetch_sparks_parallel`, 동시성 상한 공유). spark 실패·빈 candles·전량 종가결측 → `spark=None`(빈 리스트 아님). **spark 실패는 `partial_failure`를 오염시키지 않는다**(시세 실패 semantics 보존) — 시세 실패 종목도 spark는 독립 성공 가능. 종가 결측 candle은 제외(None 섞이면 프론트 스케일 깨짐).
+- **`fetch_sparks_parallel` 은 공용(public)** — 잔고 패널(`api/balance.py`)도 같은 함수로 보유종목 미니차트를 얹는다(로직 단일 출처·import 사이클 없음). `_fetch_one_spark`/`_spark_from_chart` 는 내부 헬퍼로 유지.
 
 ## 서비스 반환 계약 (api/watchlist.py·프론트 WatchlistView 소비)
 - `build_watchlist_view` → `{items:[{...저장필드(target_price·sell_target_price 포함), current_price, change_rate, per, pbr, distance_to_target, target_status, sell_distance_to_target, sell_target_status, spark:number[]|null}], regime:{regime}|null, partial_failure:[ticker…/"regime"]}`. (진입신호 `entry_signal`·regime `single_cap`/`entry_blocked` 는 폐기 — 항목3.)

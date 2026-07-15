@@ -28,7 +28,7 @@ from collectors.kis.errors import KisApiError
 BALANCE_KEYS = {"holdings", "summary", "partial_failure"}
 HOLDING_KEYS = {
     "ticker", "name", "qty", "avg_price",
-    "current_price", "eval_amount", "pnl_amount", "pnl_pct",
+    "current_price", "eval_amount", "pnl_amount", "pnl_pct", "spark",
 }
 SUMMARY_KEYS = {
     "deposit", "purchase_amount", "eval_amount",
@@ -74,6 +74,9 @@ def _make_client(monkeypatch, *, body=None, fail=False):
         balance, "resolve_kis_client",
         lambda user, db: ResolvedKis(stub, "00000000", "01", "shared"),
     )
+    # 기본은 스파크 조회 비활성(빈 dict → spark=None) — 잔고 조회 자체에 집중하는 테스트가
+    # 추가 KIS 일봉 호출로 오염되지 않게. 스파크 전용 테스트는 이 stub 을 덮어쓴다.
+    monkeypatch.setattr(balance, "fetch_sparks_parallel", lambda client, tickers: {})
     return stub
 
 
@@ -171,3 +174,37 @@ def test_balance_route_is_read_only(monkeypatch, balance_body):
     assert client.post("/api/balance", json={}).status_code == 405
     assert client.delete("/api/balance").status_code == 405
     assert client.patch("/api/balance", json={}).status_code == 405
+
+
+# ── 미니 스파크라인(관심종목 로직 재사용) ─────────────────────────────────────
+
+def test_balance_holdings_include_spark(monkeypatch, balance_body):
+    """각 holding 에 spark(종가 시계열) 필드가 실린다 — 워치리스트 fetch_sparks_parallel 재사용."""
+    _make_client(monkeypatch, body=balance_body)
+    # 스파크 병렬 조회를 stub — 넘어온 티커마다 동일 시계열 반환(실 KIS 회피).
+    monkeypatch.setattr(
+        balance, "fetch_sparks_parallel",
+        lambda client, tickers: {t: [100.0, 110.0, 105.0] for t in tickers},
+    )
+    data = _app().get("/api/balance").json()
+    assert data["holdings"], "fixture 에 보유종목이 있어야 한다"
+    for h in data["holdings"]:
+        assert h["spark"] == [100.0, 110.0, 105.0]
+    assert data["partial_failure"] == []
+
+
+def test_balance_spark_graceful_on_failure(monkeypatch, balance_body):
+    """스파크 조회 전체 실패 → 각 holding spark=None, 시세 정상·partial_failure 미오염(항상 200)."""
+    _make_client(monkeypatch, body=balance_body)
+
+    def _boom(client, tickers):
+        raise RuntimeError("chart down")
+
+    monkeypatch.setattr(balance, "fetch_sparks_parallel", _boom)
+    resp = _app().get("/api/balance")
+    assert resp.status_code == 200
+    data = resp.json()
+    for h in data["holdings"]:
+        assert h["spark"] is None
+        assert h["current_price"] is not None  # 시세는 정상(스파크와 독립)
+    assert data["partial_failure"] == []  # 스파크 실패는 partial_failure 를 오염시키지 않음

@@ -80,6 +80,30 @@ describe('WatchlistView 렌더 스모크(IMP-17)', () => {
     expect(screen.getByText('매도 목표가 도달')).toBeInTheDocument()
   })
 
+  it('종목 정보 영역(row-top) 클릭 → onOpenStock(ticker, name) 호출(종목 상세 전환)', async () => {
+    const onOpenStock = vi.fn()
+    fetchWatchlist.mockResolvedValue({
+      items: [_item({ ticker: '005930', name: '삼성전자', price: 88000, cr: 1.0 })],
+      regime: null, partial_failure: [], sort_by: 'registered',
+    })
+    render(<WatchlistView onOpenStock={onOpenStock} />)
+    await waitFor(() => expect(screen.getByText('삼성전자')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('삼성전자').closest('.wl__row-top'))
+    expect(onOpenStock).toHaveBeenCalledWith('005930', '삼성전자')
+  })
+
+  it('목표가 편집 버튼(row-bottom) 클릭은 종목 상세로 넘어가지 않는다(정보/액션 분리)', async () => {
+    const onOpenStock = vi.fn()
+    fetchWatchlist.mockResolvedValue({
+      items: [_item({ ticker: '005930', name: '삼성전자', price: 88000, cr: 1.0 })],
+      regime: null, partial_failure: [], sort_by: 'registered',
+    })
+    render(<WatchlistView onOpenStock={onOpenStock} />)
+    await waitFor(() => expect(screen.getByText('삼성전자')).toBeInTheDocument())
+    fireEvent.click(screen.getAllByText('설정')[0]) // 매수 목표가 설정 버튼(row-bottom)
+    expect(onOpenStock).not.toHaveBeenCalled()
+  })
+
   it('매도 목표가 편집 → updateWatchlistTarget(ticker, {sell_target_price}) 호출(매수 불변)', async () => {
     fetchWatchlist.mockResolvedValue({
       items: [_item({ ticker: '005930', name: '삼성전자', price: 88000, cr: 1.0 })],

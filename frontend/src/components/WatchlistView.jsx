@@ -10,6 +10,7 @@ import {
   sortItems,
   addErrorMessage,
 } from '../lib/watchlistLogic.js'
+import Sparkline from './Sparkline.jsx'
 
 // 워치리스트 본문 — 팝업(PopupWatchlist)과 독립 패널(App)이 공유하는 단일 컴포넌트.
 // 원칙: 시세 등 실데이터는 여기가 API 로 직접 조회한다(환각 차단). LLM 응답은 "무엇을 띄울지"만.
@@ -55,7 +56,7 @@ function inPartialFailure(partialFailure, key) {
   return partialFailure.some((e) => (typeof e === 'string' ? e === key : e?.section === key))
 }
 
-export default function WatchlistView({ initialSortBy, refreshKey, onView }) {
+export default function WatchlistView({ initialSortBy, refreshKey, onView, onOpenStock }) {
   const [view, setView] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -206,6 +207,7 @@ export default function WatchlistView({ initialSortBy, refreshKey, onView }) {
               item={it}
               onRemove={() => onRemove(it.ticker)}
               onSetTarget={(v) => onSetTarget(it.ticker, v)}
+              onOpenStock={onOpenStock}
             />
           ))}
         </div>
@@ -218,58 +220,38 @@ export default function WatchlistView({ initialSortBy, refreshKey, onView }) {
   )
 }
 
-// 미니 스파크라인 — watchlist 응답의 spark(종가 시계열, 과거→현재)를 90×28 SVG 로 렌더.
-//   선색 = 방향색(상승 --c-up 빨강 / 하락 --c-down 파랑 / 보합 --c-flat). spark 결측·2점 미만이면
-//   렌더하지 않는다(백엔드 per-item graceful → 조용히 생략). 데이터는 백엔드가 조회(환각 차단).
-function Sparkline({ points, dir }) {
-  if (!Array.isArray(points)) return null
-  const nums = points.filter((p) => Number.isFinite(Number(p))).map(Number)
-  if (nums.length < 2) return null
-  const w = 90
-  const h = 28
-  const pad = 3
-  const min = Math.min(...nums)
-  const max = Math.max(...nums)
-  const range = max - min || 1
-  const stepX = (w - pad * 2) / (nums.length - 1)
-  const coords = nums.map((p, i) => [
-    pad + i * stepX,
-    pad + (h - pad * 2) * (1 - (p - min) / range),
-  ])
-  const d = coords
-    .map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`)
-    .join(' ')
-  const [ex, ey] = coords[coords.length - 1]
-  const stroke =
-    dir === 'up' ? 'var(--c-up)' : dir === 'down' ? 'var(--c-down)' : 'var(--c-flat)'
-  return (
-    <svg className="wl__spark" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
-      <path
-        d={d}
-        fill="none"
-        stroke={stroke}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx={ex} cy={ey} r="2.2" fill={stroke} />
-    </svg>
-  )
-}
-
 // 목표가 근접 게이지 폭(%) — 매수 관점 근접도. |거리%|가 작을수록(가까울수록) 채움이 크다.
 function gaugeWidth(distance) {
   if (!Number.isFinite(Number(distance))) return 6
   return Math.max(6, Math.min(100, 100 - Math.abs(Number(distance)) * 9))
 }
 
-function WatchlistRow({ item, onRemove, onSetTarget }) {
+function WatchlistRow({ item, onRemove, onSetTarget, onOpenStock }) {
   const dir = changeDir(item.change_rate)
   const priceFailed = item.current_price == null
 
+  // 종목 상세로 전환 — 정보 영역(row-top: 종목명·스파크·가격)만 클릭 대상. 하단 액션(목표가 편집·제거)과
+  // 분리해 클릭 충돌을 피한다. onOpenStock 미전달이면 클릭 어포던스 없이 순수 표시(옵셔널).
+  const openDetail = () => onOpenStock?.(item.ticker, item.stock_name ?? item.ticker)
+  const rowTopProps = onOpenStock
+    ? {
+        className: 'wl__row-top wl__row-top--clickable',
+        role: 'button',
+        tabIndex: 0,
+        'aria-label': `${item.stock_name ?? item.ticker} 종목 상세 보기`,
+        onClick: openDetail,
+        onKeyDown: (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            openDetail()
+          }
+        },
+      }
+    : { className: 'wl__row-top' }
+
   return (
     <div className="wl__row">
-      <div className="wl__row-top">
+      <div {...rowTopProps}>
         <div className="wl__row-id">
           <span className="wl__name">{item.stock_name ?? item.ticker}</span>
           <span className="wl__meta">

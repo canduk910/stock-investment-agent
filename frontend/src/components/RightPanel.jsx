@@ -36,7 +36,14 @@ const TABS = [
 
 // 팝업 스펙(kind) → 패널 본문. 데이터는 각 컴포넌트가 직접 조회한다(모달일 때와 동일 재사용).
 // stock_report 는 ticker 형식(6자 영숫자)이 불량이면 조회하지 않고 안내만 한다(잘못된 백엔드 조회 방지).
-function RightPanelBody({ spec, onClose, sessionId, onConsult }) {
+function RightPanelBody({ spec, onClose, sessionId, onConsult, onSelect }) {
+  // 관심종목·잔고에서 종목 클릭 → 종목 상세로 전환(TickerSearch 와 동일한 stock_report spec SSOT).
+  const openStock = (ticker, stockName) =>
+    onSelect({
+      kind: 'stock_report',
+      args: stockName ? { ticker, stock_name: stockName } : { ticker },
+      valid: true,
+    })
   switch (spec.kind) {
     case 'stock_report':
       if (!spec.valid) {
@@ -63,13 +70,14 @@ function RightPanelBody({ spec, onClose, sessionId, onConsult }) {
         </>
       )
     case 'watchlist':
-      return <PopupWatchlist args={spec.args} />
+      return <PopupWatchlist args={spec.args} onOpenStock={openStock} />
     case 'manage_watchlist':
       // 챗봇 자연어 편집 — 사용자가 [확인]을 눌러야 실제 반영(confirm-before-write, IMP-08).
       return <ManageWatchlistConfirm args={spec.args} valid={spec.valid} onClose={onClose} />
     case 'balance':
       // 계좌 잔고·평가액·수익현황 — /api/balance 자체조회(무파라미터·조회전용·무캐시). show_balance 툴/탭 공통.
-      return <BalancePanel />
+      // 보유종목 클릭 → 종목 상세 전환(onOpenStock).
+      return <BalancePanel onOpenStock={openStock} />
     case 'settings':
       // 유저별 KIS API 키 등록/상태/삭제 — 탭 전용(챗 팝업 아님). 시크릿은 서버로만·마스킹 상태만.
       return <KisSettingsPanel />
@@ -316,6 +324,7 @@ export default function RightPanel({ spec, onSelect, onClose, sessionId, onConsu
                 onClose={onClose}
                 sessionId={sessionId}
                 onConsult={onConsult}
+                onSelect={onSelect}
               />
             )}
           </div>

@@ -6,11 +6,13 @@ collectors.kis.normalize.normalize_balance 가 담당한다(어댑터 안쪽).
 
 ## 계약(frontend 의존 — 임의 변경 금지)
 GET /api/balance → {
-  holdings:[{ticker,name,qty,avg_price,current_price,eval_amount,pnl_amount,pnl_pct}],
+  holdings:[{ticker,name,qty,avg_price,current_price,eval_amount,pnl_amount,pnl_pct,spark}],
   summary:{deposit,purchase_amount,eval_amount,pnl_amount,total_eval,net_asset},
   partial_failure:[],
 }
-(holdings/summary shape 은 normalize_balance 반환과 일치. 실패 시 둘 다 None + partial_failure=['balance'].)
+(holdings/summary shape 은 normalize_balance 반환과 일치. spark=number[]|null 은 관심종목과 동일한
+ 미니 스파크라인[일봉 종가 시계열]으로, 라우트가 후처리로 얹는다[실패는 spark=None, partial_failure 미오염].
+ 실패 시 holdings/summary 둘 다 None + partial_failure=['balance'].)
 
 ## 안전·정책
 - **조회 전용**(order/buy/sell 없음). GET 만 노출한다.
@@ -35,6 +37,8 @@ from auth.deps import get_current_user_optional
 from auth.models import User
 from collectors.kis import balance as kis_balance
 from infra.db import get_db
+# 관심종목과 동일한 미니 스파크라인(일봉 종가 시계열) — 공용 조회(현재가 캐시 금지·per-item graceful).
+from watchlist.service import fetch_sparks_parallel
 
 router = APIRouter()
 
@@ -58,6 +62,19 @@ def get_balance(
         # 로 기록한다(§5 금지: except pass). 프론트는 이 리스트로 "일시 조회 불가"를 표시.
         _log.warning("balance inquiry failed", exc_info=True)
         return {"holdings": None, "summary": None, "partial_failure": ["balance"]}
+
+    # 각 보유종목에 미니 스파크라인(관심종목과 동일 로직)을 얹는다 — 선택적 시각화라 실패는 조용히
+    # spark=None(시세는 이미 있음). 스파크 실패가 partial_failure 를 오염시키지 않는다(원칙: 독립).
+    holdings = result.get("holdings") or []
+    if holdings:
+        try:
+            sparks = fetch_sparks_parallel(resolved.client, [h["ticker"] for h in holdings])
+        except Exception:
+            _log.warning("balance spark fetch failed", exc_info=True)
+            sparks = {}
+        for h in holdings:
+            h["spark"] = sparks.get(h["ticker"])
+
     return {
         "holdings": result.get("holdings"),
         "summary": result.get("summary"),

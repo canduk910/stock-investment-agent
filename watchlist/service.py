@@ -162,8 +162,11 @@ def _fetch_one_spark(kis_client, ticker: str) -> list[float] | None:
         return None  # 스파크라인은 선택적 — 실패는 조용히 None(partial_failure 미오염)
 
 
-def _fetch_sparks_parallel(kis_client, tickers: list[str]) -> dict:
-    """종목별 일봉 병렬 → {ticker: spark|None}. 시세 병렬과 동형(동시성 상한 공유)."""
+def fetch_sparks_parallel(kis_client, tickers: list[str]) -> dict:
+    """종목별 일봉 병렬 → {ticker: spark|None}. 시세 병렬과 동형(동시성 상한 공유).
+
+    워치리스트·잔고 등 여러 패널이 공유하는 공용 스파크 조회(현재가 캐시 금지·per-item graceful).
+    """
     sparks: dict = {}
     if not tickers:
         return sparks
@@ -185,7 +188,7 @@ def build_watchlist_view(store, user_id: str, kis_client, judgement) -> dict:
     tickers = [it.ticker for it in items]
     valuations, partial_failure = _fetch_prices_parallel(kis_client, tickers)
     # 스파크라인 일봉은 시세와 독립 병렬(실패는 spark=None, partial_failure 미오염).
-    sparks = _fetch_sparks_parallel(kis_client, tickers)
+    sparks = fetch_sparks_parallel(kis_client, tickers)
 
     enriched = [
         _enrich_item(it, valuations.get(it.ticker), judgement, sparks.get(it.ticker))
