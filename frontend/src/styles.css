@@ -2357,11 +2357,52 @@ body {
   border-bottom: 1px solid var(--c-border);
 }
 
+/* 좌측 브랜드 그룹 — DK 브랜드 + 구분선 + 연세 소속 마크(한 덩어리로 좌측 고정). */
+.app__brand-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
 /* 브랜드 — DK 모노그램 + 워드마크. */
 .app__brand {
   display: flex;
   align-items: center;
   gap: 11px;
+}
+
+/* 연세대 소속 마크 — 세로 구분선 + 엠블럼 + 대학명/과목명 2줄. */
+.app__affil-divider {
+  width: 1px;
+  align-self: stretch;
+  min-height: 30px;
+  background: var(--c-border);
+}
+.app__affiliation {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.app__yonsei {
+  flex: 0 0 auto;
+  display: block;
+}
+.app__affiliation-text {
+  display: flex;
+  flex-direction: column;
+}
+.app__affiliation-univ {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--c-yonsei);
+}
+.app__affiliation-course {
+  margin-top: 1px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
 }
 .app__monogram {
   flex: 0 0 auto;

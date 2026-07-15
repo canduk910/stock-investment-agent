@@ -76,6 +76,44 @@ function DkMonogram() {
   )
 }
 
+// 연세대 소속 엠블럼 — 자체 제작 타이포 배지(연세 블루 원형 + 얇은 링 + 흰 "연세").
+// 공식 상표 엠블럼의 복제가 아니라, 과제 소속 표기용 원본 마크(DkMonogram 과 동일한 인라인 SVG 방식).
+// 색은 theme.css 토큰(--c-yonsei/--c-white). 정확한 공식 CI 파일이 생기면 이 컴포넌트만 교체하면 된다.
+function YonseiEmblem() {
+  return (
+    <svg
+      className="app__yonsei"
+      width="30"
+      height="30"
+      viewBox="0 0 30 30"
+      role="img"
+      aria-label="연세대학교 로고"
+    >
+      <circle cx="15" cy="15" r="14" fill="var(--c-yonsei)" />
+      <circle
+        cx="15"
+        cy="15"
+        r="11.4"
+        fill="none"
+        stroke="var(--c-white)"
+        strokeOpacity="0.5"
+        strokeWidth="1"
+      />
+      <text
+        x="15"
+        y="15.5"
+        textAnchor="middle"
+        dominantBaseline="central"
+        fill="var(--c-white)"
+        fontSize="9.5"
+        fontWeight="800"
+      >
+        연세
+      </text>
+    </svg>
+  )
+}
+
 export default function App() {
   // 인증 게이트 — 마운트 시 토큰으로 fetchMe. user 없으면 LoginScreen(전체 게이트). null=확인 전.
   const [user, setUser] = useState(null)
@@ -282,11 +320,21 @@ export default function App() {
   return (
     <div className="app">
       <header className="app__topbar">
-        <div className="app__brand">
-          <DkMonogram />
-          <div className="app__brand-text">
-            <h1 className="app__title">디케이 투자에이전트</h1>
-            <p className="app__caption">DK INVESTMENT AGENT</p>
+        <div className="app__brand-group">
+          <div className="app__brand">
+            <DkMonogram />
+            <div className="app__brand-text">
+              <h1 className="app__title">디케이 투자에이전트</h1>
+              <p className="app__caption">DK INVESTMENT AGENT</p>
+            </div>
+          </div>
+          <span className="app__affil-divider" aria-hidden="true" />
+          <div className="app__affiliation">
+            <YonseiEmblem />
+            <div className="app__affiliation-text">
+              <span className="app__affiliation-univ">연세대학교 AI핀테크</span>
+              <span className="app__affiliation-course">[AI핀테크Agent분석과 설계]</span>
+            </div>
           </div>
         </div>
 
