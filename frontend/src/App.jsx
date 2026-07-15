@@ -305,7 +305,7 @@ export default function App() {
           <div className="app__affiliation">
             <YonseiEmblem />
             <div className="app__affiliation-text">
-              <span className="app__affiliation-univ">연세대학교 AI핀테크</span>
+              <span className="app__affiliation-univ">정보대학원 AI핀테크</span>
               <span className="app__affiliation-course">[AI핀테크Agent분석과 설계]</span>
             </div>
           </div>
