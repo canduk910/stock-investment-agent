@@ -15,9 +15,21 @@ export async function fetchMacroIndicators() {
 //         axes:{cycle:{score,sign}, sentiment:{score,sign}},   // sign: 경기=양호/중립/악화, 심리=탐욕/중립/공포
 //         key_drivers:[[label, axis, direction]...],            // axis: 경기|심리, direction: 양호|악화|탐욕|공포
 //         params, vix_panic, missing_indicators, raw_data,      // vix_panic: vix>35 표시 플래그(오버라이드 아님)
-//         indicators_used, partial_failure}
+//         indicators_used, partial_failure,
+//         indicator_breakdown:[{key,label,value,unit,zone,axis,source,thresholds:{lo,hi}}...]}  // 판정근거 카드
 export async function fetchMacroRegime() {
   const res = await fetch('/api/macro/regime')
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
+// 국면 지표 1개의 월단위 히스토리(카드 클릭). GET /api/macro/indicators/{key}/history?months=
+// → {key, label, unit, source, thresholds:{lo,hi}, months, points:[{date,value}], available, note?}.
+// 항상 200 graceful — 불가·실패는 available:false + note(fear_greed 는 best-effort). 불량 key 는 400.
+export async function fetchMacroIndicatorHistory(key, months = 12) {
+  const res = await fetch(
+    `/api/macro/indicators/${encodeURIComponent(key)}/history?months=${months}`,
+  )
   if (!res.ok) throw new Error(`API ${res.status}`)
   return res.json()
 }

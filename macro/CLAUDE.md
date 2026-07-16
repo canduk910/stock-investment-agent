@@ -16,5 +16,6 @@
 - **VIX_PANIC(35)은 블랭킷 오버라이드가 아니다** — `vix_panic` 플래그만 세운다(UI 위험경고용). 심리축은 이미 vix>28을 공포로 반영하므로 판정 자체는 2축 로직이 결정. (기존 방어적 버전의 "무조건 수축 강제"는 폐기.)
 - **누락 안전**: `score_axes`는 `data.get(k) is not None` 가드 — 키 부재(KeyError)와 present-but-None(TypeError) 둘 다 건너뛴다. `missing_indicators`에 기록, 임의 기본값 금지.
 - **THRESHOLDS는 `score_axes` 로직과 1:1 일치**(표기용·W09 프롬프트 기준표 씨앗). 경계값(0/0.5, 5.0/3.0, 28/14, 25/75)은 전부 무투표(중립).
+- **판정근거 노출(대시보드 카드·차트용)**: `_INDICATOR_SPEC`(지표별 axis·lo/hi·below/above·unit·source) + `classify_indicator(key, value)`(값→구간 양호/중립/악화·탐욕/중립/공포, 경계=중립) + `regime_breakdown(values)`(4지표 카드 리스트, 누락도 value/zone=None) + `indicator_meta(key)`(label/unit/source/axis/thresholds). **score_axes 부등호와 1:1(SSOT) — `test_classify_indicator_matches_score_axes`가 잠금**(둘 중 하나만 바꾸면 실패). `/api/macro/regime` 이 `indicator_breakdown` 으로 전개. 이건 국면 판정에 쓰인 **수치의 표면화**이지 새 판정이 아니다(판정은 여전히 score_axes/classify).
 - `judge_regime` 반환 계약(api·frontend 소비): `regime`, `recommended_cash_ratio`, `confidence`(두 축 신호 유무: 둘 다→high/하나→medium/없음→low), `axes{cycle,sentiment: {score,sign}}`, `key_drivers[(label,axis,direction)]`, `params`, `vix_panic`, `missing_indicators`, `raw_data`. **`votes`·`override` 키는 없다**(단일축 잔재).
 - `previous_regime` 파라미터는 시그니처만 유지·미사용(하이스테리시스 P2 dormant — 2축이 더 안정적이라 우선순위 낮음).

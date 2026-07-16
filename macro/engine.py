@@ -64,6 +64,72 @@ THRESHOLDS = {
     "fear_greed": {"공포": "< 25", "탐욕": "> 75", "중립": "25 ~ 75"},
 }
 
+# 지표별 분류 스펙(판정근거 카드·히스토리 차트용) — score_axes 부등호·THRESHOLDS 와 1:1(SSOT).
+#   lo/hi = 수치 경계(경계값은 무투표=중립), below/above = lo 미만/hi 초과 구간 라벨, axis = 소속 축.
+#   unit·source 는 표시용(source 는 지표별 사실상 고정 원천). test_classify_indicator_matches_score_axes 로 잠금.
+_INDICATOR_SPEC = {
+    "yield_spread": {"axis": "경기", "lo": 0.0, "hi": 0.5, "below": "악화", "above": "양호", "unit": "%p", "source": "FRED"},
+    "hy_spread": {"axis": "경기", "lo": 3.0, "hi": 5.0, "below": "양호", "above": "악화", "unit": "%", "source": "FRED"},
+    "vix": {"axis": "심리", "lo": 14.0, "hi": 28.0, "below": "탐욕", "above": "공포", "unit": "", "source": "FRED/Yahoo"},
+    "fear_greed": {"axis": "심리", "lo": 25.0, "hi": 75.0, "below": "공포", "above": "탐욕", "unit": "/100", "source": "CNN"},
+}
+
+
+def classify_indicator(key: str, value) -> str | None:
+    """지표 값 → 구간 라벨(양호/중립/악화 · 탐욕/중립/공포). 판정 4지표가 아니거나 값 None 이면 None.
+
+    경계값(lo/hi)은 무투표=중립 — score_axes 부등호(v>hi/v<lo)와 정확히 1:1(SSOT).
+    """
+    spec = _INDICATOR_SPEC.get(key)
+    if spec is None or value is None:
+        return None
+    if value < spec["lo"]:
+        return spec["below"]
+    if value > spec["hi"]:
+        return spec["above"]
+    return "중립"
+
+
+def indicator_meta(key: str) -> dict | None:
+    """지표 표시 메타(label·unit·source·axis·thresholds). 판정 4지표 외엔 None.
+
+    히스토리 라우트가 key 검증 + 응답 라벨/단위/출처/임계에 쓴다(_INDICATOR_SPEC SSOT).
+    """
+    spec = _INDICATOR_SPEC.get(key)
+    if spec is None:
+        return None
+    return {
+        "key": key,
+        "label": INDICATOR_LABELS[key],
+        "unit": spec["unit"],
+        "source": spec["source"],
+        "axis": spec["axis"],
+        "thresholds": {"lo": spec["lo"], "hi": spec["hi"]},
+    }
+
+
+def regime_breakdown(values: dict) -> list[dict]:
+    """국면 4지표 판정근거 카드용 breakdown(경기 → 심리 순, INDICATOR_KEYS).
+
+    values = {엔진키: value}(present 만; 누락 지표도 카드로 노출하되 value/zone=None).
+    각 원소: {key, label, axis, unit, source, thresholds:{lo,hi}, value, zone}.
+    """
+    out = []
+    for key in INDICATOR_KEYS:
+        spec = _INDICATOR_SPEC[key]
+        v = values.get(key)
+        out.append({
+            "key": key,
+            "label": INDICATOR_LABELS[key],
+            "axis": spec["axis"],
+            "unit": spec["unit"],
+            "source": spec["source"],
+            "thresholds": {"lo": spec["lo"], "hi": spec["hi"]},
+            "value": v,
+            "zone": classify_indicator(key, v),
+        })
+    return out
+
 
 def score_axes(data: dict) -> dict:
     """지표 dict → 경기·심리 두 축 점수와 기여 드라이버.

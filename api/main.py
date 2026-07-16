@@ -7,13 +7,22 @@
 """
 from __future__ import annotations
 
-from fastapi import FastAPI
+import logging
+
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.deps import map_engine_input  # 국면 4지표 매핑 SSOT(IMP-06) — detail/report 경로와 공유
+from cache.keys import macro_history_key
+from cache.local import LocalCache
+from cache.policy import cache_if_clean
+from collectors.fear_greed import fetch_fear_greed_history
+from collectors.fred import fetch_fred_series_history
 from collectors.macro_snapshot import collect_macro_indicators
 from infra.config import fred_api_key
-from macro.engine import judge_regime
+from macro.engine import indicator_meta, judge_regime, regime_breakdown
+
+_log = logging.getLogger(__name__)
 
 app = FastAPI(title="투자 에이전트 데이터 API", version="0.1.0")
 
@@ -140,8 +149,70 @@ def macro_regime() -> dict:
     return {
         **judgement,
         "indicators_used": dict(engine_input),
+        # 판정근거 카드용 — 4지표 값 + 구간(양호/중립/악화·탐욕/중립/공포) + 축·단위·임계·출처.
+        # 누락 지표도 카드로 노출(value/zone=None). 국면 판정은 코드(엔진), 이건 그 근거 표면화.
+        "indicator_breakdown": regime_breakdown(engine_input),
         "partial_failure": partial_failure,
     }
+
+
+# 지표 히스토리 — 확정 과거값이라 캐시 가능(현재값 무캐시 원칙1과 무관). in-memory(_META_CACHE 패턴).
+_MACRO_HISTORY_CACHE = LocalCache()
+MACRO_HISTORY_TTL_SECONDS = 86400  # 1일(월단위 데이터라 자주 안 변함)
+# 엔진 key → FRED series_id(fear_greed 는 CNN graphdata 별도 수집기).
+_HISTORY_FRED_SERIES = {
+    "yield_spread": "T10Y2Y",
+    "hy_spread": "BAMLH0A0HYM2",
+    "vix": "VIXCLS",
+}
+
+
+@app.get("/api/macro/indicators/{key}/history")
+def macro_indicator_history(key: str, months: int = 12) -> dict:
+    """국면 4지표 1개의 **월단위 히스토리(기본 1년)** — 판정근거 카드 클릭 시 조회.
+
+    FRED 3지표(yield_spread/hy_spread/vix)는 월단위 다운샘플, fear_greed 는 CNN graphdata
+    best-effort. 확정 과거값이라 캐시(`macro:history:`, TTL 1일; 불가·실패는 미저장). 불가·실패는
+    `available:false`+note(항상 200 graceful). 국면 판정은 코드(엔진), 이건 원천값 표면화(판정 아님).
+
+    반환: {key, label, unit, source, thresholds, months, points:[{date,value}], available, note?}.
+    """
+    meta = indicator_meta(key)
+    if meta is None:  # 판정 4지표가 아닌 키(400 — 잘못된 조회 차단)
+        raise HTTPException(status_code=400, detail=f"unknown indicator: {key}")
+    months = max(1, min(months, 60))
+
+    cache_key = macro_history_key(key, months)
+    cached = _MACRO_HISTORY_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    points = None
+    try:
+        if key in _HISTORY_FRED_SERIES:
+            points = fetch_fred_series_history(_HISTORY_FRED_SERIES[key], fred_api_key(), months=months)
+        elif key == "fear_greed":
+            points = fetch_fear_greed_history(months=months)
+    except Exception:  # noqa: BLE001 — 외부 수집 실패는 삼키지 않되 available:false 로 graceful
+        _log.warning("indicator history fetch failed: %s", key, exc_info=True)
+        points = None
+
+    available = bool(points)
+    result = {
+        "key": key,
+        "label": meta["label"],
+        "unit": meta["unit"],
+        "source": meta["source"],
+        "thresholds": meta["thresholds"],
+        "months": months,
+        "points": points or [],
+        "available": available,
+    }
+    if not available:
+        result["note"] = "이 지표는 히스토리를 제공하지 못했습니다(현재값만 참고하세요)."
+    else:
+        cache_if_clean(_MACRO_HISTORY_CACHE, cache_key, result, MACRO_HISTORY_TTL_SECONDS)
+    return result
 
 
 # ─── 프로덕션: 빌드된 프론트(React/Vite dist) 정적 서빙 + SPA 폴백 ───────────────

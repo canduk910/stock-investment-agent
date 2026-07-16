@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchMacroRegime } from '../api.js'
+import MacroIndicatorCards from './MacroIndicatorCards.jsx'
 
 // 2×2 사분면 셀 — 세로축 경기(위 양호/아래 악화) · 가로축 심리(좌 공포/우 탐욕).
 // 배치: 회복=좌상, 확장=우상, 수축=좌하, 과열=우하.
@@ -14,13 +15,6 @@ const REGIME_DESC = {
   수축: '펀더멘털 악화 + 공포 — 급락·투매 국면',
 }
 
-// 기여지표 묶음 축 순서(경기 먼저, 심리 다음).
-const AXIS_ORDER = ['경기', '심리']
-
-// 방향 부호 → 긍정(양호·탐욕)이면 파랑 계열, 악화(악화·공포)면 회색 계열.
-// 색만으로 구분하지 않도록 글리프(▲/▼)를 함께 쓴다(디자인 시스템 §4).
-const POSITIVE_DIRECTIONS = new Set(['양호', '탐욕'])
-
 // 신뢰도 배지 톤 — high=남색 / medium=파랑 / low=회색. 색은 CSS 토큰에서만.
 const CONFIDENCE_META = {
   high: { label: '높음', className: 'confidence--high' },
@@ -34,13 +28,6 @@ const ENGINE_KEY_LABEL = {
   hy_spread: 'HY 신용스프레드',
   vix: 'VIX',
   fear_greed: '공포탐욕지수',
-}
-
-// key_drivers 원소 정규화 — 백엔드 튜플은 JSON 배열 [label, axis, direction]로 온다.
-// 객체 형태(오브젝트로 바뀌어도)도 방어적으로 수용.
-function normalizeDriver(d) {
-  if (Array.isArray(d)) return { label: d[0], axis: d[1], direction: d[2] }
-  return { label: d?.label, axis: d?.axis, direction: d?.direction }
 }
 
 export default function RegimeGauge() {
@@ -92,7 +79,7 @@ export default function RegimeGauge() {
     recommended_cash_ratio,
     confidence,
     axes = {},
-    key_drivers = [],
+    indicator_breakdown = [],
     vix_panic = false,
     missing_indicators = [],
   } = data
@@ -108,13 +95,6 @@ export default function RegimeGauge() {
   const sentimentScore = axes?.sentiment?.score ?? 0
   const markerX = 12 + ((sentimentScore + 2) / 4) * 76
   const markerY = 12 + ((2 - cycleScore) / 4) * 76
-
-  // 기여지표를 축(경기/심리)별로 묶는다.
-  const drivers = key_drivers.map(normalizeDriver)
-  const driversByAxis = { 경기: [], 심리: [] }
-  drivers.forEach((d) => {
-    if (driversByAxis[d.axis]) driversByAxis[d.axis].push(d)
-  })
 
   // ⑤ 손실경고 — 수축(급락장 매수 제안) 또는 VIX 패닉이면 남색 강조 배너.
   const showLossWarning = regime === '수축' || vix_panic === true
@@ -203,45 +183,11 @@ export default function RegimeGauge() {
           </div>
           <div className="cash-ratio__label">권장 현금비중</div>
         </div>
-
-        {/* ④ 기여지표(key_drivers) — 경기/심리 축별로 묶어 label·direction 표시 */}
-        <div className="drivers">
-          <div className="drivers__label">기여 지표</div>
-          {drivers.length > 0 ? (
-            <div className="drivers__axes">
-              {AXIS_ORDER.map((axis) => {
-                const list = driversByAxis[axis]
-                if (!list || list.length === 0) return null
-                return (
-                  <div key={axis} className="driver-group">
-                    <div className="driver-group__axis">{axis}</div>
-                    <ul className="drivers__list">
-                      {list.map((d, i) => {
-                        const pos = POSITIVE_DIRECTIONS.has(d.direction)
-                        return (
-                          <li key={i} className="driver">
-                            <span className="driver__label">{d.label}</span>
-                            <span
-                              className={`driver__dir ${
-                                pos ? 'driver__dir--pos' : 'driver__dir--neg'
-                              }`}
-                            >
-                              <span aria-hidden="true">{pos ? '▲' : '▼'}</span>
-                              {d.direction}
-                            </span>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  </div>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="drivers__empty">기여한 지표 없음 · 중립 기본값</div>
-          )}
-        </div>
       </div>
+
+      {/* ④ 판정 근거 4지표 카드 — 값 + 구간(양호/중립/악화·탐욕/중립/공포) + 축. 클릭 → 최근 1년 히스토리.
+          국면 판정에 실제 쓰인 수치를 표면화한다(수치는 데이터, 판정은 코드/엔진). */}
+      <MacroIndicatorCards breakdown={indicator_breakdown} />
 
       {/* ⑥ 부분 실패 — 누락 지표는 남은 지표로만 판정했음을 안내 */}
       {missingLabels.length > 0 && (

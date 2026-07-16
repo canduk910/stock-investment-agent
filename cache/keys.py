@@ -11,6 +11,15 @@ def macro_key(indicator: str) -> str:
     return f"macro:{indicator}"
 
 
+def macro_history_key(indicator: str, months: int) -> str:
+    """지표 월단위 히스토리 캐시 키.
+
+    현재값은 캐시 금지(원칙1)지만 **확정 과거 히스토리는 캐시 가능** — `macro:` 프리픽스
+    유지로 policy.ALLOWED_PREFIXES 를 통과한다(부분실패/불가 응답은 라우트가 미저장).
+    """
+    return f"macro:history:{indicator}:{months}m"
+
+
 def stock_meta_key(ticker: str) -> str:
     return f"stock:meta:{ticker}"
 

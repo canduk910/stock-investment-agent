@@ -14,10 +14,14 @@ from __future__ import annotations
 
 import macro.engine as engine
 from macro.engine import (
+    INDICATOR_KEYS,
+    INDICATOR_LABELS,
     REGIME_PARAMS,
     VIX_PANIC,
     classify,
+    classify_indicator,
     judge_regime,
+    regime_breakdown,
     score_axes,
 )
 
@@ -409,3 +413,102 @@ def test_present_but_none_treated_as_missing__2axis():
     assert j["vix_panic"] is False
     assert j["regime"] == "확장"  # 전부 중립 → 확장
     assert j["confidence"] == "low"
+
+
+# ── classify_indicator: 지표 값 → 구간(양호/중립/악화·탐욕/중립/공포) ─────────────
+# 판정근거 카드/차트용. score_axes 부등호와 1:1 일치(SSOT) — 경계값은 전부 중립.
+
+def test_classify_indicator_yield_spread__classify():
+    assert classify_indicator("yield_spread", 0.51) == "양호"
+    assert classify_indicator("yield_spread", -0.1) == "악화"
+    assert classify_indicator("yield_spread", 0.3) == "중립"
+    assert classify_indicator("yield_spread", 0.0) == "중립"   # 경계 무투표
+    assert classify_indicator("yield_spread", 0.5) == "중립"   # 경계 무투표
+
+
+def test_classify_indicator_hy_spread__classify():
+    assert classify_indicator("hy_spread", 2.9) == "양호"
+    assert classify_indicator("hy_spread", 5.1) == "악화"
+    assert classify_indicator("hy_spread", 4.0) == "중립"
+    assert classify_indicator("hy_spread", 3.0) == "중립"
+    assert classify_indicator("hy_spread", 5.0) == "중립"
+
+
+def test_classify_indicator_vix__classify():
+    assert classify_indicator("vix", 13.9) == "탐욕"
+    assert classify_indicator("vix", 28.1) == "공포"
+    assert classify_indicator("vix", 20) == "중립"
+    assert classify_indicator("vix", 14) == "중립"
+    assert classify_indicator("vix", 28) == "중립"
+
+
+def test_classify_indicator_fear_greed__classify():
+    assert classify_indicator("fear_greed", 76) == "탐욕"
+    assert classify_indicator("fear_greed", 24) == "공포"
+    assert classify_indicator("fear_greed", 50) == "중립"
+    assert classify_indicator("fear_greed", 75) == "중립"
+    assert classify_indicator("fear_greed", 25) == "중립"
+
+
+def test_classify_indicator_unknown_or_none__classify():
+    assert classify_indicator("dollar_index", 100) is None  # 판정 4지표 아님
+    assert classify_indicator("vix", None) is None
+
+
+def test_classify_indicator_matches_score_axes__single_source():
+    # SSOT 잠금: classify 의 양호/탐욕 → score_axes +1, 악화/공포 → -1, 중립 → 0.
+    cases = [
+        ("yield_spread", 0.6, "경기"), ("yield_spread", -0.5, "경기"), ("yield_spread", 0.3, "경기"),
+        ("hy_spread", 2.0, "경기"), ("hy_spread", 6.0, "경기"), ("hy_spread", 4.0, "경기"),
+        ("vix", 10, "심리"), ("vix", 40, "심리"), ("vix", 20, "심리"),
+        ("fear_greed", 90, "심리"), ("fear_greed", 10, "심리"), ("fear_greed", 50, "심리"),
+    ]
+    score_key = {"경기": "cycle_score", "심리": "sentiment_score"}
+    expect = {"양호": 1, "탐욕": 1, "악화": -1, "공포": -1, "중립": 0}
+    for key, val, axis in cases:
+        zone = classify_indicator(key, val)
+        got = score_axes({key: val})[score_key[axis]]
+        assert got == expect[zone], f"{key}={val} zone={zone} score={got}"
+
+
+def test_classify_boundaries_lock_to_score_axes__single_source():
+    # 강한 SSOT 잠금 — score_axes 경계를 하드코딩하고 경계±ε 에서 classify_indicator 와 score_axes 가
+    # **정확히 같은 경계로 전이**하는지 확인한다. _INDICATOR_SPEC 의 임계가 아주 조금이라도(예 0.5→0.505)
+    # score_axes 부등호에서 벗어나면 여기서 실패한다(경계 근처를 안 찍는 넓은 케이스로는 못 잡던 구멍).
+    eps = 0.001
+    score_key = {"경기": "cycle_score", "심리": "sentiment_score"}
+    zone_score = {"양호": 1, "탐욕": 1, "악화": -1, "공포": -1, "중립": 0}
+    # key → (axis, [(value, expected_score)...]) — 경계값=중립(무투표), 경계±ε 는 부호 전이.
+    boundaries = {
+        "yield_spread": ("경기", [(0.0, 0), (0.0 - eps, -1), (0.5, 0), (0.5 + eps, 1)]),
+        "hy_spread": ("경기", [(3.0, 0), (3.0 - eps, 1), (5.0, 0), (5.0 + eps, -1)]),
+        "vix": ("심리", [(14.0, 0), (14.0 - eps, 1), (28.0, 0), (28.0 + eps, -1)]),
+        "fear_greed": ("심리", [(25.0, 0), (25.0 - eps, -1), (75.0, 0), (75.0 + eps, 1)]),
+    }
+    for key, (axis, points) in boundaries.items():
+        for val, expected in points:
+            # 진짜 판정(score_axes)이 이 경계에서 기대대로인지 + classify 가 같은 부호를 내는지.
+            assert score_axes({key: val})[score_key[axis]] == expected, f"score {key}={val}"
+            assert zone_score[classify_indicator(key, val)] == expected, f"classify {key}={val}"
+
+
+# ── regime_breakdown: 국면 4지표 카드용 breakdown ─────────────────────────────
+
+def test_regime_breakdown_present_and_missing__2axis():
+    bd = regime_breakdown({"yield_spread": 0.6, "hy_spread": 4.0, "vix": 30})  # fear_greed 누락
+    assert [d["key"] for d in bd] == list(INDICATOR_KEYS)  # 4지표·경기먼저 순서
+    by = {d["key"]: d for d in bd}
+    # present: 값·구간·축·단위·임계·라벨.
+    assert by["yield_spread"]["value"] == 0.6
+    assert by["yield_spread"]["zone"] == "양호"
+    assert by["yield_spread"]["axis"] == "경기"
+    assert by["yield_spread"]["label"] == INDICATOR_LABELS["yield_spread"]
+    assert by["yield_spread"]["thresholds"] == {"lo": 0.0, "hi": 0.5}
+    assert by["vix"]["zone"] == "공포"
+    assert by["vix"]["axis"] == "심리"
+    # missing: 카드는 나오되 value/zone 은 None(데이터 없음 표시).
+    assert by["fear_greed"]["value"] is None
+    assert by["fear_greed"]["zone"] is None
+    # 모든 카드에 source·unit 존재.
+    for d in bd:
+        assert d["source"] and "unit" in d and "thresholds" in d

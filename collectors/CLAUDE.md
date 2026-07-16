@@ -35,6 +35,7 @@
 - 공통 반환 계약 **`IndicatorPoint = {key, value, as_of, source, prev_value}`**(`base.py`). 소비자(quant·api)가 이 shape에 의존.
 - **VIX**: 야후 `^VIX` 1차 → 실패 시 FRED `VIXCLS` 폴백. `source`에 성공 소스 기록.
 - **fear_greed**: 실패 시 예외 대신 `None` 반환(파이프라인 안 죽임). `fear_and_greed`를 **지연 import** — import 시 `requests_cache`를 전역 설치해 다른 테스트의 HTTP mock을 오염시키기 때문.
+- **월단위 히스토리(대시보드 카드 클릭용)**: `fred.fetch_fred_series_history(series_id, api_key, months=12, frequency="m")` → `[{date,value}]`(과거→현재, `.` 제외·최근 months 절삭). FRED 3지표(T10Y2Y/BAMLH0A0HYM2/VIXCLS) 월 다운샘플. **공포탐욕**은 `fear_greed.fetch_fear_greed_history(months=12)`(CNN graphdata 비공식·`_cnn_graphdata` 경계·브라우저 UA 필요·**월별 마지막값 리샘플**·실패/빈=graceful None). 소비: `GET /api/macro/indicators/{key}/history`. **히스토리는 확정 과거값이라 캐시 가능**(현재값 무캐시 원칙1과 무관).
 - **`fetch_gdp`는 미국 GDP** — 버핏지수는 KRX 시총 ÷ 한국 GDP라 이대로면 무의미. 한국 GDP 소스 교체가 남은 과제(W07 지표 확장 시).
 
 ## 집계

@@ -39,3 +39,51 @@ def test_fear_greed_failure_returns_none_without_raising(monkeypatch):
     point = fear_greed.fetch_fear_greed()
 
     assert point is None  # 호출자가 partial_failure에 기록
+
+
+# ── 월단위 히스토리(CNN graphdata best-effort) ───────────────────────────────
+
+def _ms(y, m, d):
+    return dt.datetime(y, m, d, tzinfo=dt.timezone.utc).timestamp() * 1000
+
+
+def test_fear_greed_history_resamples_monthly_last(monkeypatch):
+    # 일단위 graphdata → 월별 마지막 관측(과거→현재).
+    graph = {"fear_and_greed_historical": {"data": [
+        {"x": _ms(2025, 10, 5), "y": 40.0},
+        {"x": _ms(2025, 10, 28), "y": 45.0},  # 10월 마지막 → 45
+        {"x": _ms(2025, 11, 15), "y": 55.0},
+        {"x": _ms(2025, 12, 30), "y": 62.0},
+    ]}}
+    monkeypatch.setattr(fear_greed, "_cnn_graphdata", lambda: graph)
+
+    points = fear_greed.fetch_fear_greed_history(months=12)
+
+    assert points == [
+        {"date": "2025-10-01", "value": 45.0},
+        {"date": "2025-11-01", "value": 55.0},
+        {"date": "2025-12-01", "value": 62.0},
+    ]
+
+
+def test_fear_greed_history_picks_month_latest_regardless_of_order(monkeypatch):
+    # 소스가 월내 비오름차순으로 줘도 그 달의 '가장 나중(max x)' 관측을 선택(정렬 가정 비의존).
+    graph = {"fear_and_greed_historical": {"data": [
+        {"x": _ms(2025, 10, 28), "y": 45.0},  # 나중이지만 배열상 앞
+        {"x": _ms(2025, 10, 5), "y": 40.0},   # 이른데 배열상 뒤 — 덮어써도 45 유지돼야
+    ]}}
+    monkeypatch.setattr(fear_greed, "_cnn_graphdata", lambda: graph)
+    assert fear_greed.fetch_fear_greed_history(months=12) == [{"date": "2025-10-01", "value": 45.0}]
+
+
+def test_fear_greed_history_failure_returns_none(monkeypatch):
+    def boom():
+        raise RuntimeError("graphdata 418")
+
+    monkeypatch.setattr(fear_greed, "_cnn_graphdata", boom)
+    assert fear_greed.fetch_fear_greed_history() is None  # graceful(라우트가 available:false)
+
+
+def test_fear_greed_history_empty_returns_none(monkeypatch):
+    monkeypatch.setattr(fear_greed, "_cnn_graphdata", lambda: {"fear_and_greed_historical": {"data": []}})
+    assert fear_greed.fetch_fear_greed_history() is None

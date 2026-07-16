@@ -339,74 +339,138 @@ body {
   color: var(--c-text-faint);
 }
 
-/* ④ 기여 지표(key_drivers) — 경기/심리 축별로 묶음 */
-.drivers {
-  min-width: 0;
+/* ④ 판정 근거 지표 카드 — 값 + 구간(양호/중립/악화·탐욕/중립/공포) + 축. 클릭 → 최근 1년 히스토리. */
+.macro-cards {
+  margin-top: 16px;
 }
-.drivers__label {
+.macro-cards__label {
   font-size: 12px;
   font-weight: 600;
   color: var(--c-text-secondary);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
-.drivers__axes {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.macro-cards__hint {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--c-text-muted);
+  margin-left: 4px;
 }
-.driver-group__axis {
+.macro-cards__axis-group {
+  margin-bottom: 10px;
+}
+.macro-cards__axis {
   font-size: 11px;
   font-weight: 700;
   color: var(--c-navy);
   letter-spacing: 0.03em;
   margin-bottom: 6px;
 }
-.drivers__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.macro-cards__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.macro-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-}
-.driver {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 12px;
   background: var(--c-surface);
   border: 1px solid var(--c-border);
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
-.driver__label {
-  flex: 1;
-  color: var(--c-text);
-  min-width: 0;
+.macro-card:hover,
+.macro-card:focus-visible {
+  border-color: var(--c-blue);
+  background: var(--c-surface-3);
+  outline: none;
 }
-.driver__dir {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
+.macro-card__name {
+  font-size: 12px;
+  color: var(--c-text-secondary);
+}
+.macro-card__value {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--c-navy);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+/* 신호(중립 아님)=주황 강조 소프트(주목) / 중립=회색 / 결측=흐린 회색. 방향(양호/공포)은 텍스트로 — 가격 방향색 아님. */
+.macro-card__zone {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   padding: 2px 8px;
   border-radius: 999px;
 }
-/* 방향: 양호·탐욕 = 파랑(긍정) / 악화·공포 = 회색(중립) — 글리프(▲/▼)로도 구분 */
-.driver__dir--pos {
-  color: var(--c-navy);
-  background: var(--c-blue-soft);
+.macro-card__zone--signal {
+  color: var(--c-emph-strong);
+  background: var(--c-emph-soft);
+  border: 1px solid var(--c-emph-border);
 }
-.driver__dir--neg {
+.macro-card__zone--neutral {
   color: var(--c-text-secondary);
   background: var(--c-surface-2);
   border: 1px solid var(--c-border);
 }
-.drivers__empty {
-  font-size: 13px;
+.macro-card__zone--muted {
   color: var(--c-text-muted);
-  padding: 7px 0;
+  background: var(--c-hairline);
+}
+.macro-card__more {
+  font-size: 10.5px;
+  color: var(--c-text-muted);
+  margin-top: 2px;
+}
+
+/* 히스토리 오버레이 — 차트 수용 위해 폭 확장(mo-overlay 재사용). */
+.mo-overlay__card--wide {
+  max-width: 620px;
+}
+.macro-hist__note {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--c-text-muted);
+  line-height: 1.5;
+}
+
+/* 월단위 라인차트 — 남색 선 + 주황 현재값 + 회색 임계 점선(방향색 아님, theme.css 토큰만). */
+.macro-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 4px;
+}
+.macro-chart__line {
+  stroke: var(--c-navy);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.macro-chart__guide {
+  stroke: var(--c-border-strong);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+.macro-chart__guide-label,
+.macro-chart__ytick,
+.macro-chart__xtick {
+  fill: var(--c-text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.macro-chart__last-dot {
+  fill: var(--c-emph);
+}
+.macro-chart__last-val {
+  fill: var(--c-emph-strong);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .gauge__note {

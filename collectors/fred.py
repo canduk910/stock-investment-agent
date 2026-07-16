@@ -52,6 +52,37 @@ def fetch_fred_series(series_id: str, api_key: str) -> dict:
     )
 
 
+def fetch_fred_series_history(
+    series_id: str, api_key: str, months: int = 12, frequency: str = "m"
+) -> list[dict]:
+    """FRED 시계열 월단위 히스토리 → [{date, value}] (date 오름차순, 최근 months개).
+
+    최근 `months`개월 범위를 frequency(기본 월 'm')로 다운샘플(FRED 기본 집계=평균).
+    일단위 시리즈(T10Y2Y/BAMLH0A0HYM2/VIXCLS)를 월단위 12포인트로 요약한다. 결측('.')은 제외.
+    히스토리는 **확정 과거값**이라 캐시 가능(라우트가 TTL 관리) — 현재값 무캐시 원칙1과 무관.
+    """
+    end = dt.date.today()
+    start = end - dt.timedelta(days=31 * months + 10)  # months 개월 + 여유(경계 절삭 방지)
+    params = {
+        "series_id": series_id,
+        "api_key": api_key,
+        "file_type": "json",
+        "observation_start": start.isoformat(),
+        "observation_end": end.isoformat(),
+        "frequency": frequency,
+    }
+    resp = requests.get(FRED_OBSERVATIONS_URL, params=params, timeout=10)
+    resp.raise_for_status()
+    observations = resp.json().get("observations", [])
+    points = [
+        {"date": obs["date"], "value": float(obs["value"])}
+        for obs in observations
+        if obs.get("value") not in (None, ".", "")
+    ]
+    points.sort(key=lambda p: p["date"])  # date 오름차순(FRED 는 이미 오름차순이나 방어)
+    return points[-months:]  # 최근 months 개(과거→현재)
+
+
 def fetch_t10y2y(api_key: str) -> dict:
     """장단기 금리차(10년-2년)."""
     return fetch_fred_series("T10Y2Y", api_key)
