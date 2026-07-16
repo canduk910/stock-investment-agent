@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { login, signup } from '../auth.js'
+import DkMonogram from './DkMonogram.jsx'
 
 // 로그인/회원가입 화면 — 비로그인 시 App 이 전체 대신 이 화면을 렌더한다(인증 게이트).
 // 성공하면 onAuthed(user)로 App 에 알린다. 비밀번호는 서버가 bcrypt 해시(프론트는 전송만).
@@ -40,7 +41,7 @@ export default function LoginScreen({ onAuthed }) {
     <div className="login">
       <div className="login__card">
         <div className="login__brand">
-          <span className="login__logo">DK</span>
+          <DkMonogram size={40} />
           <div>
             <h1 className="login__title">디케이 투자에이전트</h1>
             <p className="login__caption">로그인하고 나만의 관심종목·대화를 이어가세요</p>

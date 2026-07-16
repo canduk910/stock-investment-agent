@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import ChatPanel from './components/ChatPanel.jsx'
 import RightPanel from './components/RightPanel.jsx'
 import LoginScreen from './components/LoginScreen.jsx'
+import DkMonogram from './components/DkMonogram.jsx'
 import {
   fetchWatchlist,
   fetchMacroRegime,
@@ -43,43 +44,6 @@ const LANDING_SPEC = { kind: 'watchlist', args: {}, valid: true }
 const VIEW_CONTEXT_KINDS = new Set(['watchlist', 'balance', 'stock_report'])
 // 패널 변경 → 컨텍스트 핀 디바운스(ms) — 빠른 탭 전환 시 KIS 재조회 폭주 방지.
 const VIEW_CONTEXT_DEBOUNCE_MS = 400
-
-// DK 모노그램 CI — 남색 스퀘어(rx) + 우상단 주황 다이아몬드 + 중앙 흰 "DK". 색은 theme.css 토큰.
-function DkMonogram() {
-  return (
-    <svg
-      className="app__monogram"
-      width="34"
-      height="34"
-      viewBox="0 0 34 34"
-      role="img"
-      aria-label="디케이 투자에이전트 로고"
-    >
-      <rect x="0" y="0" width="34" height="34" rx="9" fill="var(--c-navy)" />
-      <rect
-        x="24.5"
-        y="3.5"
-        width="6"
-        height="6"
-        rx="1"
-        fill="var(--c-emph)"
-        transform="rotate(45 27.5 6.5)"
-      />
-      <text
-        x="17"
-        y="17"
-        textAnchor="middle"
-        dominantBaseline="central"
-        fill="var(--c-white)"
-        fontSize="13.5"
-        fontWeight="900"
-        letterSpacing="0.5"
-      >
-        DK
-      </text>
-    </svg>
-  )
-}
 
 // 연세대 소속 엠블럼 — 연세대학교 공식 CI 이미지(사용자 제공 파일, 과제 소속 표기용).
 // 자체 제작 SVG 배지를 공식 CI 로 교체. 크기는 styles.css .app__yonsei(높이 고정·비율 유지).

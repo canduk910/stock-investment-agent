@@ -16,6 +16,14 @@ function fill(email, pw) {
 }
 
 describe('LoginScreen', () => {
+  it('브랜드 로고 = 톱바와 동일한 DK 모노그램(주황 마름모 포함)', () => {
+    const { container } = render(<LoginScreen onAuthed={() => {}} />)
+    // 톱바 DkMonogram 과 동일 SVG(aria-label) — 텍스트 배지 아님.
+    expect(screen.getByLabelText('디케이 투자에이전트 로고')).toBeInTheDocument()
+    // 주황 마름모 = fill var(--c-emph) 인 회전 rect(강조 토큰만, hex 아님).
+    expect(container.querySelector('rect[fill="var(--c-emph)"]')).toBeTruthy()
+  })
+
   it('로그인 제출 → login 호출 + onAuthed(user)', async () => {
     login.mockResolvedValue({ token: 't', user: { id: 1, email: 'a@b.com' } })
     const onAuthed = vi.fn()

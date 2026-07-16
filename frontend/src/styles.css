@@ -2570,18 +2570,6 @@ body {
   gap: 12px;
   margin-bottom: 20px;
 }
-.login__logo {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--c-navy);
-  color: var(--c-white);
-  font-weight: 900;
-  border-radius: 10px;
-  font-size: 15px;
-}
 .login__title {
   margin: 0;
   font-size: 17px;
