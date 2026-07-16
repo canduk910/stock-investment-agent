@@ -33,6 +33,7 @@
 - **팝업 실데이터는 LLM 응답이 아니라 프론트가 직접 조회**(환각 차단): `popups[].name`→`lib/popupRouter.js`가 컴포넌트로 라우팅(`show_stock_report`→번들 API, `show_macro_dashboard`→regime API, `show_watchlist`→watchlist API, **`show_balance`→`/api/balance`**). `POPUP_KIND` 5종이 라우팅 SSOT. LLM은 "무엇을 띄울지"만 준다.
 - **ticker 유효성은 `lib/ticker.js` 단일 출처**(`/^[0-9A-Za-z]{6}$/`) — 직접입력(StockReport)과 팝업 라우팅이 공유. 불량 코드는 조회 없이 안내로 graceful 처리.
 - 챗 신규 UI도 `theme.css` 토큰만(hex/초록/황색 0), 면책 고지 상시 노출.
+- **봇 응답은 마크다운 렌더**(`ChatMessage.jsx` — `react-markdown`+`remark-gfm`): 굵게·목록·코드·제목·링크·**GFM 표**를 요소로 렌더(`.chat__md` 스타일, 토큰만). **사용자 입력은 평문**(`chat__text` pre-wrap — 친 문자 그대로). **안전**: react-markdown 기본이 원문 HTML을 미렌더(escape) → LLM 출력의 `<script>` 등 **XSS 불가**(`rehype-raw` 미사용·`dangerouslySetInnerHTML` 없음), 링크는 `target=_blank rel=noopener`. **스트리밍 호환**: 토큰 누적마다 재파싱(미완성 문법은 닫힐 때까지 평문), 커서·단계 체크리스트 로직 불변.
 
 ## 잔고 패널 (UX 개편 · 리디자인)
 - **`BalancePanel.jsx`**: `/api/balance` **자체 조회**(환각 차단) → **네이비 히어로 카드**(순자산 큰 값 + 평가손익 pill: 수익=`--c-up-onnavy` 밝은 빨강/손실=`--c-blue-soft` 밝은 파랑) + 보조 카드 4(예수금·매입액·평가액·보유종목) + 보유종목 표. **조회 전용**(주문/매매 없음), 현재가 포함이라 무캐시. `partial_failure:['balance']`(KIS 실패)는 **dashed 카드** "일시 조회 불가"·재시도 graceful, 네트워크/HTTP 오류도 재시도 버튼(무한 스피너 금지). 면책 상시. **보유종목 표 우측에 "추세" 열 = 미니 스파크라인**(공용 `Sparkline`, `h.spark`, dir 미지정→스파크 자체 추세색) + **행 클릭 → 종목 상세**(`onOpenStock`).

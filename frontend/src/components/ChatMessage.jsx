@@ -1,5 +1,13 @@
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { routePopups } from '../lib/popupRouter.js'
 import { stageChecklist } from '../lib/chatStages.js'
+
+// 마크다운 링크는 새 탭 + rel(보안). react-markdown 기본은 원문 HTML을 렌더하지 않으므로
+// LLM 출력의 <script> 등은 문자로 이스케이프된다(XSS 불가) — 별도 sanitize 불필요.
+const MD_COMPONENTS = {
+  a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+}
 
 // 팝업 kind → 재열기 칩 라벨(닫은 팝업을 다시 열 수 있게).
 const POPUP_CHIP_LABEL = {
@@ -42,10 +50,19 @@ export default function ChatMessage({ role, text, popups, streaming, stage, onOp
       <div className={`chat__bubble ${isUser ? 'chat__bubble--user' : 'chat__bubble--bot'}`}>
         {showStages && <ChatStages stage={stage} />}
         {text ? (
-          <span className="chat__text">
-            {text}
-            {streaming && <span className="chat__cursor" aria-hidden="true" />}
-          </span>
+          isUser ? (
+            // 사용자 입력은 평문(줄바꿈 보존) — 사용자가 친 문자 그대로.
+            <span className="chat__text">{text}</span>
+          ) : (
+            // 봇(LLM) 응답은 마크다운 렌더 — 굵게/목록/코드/제목/링크 등. 스트리밍 중엔 커서 병기
+            // (미완성 문법은 닫힐 때까지 평문으로 보이다가 완성되면 렌더). 원문 HTML은 미렌더(XSS 불가).
+            <div className="chat__md">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+                {text}
+              </ReactMarkdown>
+              {streaming && <span className="chat__cursor" aria-hidden="true" />}
+            </div>
+          )
         ) : null}
         {specs.length > 0 && (
           <div className="chat__popup-chips">
