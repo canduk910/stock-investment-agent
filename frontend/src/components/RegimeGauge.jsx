@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
 import { fetchMacroRegime } from '../api.js'
+import { useFetch } from '../lib/useFetch.js'
 import MacroIndicatorCards from './MacroIndicatorCards.jsx'
 
 // 2×2 사분면 셀 — 세로축 경기(위 양호/아래 악화) · 가로축 심리(좌 공포/우 탐욕).
@@ -31,25 +31,7 @@ const ENGINE_KEY_LABEL = {
 }
 
 export default function RegimeGauge() {
-  const [data, setData] = useState(null)
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  async function load() {
-    setLoading(true)
-    setError(null)
-    try {
-      setData(await fetchMacroRegime())
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    load()
-  }, [])
+  const { data, loading, error } = useFetch(fetchMacroRegime)
 
   if (loading) {
     return (

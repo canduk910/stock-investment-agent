@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
 import { fetchBalance } from '../api.js'
+import { useFetch } from '../lib/useFetch.js'
 import Sparkline from './Sparkline.jsx'
 import { won, signedWon, signedPct, qty, flatDir } from '../lib/format.js'
 
@@ -47,27 +47,9 @@ function Pnl({ amount, pct }) {
 }
 
 export default function BalancePanel({ onOpenStock } = {}) {
-  const [view, setView] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  async function load() {
-    setLoading(true)
-    setError(null)
-    try {
-      // partial_failure 는 200 정상 응답이라 throw 안 함(그대로 렌더). throw 는 네트워크/HTTP 오류만.
-      setView(await fetchBalance())
-    } catch (e) {
-      setError(e.message)
-      setView(null)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    load()
-  }, [])
+  // partial_failure 는 200 정상 응답이라 throw 안 함(그대로 렌더) — 에러 분기는 네트워크/HTTP 오류만.
+  // reload 를 load 로 별칭해 재시도 버튼(onClick={load}) 계약 유지.
+  const { data: view, loading, error, reload: load } = useFetch(fetchBalance)
 
   if (loading && !view) {
     return <div className="balance__state">잔고를 불러오는 중…</div>
