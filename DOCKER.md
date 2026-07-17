@@ -45,7 +45,8 @@ docker compose exec backend uv run python chat/intent_train.py   # 인텐트 모
 
 ## 설계 메모
 - 백엔드는 `build-system` 없는 run-from-source 앱이라 `uv sync --no-install-project`로 의존성만 설치하고 `PYTHONPATH=/app`으로 실행한다.
-- 호스트(mac)에서 빌드된 `.venv`/`node_modules`가 컨테이너(Linux)를 덮지 않도록 named 볼륨(`backend-venv`, `frontend-node-modules`)으로 격리한다.
+- 호스트(mac)에서 빌드된 `.venv`가 컨테이너(Linux)를 덮지 않도록 백엔드는 named 볼륨(`backend-venv`)으로 격리한다.
+- **프론트 node_modules — 이미지가 단일 출처(재설치 불필요)**: `frontend/Dockerfile`이 `npm ci` 후 node_modules를 바인드마운트 '한 단계 위'(`/node_modules`)로 옮기고, compose는 `/app/node_modules`에 **빈 익명 볼륨**만 씌워 호스트(mac) node_modules를 가린다. Node/Vite가 상위로 올라가 `/node_modules`(이미지의 리눅스 의존성)를 해석하므로, **stale named volume이 없어** 이미지 재빌드마다 의존성이 항상 최신 → 프론트 의존성 추가 시 `docker compose up --build`만으로 반영(백엔드처럼 컨테이너 내 재설치·exec install 불필요).
 - scikit-learn 런타임용 `libgomp1`을 백엔드 이미지에 설치한다.
 - `.env`는 `.dockerignore`로 이미지 빌드에서 제외 → 시크릿이 이미지 레이어에 남지 않는다.
 

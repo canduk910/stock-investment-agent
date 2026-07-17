@@ -25,10 +25,12 @@ services:
       - "5173:5173"
     volumes:
       - ./frontend:/app
-      - frontend-node-modules:/app/node_modules  # 컨테이너 node_modules 보존(호스트로 덮이지 않게)
+      # 빈 익명 볼륨으로 호스트(mac) node_modules 를 가린다. 실제 의존성은 이미지가 바인드마운트
+      # '한 단계 위'(/node_modules)에 굽고 Node/Vite 가 상위로 올라가 해석 → stale named volume 이
+      # 없어 이미지 재빌드마다 자동 최신. 의존성 추가 후 `docker compose up --build` 만으로 반영.
+      - /app/node_modules
     depends_on:
       - backend
 
 volumes:
   backend-venv:
-  frontend-node-modules:
