@@ -19,10 +19,17 @@ from infra.db import get_db
 
 @pytest.fixture(autouse=True)
 def _auth_override():
-    # 챗 라우트는 이제 인증 필수 + DB 대화기록 저장(유저 스코프). 고정 유저·더미 db 로 오버라이드
-    # (db=None → 대화기록 helper 는 best-effort try/except 로 no-op). 후처리로 정리(누수 방지).
-    main.app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
-    main.app.dependency_overrides[get_db] = lambda: None
+    # 챗 라우트는 인증 필수 + DB 대화기록 저장 + 토큰 한도 enforcement(유저 스코프). 한도 여유 있는
+    # 고정 유저 + commit 가능한 더미 db 로 오버라이드(대화기록 helper 는 best-effort try/except no-op,
+    # consume 는 db.commit()). 후처리로 정리(누수 방지).
+    from auth.usage import today_kst
+
+    user = SimpleNamespace(
+        id=1, is_admin=False, daily_limit=20, used_today=0, usage_date=today_kst(), total_questions=0
+    )
+    fake_db = SimpleNamespace(commit=lambda: None)
+    main.app.dependency_overrides[get_current_user] = lambda: user
+    main.app.dependency_overrides[get_db] = lambda: fake_db
     yield
     main.app.dependency_overrides.pop(get_current_user, None)
     main.app.dependency_overrides.pop(get_db, None)
@@ -92,3 +99,43 @@ def test_post_chat_reuses_session_across_calls(monkeypatch):
 def test_get_not_allowed_on_chat(monkeypatch):
     client = _client(monkeypatch)
     assert client.get("/api/chat").status_code == 405  # POST 전용
+
+
+def test_over_limit_blocks_without_calling_chat(monkeypatch):
+    # 한도 초과 유저 → LLM(chat) 미호출, 안내문만 반환(비용·판정 코드 결정).
+    import api.chat as chat_route
+    from auth.usage import today_kst
+
+    over = SimpleNamespace(
+        id=2, is_admin=False, daily_limit=20, used_today=20, usage_date=today_kst(), total_questions=20
+    )
+    main.app.dependency_overrides[get_current_user] = lambda: over
+    called = {"n": 0}
+
+    def fake_chat(*a, **k):
+        called["n"] += 1
+        return {"text": "정상", "popups": []}
+
+    monkeypatch.setattr(chat_route, "chat", fake_chat)
+    client = _client(monkeypatch)
+    resp = client.post("/api/chat", json={"session_id": "s1", "message": "삼성전자 어때"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "한도" in body["text"] and body["popups"] == []
+    assert called["n"] == 0  # 한도 초과 → chat 미호출
+
+
+def test_admin_exempt_from_limit(monkeypatch):
+    # 관리자는 used_today 가 한도를 넘어도 정상 응답(무제한).
+    import api.chat as chat_route
+    from auth.usage import today_kst
+
+    admin = SimpleNamespace(
+        id=3, is_admin=True, daily_limit=20, used_today=999, usage_date=today_kst(), total_questions=999
+    )
+    main.app.dependency_overrides[get_current_user] = lambda: admin
+    monkeypatch.setattr(main, "collect_macro_indicators", _fake_snapshot)
+    monkeypatch.setattr(chat_route, "chat", lambda *a, **k: {"text": "정상", "popups": []})
+    client = _client(monkeypatch)
+    resp = client.post("/api/chat", json={"session_id": "s1", "message": "x"})
+    assert resp.status_code == 200 and resp.json()["text"] == "정상"

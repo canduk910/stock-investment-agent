@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 
 from auth.deps import get_current_user, get_current_user_optional
 from auth.models import User
+from auth.usage import consume, is_over_limit, quota_snapshot
 from chat.chat import chat, chat_stream
 from chat.history_store import HistoryStore
 from chat.intent import guardrail_label
@@ -41,6 +42,15 @@ router = APIRouter()
 
 # LLM 컨텍스트 hydrate 창(세션 슬라이딩 윈도우와 정합).
 _HYDRATE_WINDOW = 8
+
+
+def _limit_message(user: User) -> str:
+    """토큰(질문) 한도 초과 시 안내(챗 텍스트로 표시). LLM 미호출 — 판정·차단은 코드."""
+    limit = quota_snapshot(user)["daily_limit"]
+    return (
+        f"오늘 사용할 수 있는 질문 {limit}회를 모두 사용했습니다. "
+        "질문 한도는 매일 자정(KST)에 초기화됩니다. 더 필요하면 관리자에게 한도 조정을 요청하세요."
+    )
 
 
 class ChatRequest(BaseModel):
@@ -101,10 +111,15 @@ def post_chat(
     """{session_id(=conversation.id), message} → {text, popups}. 대화기록 DB 저장(유저 스코프)."""
     from api.main import live_judgement  # 지연 import(순환 참조 회피)
 
+    # 토큰(질문) 한도 선차단 — 관리자 무제한, 초과면 LLM 미호출(비용·판정 코드가 결정).
+    if is_over_limit(user):
+        return {"text": _limit_message(user), "popups": []}
+
     session = get_session(body.session_id)
     _hydrate_session(session, user, db, body.session_id)
     judgement, _indicators_used, _partial_failure = live_judgement()
     result = chat(body.message, judgement, session)
+    consume(user, db)  # 성공 턴 1회 소비 기록(일별 리셋 반영·누적·커밋)
     _persist_turn(user, db, body.session_id, body.message, result.get("text", ""))
     return result
 
@@ -191,6 +206,12 @@ def _sse(body: ChatRequest, user: User, db: Session):
 
     yield frame({"type": "stage", "stage": "analyze"})
 
+    # 토큰(질문) 한도 선차단 — 초과면 안내문만 토큰으로 흘리고 종료(chat_stream·LLM 미호출).
+    if is_over_limit(user):
+        yield frame({"type": "token", "text": _limit_message(user)})
+        yield frame({"type": "done", "popups": []})
+        return
+
     if guardrail_label(body.message):
         # 결정적 키워드 차단은 확정 → 국면 조회 불필요(live_judgement 미실행, FRED 낭비 0).
         # ML-risk 는 chat_stream 의 LLM 재분류로 허용될 수 있어 여기서 스킵하지 않는다(judgement 필요).
@@ -208,6 +229,7 @@ def _sse(body: ChatRequest, user: User, db: Session):
             assistant_text += ev.get("text", "")
         yield frame(ev)
 
+    consume(user, db)  # 스트림 완료 후 1회 소비 기록(일별 리셋 반영·누적·커밋)
     _persist_turn(user, db, body.session_id, body.message, assistant_text)
 
 

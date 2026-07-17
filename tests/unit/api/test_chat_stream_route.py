@@ -23,9 +23,16 @@ from infra.db import get_db
 
 @pytest.fixture(autouse=True)
 def _auth_override():
-    # 챗 스트림 라우트도 인증 필수 + 대화기록 저장. 고정 유저·더미 db(대화기록 helper 는 no-op).
-    main.app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
-    main.app.dependency_overrides[get_db] = lambda: None
+    # 챗 스트림 라우트도 인증 필수 + 대화기록 저장 + 토큰 한도 enforcement. 한도 여유 있는 고정 유저 +
+    # commit 가능한 더미 db(대화기록 helper 는 no-op, consume 는 db.commit()).
+    from auth.usage import today_kst
+
+    user = SimpleNamespace(
+        id=1, is_admin=False, daily_limit=20, used_today=0, usage_date=today_kst(), total_questions=0
+    )
+    fake_db = SimpleNamespace(commit=lambda: None)
+    main.app.dependency_overrides[get_current_user] = lambda: user
+    main.app.dependency_overrides[get_db] = lambda: fake_db
     yield
     main.app.dependency_overrides.pop(get_current_user, None)
     main.app.dependency_overrides.pop(get_db, None)
@@ -131,6 +138,39 @@ def test_stream_ml_risk_without_keyword_still_fetches_judgement(monkeypatch):
     stages = [e["stage"] for e in events if e["type"] == "stage"]
     assert "regime" in stages
     assert calls["live"] == 1  # 결정적 차단이 아니므로 국면 조회 실행
+
+
+def test_stream_over_limit_blocks_without_calling_chat_stream(monkeypatch):
+    """한도 초과 유저 → chat_stream·live_judgement 미호출, analyze 후 안내 token + done 만."""
+    from auth.usage import today_kst
+
+    over = SimpleNamespace(
+        id=2, is_admin=False, daily_limit=20, used_today=20, usage_date=today_kst(), total_questions=20
+    )
+    main.app.dependency_overrides[get_current_user] = lambda: over
+    calls = {"stream": 0, "live": 0}
+
+    def fake_live_judgement():
+        calls["live"] += 1
+        return ({"regime": "x"}, {}, [])
+
+    def fake_chat_stream(*a, **k):
+        calls["stream"] += 1
+        yield {"type": "done", "popups": []}
+
+    monkeypatch.setattr(main, "live_judgement", fake_live_judgement)
+    monkeypatch.setattr(chat_route, "chat_stream", fake_chat_stream)
+
+    client = TestClient(main.app)
+    with client.stream("POST", "/api/chat/stream", json={"session_id": "s1", "message": "삼성전자 어때"}) as resp:
+        assert resp.status_code == 200
+        body = resp.read().decode()
+
+    events = _parse_sse(body)
+    tokens = "".join(e.get("text", "") for e in events if e["type"] == "token")
+    assert "한도" in tokens  # 안내문만 흘렀다
+    assert events[-1] == {"type": "done", "popups": []}
+    assert calls["stream"] == 0 and calls["live"] == 0  # LLM·국면 조회 미실행
 
 
 def test_stream_reuses_session_across_calls(monkeypatch):
