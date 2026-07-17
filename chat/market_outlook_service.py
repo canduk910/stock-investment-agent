@@ -5,9 +5,7 @@ fetch_reports("market", ...) → 병렬(ThreadPool): 이미 요약한 nid skip(i
 """
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
-
-_MAX_WORKERS = 4  # 네이버 예의 크롤링 + OpenAI 동시 요약 상한
+from chat.report_progress import run_batch  # 비스트림 배치 루프 공용(스트림은 iter_process_metas)
 
 
 def _process_one(meta: dict, *, store, client) -> str:
@@ -49,12 +47,7 @@ def fetch_and_summarize(limit: int = 15, *, client=None, store=None) -> dict:
 
     store = store or default_store()
     metas = naver_research.fetch_reports("market", limit=limit)
-    counts = {"new": 0, "skipped": 0, "failed": 0}
-    if metas:
-        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as ex:
-            for label in ex.map(lambda m: _process_one(m, store=store, client=client), metas):
-                counts[label] += 1
-    return {"fetched": len(metas), **counts}
+    return run_batch(metas, lambda m: _process_one(m, store=store, client=client))
 
 
 def iter_fetch_and_summarize(limit: int = 15, *, client=None, store=None):

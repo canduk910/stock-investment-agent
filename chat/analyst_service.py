@@ -6,9 +6,7 @@ fetch_company_reports(목록·메타) → 종목별로 병렬(ThreadPool):
 """
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
-
-_MAX_WORKERS = 4  # 네이버 예의 크롤링 + OpenAI 동시 요약 상한
+from chat.report_progress import run_batch  # 비스트림 배치 루프 공용(스트림은 iter_process_metas)
 
 
 def _process_one(meta: dict, *, store, client) -> str:
@@ -47,12 +45,7 @@ def _process_one(meta: dict, *, store, client) -> str:
 
 def _summarize_metas(metas: list[dict], *, store, client) -> dict:
     """메타 리스트 → 병렬 처리 카운트({fetched,new,skipped,failed})."""
-    counts = {"new": 0, "skipped": 0, "failed": 0}
-    if metas:
-        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as ex:
-            for label in ex.map(lambda m: _process_one(m, store=store, client=client), metas):
-                counts[label] += 1
-    return {"fetched": len(metas), **counts}
+    return run_batch(metas, lambda m: _process_one(m, store=store, client=client))
 
 
 def fetch_and_summarize(limit: int = 20, *, client=None, store=None) -> dict:

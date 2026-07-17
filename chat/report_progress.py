@@ -16,6 +16,21 @@ from typing import Callable, Iterable, Iterator
 _MAX_WORKERS = 4  # 네이버 예의 크롤링 + OpenAI 동시 요약 상한(서비스 _MAX_WORKERS 와 동일)
 
 
+def run_batch(metas: Iterable[dict], process_one: Callable[[dict], str]) -> dict:
+    """metas → 병렬 처리(ThreadPool.map) → {fetched,new,skipped,failed}. non-stream 배치 SSOT.
+
+    analyst_service·market_outlook_service 의 비스트림 수집 루프 단일 출처(스트림은
+    iter_process_metas). `process_one(meta)->'new'|'skipped'|'failed'`(예외는 콜백이 흡수).
+    """
+    metas = list(metas)
+    counts = {"new": 0, "skipped": 0, "failed": 0}
+    if metas:
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as ex:
+            for label in ex.map(process_one, metas):
+                counts[label] += 1
+    return {"fetched": len(metas), **counts}
+
+
 def _report_meta(meta: dict, id_of: Callable[[dict], str]) -> dict:
     out = {"id": id_of(meta), "broker": meta.get("broker", ""), "title": meta.get("title", "")}
     if meta.get("stock_name"):  # 종목 리포트만(시황은 없음)
