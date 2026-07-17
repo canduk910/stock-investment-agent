@@ -31,6 +31,7 @@ dev = [
     "httpx>=0.28.1",
     "pytest>=8.0",
     "responses>=0.25",
+    "ipykernel>=7.3.0",  # 과제 실행 노트북 커널(런타임 아님 — 앱 배포엔 불필요)
 ]
 
 [tool.pytest.ini_options]
