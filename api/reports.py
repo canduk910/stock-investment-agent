@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from api._helpers import graceful_counts
 from api._sse import sse_response
 from api.deps import assert_valid_ticker
 from chat import analyst_combined, analyst_service
@@ -18,14 +19,13 @@ from rag import store
 
 router = APIRouter()
 
+_ZERO_COUNTS = {"fetched": 0, "new": 0, "skipped": 0, "failed": 0}
+
 
 @router.post("/api/reports/reindex")
 def reindex_reports() -> dict:
     """reports 폴더 PDF 재인덱스. 임베딩/파싱 실패는 graceful(항상 200 + error 필드)."""
-    try:
-        return store.reindex()
-    except Exception as e:  # OpenAI/파싱 실패 — 크래시 대신 안내
-        return {"error": str(e)[:200], "reports": 0, "chunks": 0, "sources": []}
+    return graceful_counts(store.reindex, {"reports": 0, "chunks": 0, "sources": []})
 
 
 @router.get("/api/reports/status")
@@ -37,10 +37,7 @@ def reports_status() -> dict:
 def fetch_naver_reports(limit: int = 20) -> dict:
     """네이버 최신 리포트 수집→요약→저장. 항상 200 + 카운트({fetched,new,skipped,failed})."""
     limit = max(1, min(limit, 50))  # 예의 크롤링 상한
-    try:
-        return analyst_service.fetch_and_summarize(limit=limit)
-    except Exception as e:  # 수집/요약 실패 — 크래시 대신 안내
-        return {"error": str(e)[:200], "fetched": 0, "new": 0, "skipped": 0, "failed": 0}
+    return graceful_counts(lambda: analyst_service.fetch_and_summarize(limit=limit), _ZERO_COUNTS)
 
 
 @router.post("/api/detail/{ticker}/analyst-reports/fetch")
@@ -51,10 +48,9 @@ def fetch_stock_analyst_reports(ticker: str, limit: int = 10) -> dict:
     """
     assert_valid_ticker(ticker)  # 불량 코드 400(공용 SSOT)
     limit = max(1, min(limit, 30))  # 예의 크롤링 상한
-    try:
-        return analyst_service.fetch_and_summarize_for_ticker(ticker, limit=limit)
-    except Exception as e:  # 수집/요약 실패 — 크래시 대신 안내
-        return {"error": str(e)[:200], "fetched": 0, "new": 0, "skipped": 0, "failed": 0}
+    return graceful_counts(
+        lambda: analyst_service.fetch_and_summarize_for_ticker(ticker, limit=limit), _ZERO_COUNTS
+    )
 
 
 @router.post("/api/detail/{ticker}/analyst-reports/fetch/stream")
@@ -80,11 +76,7 @@ def analyst_reports_summary(ticker: str) -> dict:
     실패는 graceful(항상 200 + validation_failed). 종합은 '여러 리포트 인용'(판정 아님)·면책.
     """
     assert_valid_ticker(ticker)  # 불량 코드 400(공용 SSOT)
-    try:
-        result = analyst_combined.summarize_recent_reports(ticker)
-    except Exception as e:  # LLM/조회 실패 — 크래시 대신 안내
-        return {
-            "ticker": ticker, "summary": None, "validation_failed": True,
-            "report_count": 0, "error": str(e)[:200],
-        }
-    return {"ticker": ticker, **result}
+    return graceful_counts(
+        lambda: {"ticker": ticker, **analyst_combined.summarize_recent_reports(ticker)},
+        {"ticker": ticker, "summary": None, "validation_failed": True, "report_count": 0},
+    )

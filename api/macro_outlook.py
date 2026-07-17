@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from api._helpers import graceful_counts
 from api._sse import sse_response
 from chat import market_outlook_service
 from chat.market_outlook_store import default_store
@@ -19,10 +20,10 @@ router = APIRouter()
 def fetch_market_outlook(limit: int = 15) -> dict:
     """네이버 최신 시황 수집→요약→저장. 항상 200 + 카운트({fetched,new,skipped,failed})."""
     limit = max(1, min(limit, 30))  # 예의 크롤링 상한
-    try:
-        return market_outlook_service.fetch_and_summarize(limit=limit)
-    except Exception as e:  # 수집/요약 실패 — 크래시 대신 안내
-        return {"error": str(e)[:200], "fetched": 0, "new": 0, "skipped": 0, "failed": 0}
+    return graceful_counts(
+        lambda: market_outlook_service.fetch_and_summarize(limit=limit),
+        {"fetched": 0, "new": 0, "skipped": 0, "failed": 0},
+    )
 
 
 @router.post("/api/macro/market-outlook/fetch/stream")
