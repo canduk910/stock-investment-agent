@@ -134,12 +134,37 @@ def test_classify_does_not_block_benign_queries():
     assert not misfires, f"classify 가 정당 조회를 차단함: {misfires}"
 
 
-def test_labels_are_exactly_six():
+def test_labels_are_exactly_seven():
+    # 강화: 애널리스트 리포트 수집·검색을 별도 인텐트(analyst_report)로 인식(7분류).
     assert set(LABELS) == {
         "macro_view",
         "stock_analysis",
         "portfolio_advice",
         "watchlist_mgmt",
         "general_qa",
+        "analyst_report",
         "risk_guardrail",
     }
+
+
+# 애널리스트/리포트 확보·검색 질의 — 강화로 analyst_report 인텐트로 분류되어야 하고 절대 위험 아님.
+_REPORT_QUERIES = [
+    "삼성전자 애널리스트 리포트 확보해줘",
+    "이 종목 증권사 리포트 가져와",
+    "LG이노텍 목표주가 리포트 찾아줘",
+    "업로드한 리포트에서 목표주가 검색해줘",
+    "네이버 애널리스트 리포트 수집해줘",
+]
+
+
+@pytest.mark.skipif(not _DATASET.exists(), reason="production dataset 부재")
+def test_report_queries_classify_as_analyst_report():
+    # 데이터셋 즉석 학습(tfidf+lbfgs 결정적) → 리포트 질의가 analyst_report 로 분류되고
+    # risk_guardrail 로 오분류되지 않는지(강화 효과 + 안전) 검증.
+    texts, labels = _load_tsv(_DATASET)
+    pipe = build_pipeline()
+    pipe.fit(texts, labels)
+    preds = list(pipe.predict(_REPORT_QUERIES))
+    assert all(p != "risk_guardrail" for p in preds), f"리포트 질의 위험 오분류: {preds}"
+    # 다수가 analyst_report 로 분류(ML이라 전수 단정은 피하되 대다수는 맞아야 강화 효과 입증).
+    assert sum(p == "analyst_report" for p in preds) >= 4, f"리포트 인텐트 미인식: {preds}"

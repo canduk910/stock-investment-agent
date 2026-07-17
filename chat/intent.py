@@ -22,13 +22,15 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 
-# 6분류 라벨(스킬 §3 표). risk_guardrail 은 차단 경로.
+# 7분류 라벨(스킬 §3 표). risk_guardrail 은 차단 경로.
+# analyst_report: 애널리스트/증권사 리포트 수집·검색·목표주가·투자의견 조회(콘텐츠 툴 흐름).
 LABELS = (
     "macro_view",
     "stock_analysis",
     "portfolio_advice",
     "watchlist_mgmt",
     "general_qa",
+    "analyst_report",
     "risk_guardrail",
 )
 
