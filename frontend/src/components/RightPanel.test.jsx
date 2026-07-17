@@ -49,6 +49,9 @@ vi.mock('./MarketOutlookSection.jsx', () => ({
 vi.mock('./KisSettingsPanel.jsx', () => ({
   default: () => <div data-testid="kis-settings">kis-settings</div>,
 }))
+vi.mock('./AdminPanel.jsx', () => ({
+  default: ({ currentUserId }) => <div data-testid="admin">admin:{String(currentUserId)}</div>,
+}))
 // 종목검색 자동완성(항목6) — TickerSearch 가 searchStocks 를 부른다. 경계만 mock.
 vi.mock('../api.js', () => ({ searchStocks: vi.fn() }))
 import { searchStocks } from '../api.js'
@@ -163,6 +166,23 @@ describe('RightPanel 퀵버튼 툴바(대화 없이 직접 탐색 → onSelect �
     render(<RightPanel spec={null} onSelect={onSelect} onClose={() => {}} />)
     fireEvent.click(screen.getByRole('button', { name: '내 잔고' }))
     expect(onSelect).toHaveBeenCalledWith({ kind: 'balance', args: {}, valid: true })
+  })
+
+  it('회원 관리 탭은 관리자만 노출된다(비관리자 미노출)', () => {
+    const { rerender } = render(<RightPanel spec={null} onSelect={() => {}} onClose={() => {}} />)
+    expect(screen.queryByRole('button', { name: '회원 관리' })).not.toBeInTheDocument()
+    rerender(<RightPanel spec={null} onSelect={() => {}} onClose={() => {}} isAdmin />)
+    expect(screen.getByRole('button', { name: '회원 관리' })).toBeInTheDocument()
+  })
+
+  it('회원 관리 → {kind:admin}, admin body 에 currentUserId 전달', () => {
+    const onSelect = vi.fn()
+    render(<RightPanel spec={null} onSelect={onSelect} onClose={() => {}} isAdmin currentUserId={7} />)
+    fireEvent.click(screen.getByRole('button', { name: '회원 관리' }))
+    expect(onSelect).toHaveBeenCalledWith({ kind: 'admin', args: {}, valid: true })
+    // spec 이 admin 이면 AdminPanel 을 렌더하고 currentUserId 를 넘긴다.
+    render(<RightPanel spec={spec({ kind: 'admin' })} onSelect={() => {}} onClose={() => {}} isAdmin currentUserId={7} />)
+    expect(screen.getByTestId('admin')).toHaveTextContent('admin:7')
   })
 
   it('종목검색: 유효 ticker 제출 → {kind:stock_report, args:{ticker}}', () => {

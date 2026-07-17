@@ -8,6 +8,7 @@ import RegimeGauge from './RegimeGauge.jsx'
 import MarketOutlookSection from './MarketOutlookSection.jsx'
 import BalancePanel from './BalancePanel.jsx'
 import KisSettingsPanel from './KisSettingsPanel.jsx'
+import AdminPanel from './AdminPanel.jsx'
 
 // 우측 동적 패널(리디자인) — 좌측 상시 채팅 옆에서 맥락형 콘텐츠를 인라인 렌더한다(모달 폐기).
 // 두 경로로 구동: (a) 챗봇 tool_call(App 이 onShowPanel 로 spec 리프팅) · (b) 상단 세그먼트 탭·종목검색(대화 없이 직접 탐색).
@@ -23,6 +24,7 @@ const PANEL_TITLE = {
   manage_watchlist: '관심종목 관리',
   balance: '내 잔고',
   settings: '설정 · KIS API 키',
+  admin: '회원 관리',
 }
 
 // 세그먼트 탭(SSOT) — 대화 없이 직접 탐색. 클릭 시 해당 kind spec 을 onSelect 로 리프팅한다.
@@ -36,7 +38,7 @@ const TABS = [
 
 // 팝업 스펙(kind) → 패널 본문. 데이터는 각 컴포넌트가 직접 조회한다(모달일 때와 동일 재사용).
 // stock_report 는 ticker 형식(6자 영숫자)이 불량이면 조회하지 않고 안내만 한다(잘못된 백엔드 조회 방지).
-function RightPanelBody({ spec, onClose, sessionId, onConsult, onSelect }) {
+function RightPanelBody({ spec, onClose, sessionId, onConsult, onSelect, currentUserId }) {
   // 관심종목·잔고에서 종목 클릭 → 종목 상세로 전환(TickerSearch 와 동일한 stock_report spec SSOT).
   const openStock = (ticker, stockName) =>
     onSelect({
@@ -81,6 +83,9 @@ function RightPanelBody({ spec, onClose, sessionId, onConsult, onSelect }) {
     case 'settings':
       // 유저별 KIS API 키 등록/상태/삭제 — 탭 전용(챗 팝업 아님). 시크릿은 서버로만·마스킹 상태만.
       return <KisSettingsPanel />
+    case 'admin':
+      // 회원 관리 — 관리자 전용 탭(get_admin_user 게이트). 유저 목록·통계·한도·권한·삭제. 조회/제어만.
+      return <AdminPanel currentUserId={currentUserId} />
     default:
       return null
   }
@@ -247,8 +252,18 @@ function PanelSkeleton() {
 // 전환 스켈레톤 지속(ms) — 짧은 로딩감(실데이터는 각 본문 컴포넌트가 별도 조회).
 const PANEL_SKELETON_MS = 450
 
-export default function RightPanel({ spec, onSelect, onClose, sessionId, onConsult }) {
+export default function RightPanel({
+  spec,
+  onSelect,
+  onClose,
+  sessionId,
+  onConsult,
+  isAdmin = false,
+  currentUserId = null,
+}) {
   const activeKind = spec?.kind ?? null
+  // 세그먼트 탭 — 관리자면 '회원 관리' 탭 추가(관리자 전용). 비관리자는 노출하지 않는다.
+  const tabs = isAdmin ? [...TABS, { key: 'admin', label: '회원 관리' }] : TABS
 
   // 전환 스켈레톤: kind(또는 종목) 변화 시 잠깐 shimmer. 초기 마운트는 건너뛴다(첫 화면 지연·테스트 방해 방지).
   const [loading, setLoading] = useState(false)
@@ -278,7 +293,7 @@ export default function RightPanel({ spec, onSelect, onClose, sessionId, onConsu
       {/* ── 툴바: 세그먼트 탭(관심종목/시장 국면/내 잔고) + 우측 인라인 종목검색 ── */}
       <div className="right-panel__toolbar" role="toolbar" aria-label="빠른 탐색">
         <div className="right-panel__tabs">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button
               key={t.key}
               type="button"
@@ -325,6 +340,7 @@ export default function RightPanel({ spec, onSelect, onClose, sessionId, onConsu
                 sessionId={sessionId}
                 onConsult={onConsult}
                 onSelect={onSelect}
+                currentUserId={currentUserId}
               />
             )}
           </div>

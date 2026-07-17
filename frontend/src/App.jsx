@@ -116,13 +116,20 @@ export default function App() {
     }
   }, [])
 
-  // 챗 턴 완료 후 대화목록 재조회 — 첫 질문 자동 명명·updated_at 재정렬을 스위처에 반영.
+  // 챗 턴 완료 후: ① 대화목록 재조회(첫 질문 자동 명명·재정렬 반영) ② 내 질문 잔량 갱신(톱바 칩).
+  //   fetchMe 는 quota(used_today/daily_limit/remaining)까지 반환 → 소비 후 잔량이 즉시 최신화된다.
   const refreshConversations = useCallback(async () => {
     try {
       const list = (await fetchConversations()).conversations || []
       setConversations(list)
     } catch {
       /* graceful */
+    }
+    try {
+      const me = await fetchMe()
+      if (me) setUser(me)
+    } catch {
+      /* 잔량 갱신 실패는 조용히 — 다음 로드에 반영 */
     }
   }, [])
 
@@ -279,6 +286,17 @@ export default function App() {
           <span className="app__user" title={user.email}>
             {user.email}
           </span>
+          {/* 내 질문 잔량 칩 — 관리자는 무제한, 일반 회원은 오늘 사용/한도. 소진 시 주황 강조(경보 아님). */}
+          {user.is_admin ? (
+            <span className="app__chip app__chip--quota">관리자 · 질문 무제한</span>
+          ) : user.daily_limit != null ? (
+            <span
+              className={`app__chip app__chip--quota${user.remaining === 0 ? ' is-exhausted' : ''}`}
+              title="하루 질문 한도는 매일 자정(KST)에 초기화됩니다."
+            >
+              오늘 질문 {user.used_today}/{user.daily_limit}
+            </span>
+          ) : null}
           <button type="button" className="app__logout" onClick={handleLogout}>
             로그아웃
           </button>
@@ -362,6 +380,8 @@ export default function App() {
             onClose={() => setRightPanelSpec(null)}
             sessionId={sessionId.current}
             onConsult={startConsult}
+            isAdmin={!!user.is_admin}
+            currentUserId={user.id}
           />
         </div>
       </main>

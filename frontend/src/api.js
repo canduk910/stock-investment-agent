@@ -392,3 +392,61 @@ export async function searchStocks(query, limit = 8) {
   const data = await res.json()
   return data.results ?? []
 }
+
+// ── 관리자 — 유저 관리·이용 통계·질문 한도 제어 ────────────────────────────────
+// 전부 authFetch(Bearer) + get_admin_user 게이트(비관리자 403). 매매·자격증명 원문 무관(조회/제어만).
+
+// GET /api/admin/users → {users:[{id,email,is_admin,daily_limit,used_today,remaining,total_questions,created_at}]}.
+export async function fetchAdminUsers() {
+  const res = await authFetch('/api/admin/users')
+  if (!res.ok) {
+    const err = new Error(`API ${res.status}`)
+    err.status = res.status
+    throw err
+  }
+  const data = await res.json()
+  return data.users ?? []
+}
+
+// PATCH /api/admin/users/{id} {is_admin?, daily_limit?} → 갱신된 유저. 자기 자신 관리자해제=400.
+export async function updateAdminUser(userId, patch) {
+  const res = await authFetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const err = new Error(data.detail || `API ${res.status}`)
+    err.status = res.status
+    throw err
+  }
+  return data
+}
+
+// POST /api/admin/users/{id}/reset-usage → 갱신된 유저(오늘 사용량 0, 누적 통계 보존).
+export async function resetAdminUserUsage(userId) {
+  const res = await authFetch(`/api/admin/users/${encodeURIComponent(userId)}/reset-usage`, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const err = new Error(`API ${res.status}`)
+    err.status = res.status
+    throw err
+  }
+  return res.json()
+}
+
+// DELETE /api/admin/users/{id} → {ok, deleted}. 유저 + 스코프 데이터 삭제. 자기 자신 삭제=400.
+export async function deleteAdminUser(userId) {
+  const res = await authFetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const err = new Error(data.detail || `API ${res.status}`)
+    err.status = res.status
+    throw err
+  }
+  return data
+}
