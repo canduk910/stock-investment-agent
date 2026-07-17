@@ -6,19 +6,9 @@ import AiReportPanel from './AiReportPanel.jsx'
 import AnalystReportsSection from './AnalystReportsSection.jsx'
 import WatchlistStar from './WatchlistStar.jsx'
 import { sectionFailed, isValuationReady } from '../lib/reportLogic.js'
+// 표시 포맷 SSOT(순수) — 값·판정은 백엔드 summary 가 확정, 여기선 표시만. 결측은 '—'.
+import { num, pct } from '../lib/format.js'
 
-// ── 표시 포맷 헬퍼(순수) — 값·판정은 백엔드 summary 가 확정, 여기선 표시만. 결측은 '—'. ──
-function num(v, digits = 0) {
-  if (v === null || v === undefined || !Number.isFinite(Number(v))) return '—'
-  return Number(v).toLocaleString(undefined, {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  })
-}
-function pct(v, digits = 1) {
-  if (v === null || v === undefined || !Number.isFinite(Number(v))) return '—'
-  return `${Number(v).toFixed(digits)}`
-}
 // CAGR 은 이미 %(엔진 stock/summary.py::_cagr 가 ×100 반환). 프론트는 ×100 재적용 금지(단위 규약).
 function cagrPct(v, digits = 1) {
   if (v === null || v === undefined || !Number.isFinite(Number(v))) return '—'

@@ -10,6 +10,8 @@ import {
   sortItems,
   addErrorMessage,
 } from '../lib/watchlistLogic.js'
+// 등락률은 % 를 JSX 가 접미(`{signedNum(x)}%`) → 접미 없는 signedNum 사용(원본 로컬 signedPct 와 동일 동작).
+import { num, signedNum, changeDir } from '../lib/format.js'
 import Sparkline from './Sparkline.jsx'
 
 // 워치리스트 본문 — 팝업(PopupWatchlist)과 독립 패널(App)이 공유하는 단일 컴포넌트.
@@ -23,23 +25,6 @@ import Sparkline from './Sparkline.jsx'
 //   initialSortBy  : 팝업이 show_watchlist args.sort_by 를 주입(기본 'registered').
 //   refreshKey     : 값이 바뀌면 재조회(App 의 60s interval 이 증가시킨다). 팝업은 미전달(마운트 1회).
 //   onView         : 조회 성공 시 최신 view 를 부모에 통지(App 의 목표가 전이 알림 근거). 팝업은 미전달.
-
-const num = (v, digits = 0) => {
-  if (v === null || v === undefined || !Number.isFinite(Number(v))) return '—'
-  return Number(v).toLocaleString(undefined, {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  })
-}
-const signedPct = (v, digits = 2) => {
-  if (v === null || v === undefined || !Number.isFinite(Number(v))) return '—'
-  const n = Number(v)
-  return `${n > 0 ? '+' : ''}${n.toFixed(digits)}`
-}
-const changeDir = (v) => {
-  if (v === null || v === undefined || !Number.isFinite(Number(v))) return null
-  return Number(v) > 0 ? 'up' : Number(v) < 0 ? 'down' : 'flat'
-}
 
 // 목표가 상태 배지 — 매수/매도를 라벨로 구분(색은 동일: 도달/근접=강조 주황, 여유=회색, 위험 빨강 아님).
 // sideLabel = '매수' | '매도'. status ∈ {reached, near, far, none}.
@@ -270,7 +255,7 @@ function WatchlistRow({ item, onRemove, onSetTarget, onOpenStock }) {
                 <span aria-hidden="true">
                   {dir === 'up' ? '▲' : dir === 'down' ? '▼' : '─'}
                 </span>{' '}
-                {signedPct(item.change_rate)}%
+                {signedNum(item.change_rate)}%
               </span>
             </>
           )}
@@ -368,7 +353,7 @@ function TargetRow({ sideLabel, field, targetPrice, distance, status, onSetTarge
           <div className="wl__target-head">
             <span className="wl__target-val">{num(targetPrice)}원</span>
             {Number.isFinite(distance) ? (
-              <span className="wl__target-dist">({signedPct(distance, 1)}%)</span>
+              <span className="wl__target-dist">({signedNum(distance, 1)}%)</span>
             ) : null}
             {badge ? <span className={`badge badge--${badge.tone}`}>{badge.text}</span> : null}
           </div>

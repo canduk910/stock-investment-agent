@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchBalance } from '../api.js'
 import Sparkline from './Sparkline.jsx'
+import { won, signedWon, signedPct, qty, flatDir } from '../lib/format.js'
 
 // 잔고(포트폴리오) 패널 — 우측 동적 패널에서 /api/balance 를 자체 조회한다(환각 차단).
 // 조회 전용(주문/매매 없음). 현재가 포함 → 무캐시(팝업 열 때마다 조회, 원칙1).
@@ -14,33 +15,6 @@ const DISCLAIMER =
   '본 화면은 정보 제공 목적이며 투자 자문·매매 권유가 아닙니다. 잔고·평가액은 조회 시점 기준이며 ' +
   '판정·수치는 코드가 산출합니다. 투자 판단과 그 결과의 책임은 전적으로 본인에게 있습니다.'
 
-// 원 단위 정수 포맷(천단위 콤마). 결측/비수치 → '—'.
-const won = (v) => {
-  if (v === null || v === undefined || !Number.isFinite(Number(v))) return '—'
-  return `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}원`
-}
-// 부호 있는 원(손익 금액). +는 명시, 결측 → '—'.
-const signedWon = (v) => {
-  if (v === null || v === undefined || !Number.isFinite(Number(v))) return '—'
-  const n = Number(v)
-  return `${n > 0 ? '+' : ''}${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}원`
-}
-// 부호 있는 퍼센트(수익률).
-const signedPct = (v) => {
-  if (v === null || v === undefined || !Number.isFinite(Number(v))) return '—'
-  const n = Number(v)
-  return `${n > 0 ? '+' : ''}${n.toFixed(2)}%`
-}
-// 수량(정수).
-const qty = (v) => {
-  if (v === null || v === undefined || !Number.isFinite(Number(v))) return '—'
-  return Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })
-}
-// 방향(상승/하락/중립) — 색·글리프 결정. 상승=파랑(up)/하락=회색(down)/0·결측=flat.
-const dir = (v) => {
-  if (v === null || v === undefined || !Number.isFinite(Number(v))) return 'flat'
-  return Number(v) > 0 ? 'up' : Number(v) < 0 ? 'down' : 'flat'
-}
 
 // partial_failure(문자열 리스트/객체 둘 다 방어)에 key 가 있는지.
 function inPartialFailure(partialFailure, key) {
@@ -60,7 +34,7 @@ function SummaryCard({ label, value, tone }) {
 
 // 손익 표기(금액+수익률) — 방향색 + 글리프(색만으로 구분하지 않음, 디자인 §4).
 function Pnl({ amount, pct }) {
-  const d = dir(amount ?? pct)
+  const d = flatDir(amount ?? pct)
   return (
     <span className={`balance__pnl ${d}`}>
       <span aria-hidden="true">{d === 'up' ? '▲' : d === 'down' ? '▼' : '─'}</span>{' '}
@@ -144,9 +118,9 @@ export default function BalancePanel({ onOpenStock } = {}) {
               <span className="balance__hero-label">순자산</span>
               <span className="balance__hero-value">{won(summary.net_asset)}</span>
             </div>
-            <span className={`balance__hero-pnl ${dir(summary.pnl_amount)}`}>
+            <span className={`balance__hero-pnl ${flatDir(summary.pnl_amount)}`}>
               <span aria-hidden="true">
-                {dir(summary.pnl_amount) === 'up' ? '▲' : dir(summary.pnl_amount) === 'down' ? '▼' : '─'}
+                {flatDir(summary.pnl_amount) === 'up' ? '▲' : flatDir(summary.pnl_amount) === 'down' ? '▼' : '─'}
               </span>{' '}
               {signedWon(summary.pnl_amount)} 평가손익
             </span>
