@@ -65,6 +65,81 @@ def test_run_content_tool_search_report_empty(monkeypatch):
     assert "리포트" in out  # 인덱스 없음 안내(지어내지 않음)
 
 
+# ── fetch_analyst_reports 콘텐츠 툴(네이버 애널리스트 수집 — 요청 시) ──────────
+
+def test_fetch_analyst_reports_registered_as_content_tool():
+    # 챗에서 네이버 애널리스트 리포트를 '수집'하는 콘텐츠 툴. search_report(업로드 PDF RAG)와 별개.
+    names = {t["function"]["name"] for t in TOOLS}
+    assert "fetch_analyst_reports" in CONTENT_TOOLS
+    assert "fetch_analyst_reports" in names
+
+
+def test_fetch_analyst_reports_ticker_required():
+    fn = _tool("fetch_analyst_reports")
+    assert fn["parameters"]["required"] == ["ticker"]
+    assert "ticker" in _props("fetch_analyst_reports")
+    # 설명이 '수집' 용도 + 요청 시만 호출을 명시(오발동 방지).
+    desc = fn["description"]
+    assert "수집" in desc
+
+
+def test_run_content_tool_fetch_analyst_attributes_source(monkeypatch):
+    """fetch_analyst_reports → 저장된 요약을 출처 귀속 프레이밍으로 되먹인다(판정 아님)."""
+    calls = {}
+
+    def fake_fetch(ticker, limit=5, **kw):
+        calls["ticker"] = ticker
+        calls["limit"] = limit
+        return {"fetched": 2, "new": 2, "skipped": 0, "failed": 0}
+
+    monkeypatch.setattr("chat.analyst_service.fetch_and_summarize_for_ticker", fake_fetch)
+
+    class FakeStore:
+        def list_reports(self, t):
+            return [{
+                "broker": "신한투자증권",
+                "summary": {"증권사": "신한투자증권", "투자의견": "매수",
+                            "목표주가": "9만원", "요약": "메모리 업황 회복 기대"},
+            }]
+
+    monkeypatch.setattr("chat.analyst_store.default_store", lambda: FakeStore())
+
+    out = run_content_tool("fetch_analyst_reports", {"ticker": "005930"})
+    assert calls["ticker"] == "005930"
+    assert "신한투자증권" in out and "매수" in out and "9만원" in out
+    assert "리포트에 따르면" in out  # 출처 귀속·판정 금지 프레이밍
+
+
+def test_run_content_tool_fetch_analyst_bad_ticker_no_fetch(monkeypatch):
+    """불량 티커(6자리 아님)면 네이버 수집을 호출하지 않고 graceful 안내."""
+    called = {"n": 0}
+
+    def fake_fetch(*a, **k):
+        called["n"] += 1
+        return {}
+
+    monkeypatch.setattr("chat.analyst_service.fetch_and_summarize_for_ticker", fake_fetch)
+    out = run_content_tool("fetch_analyst_reports", {"ticker": "삼성전자"})
+    assert "6자리" in out or "확인" in out
+    assert called["n"] == 0  # 불량 티커면 수집 미호출(불필요한 크롤 방지)
+
+
+def test_run_content_tool_fetch_analyst_no_reports_graceful(monkeypatch):
+    """수집했지만 리포트 0건이면 지어내지 않고 없음 안내."""
+    monkeypatch.setattr(
+        "chat.analyst_service.fetch_and_summarize_for_ticker",
+        lambda *a, **k: {"fetched": 0, "new": 0, "skipped": 0, "failed": 0},
+    )
+
+    class EmptyStore:
+        def list_reports(self, t):
+            return []
+
+    monkeypatch.setattr("chat.analyst_store.default_store", lambda: EmptyStore())
+    out = run_content_tool("fetch_analyst_reports", {"ticker": "058610"})
+    assert "찾지 못" in out or "없" in out
+
+
 def test_all_tools_are_openai_function_type():
     for t in TOOLS:
         assert t["type"] == "function"

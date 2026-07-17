@@ -178,3 +178,14 @@ def test_prompt_allows_actionable_recommendation():
     # 완화의 핵심: 후보를 구체적으로 제시(actionable) 허용 문구가 있어야 한다.
     text = build_prompt(_JUDGEMENT)
     assert "후보" in text  # 편입 검토 후보 제시
+
+
+def test_prompt_analyst_fetch_channel_and_offer():
+    # 애널리스트 리포트 = 네이버 수집(fetch_analyst_reports), 업로드 PDF = search_report 로 구분.
+    # 저장된 리포트가 없으면 '지어내기'가 아니라 '수집 제안' → 동의 시 수집.
+    text = build_prompt(_JUDGEMENT)
+    assert "fetch_analyst_reports" in text and "search_report" in text
+    assert "수집" in text  # 네이버 수집 채널 명시
+    assert "제안" in text or "수집해 올까요" in text  # 없으면 먼저 제안(자동수집 아님)
+    # 네이버 리포트를 'PDF 폴더 재인덱스'로 오안내하지 않음(그건 업로드 PDF 경우에 한정).
+    assert "직접 올린" in text or "한한다" in text

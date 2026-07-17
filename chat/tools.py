@@ -181,6 +181,26 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "fetch_analyst_reports",
+            "description": (
+                "특정 종목의 네이버 애널리스트 리포트를 새로 **수집·요약**해 온다. "
+                "사용자가 '이 종목 리포트 확보/가져와/수집해줘'라고 하거나, 저장된 리포트가 없어 "
+                "사용자가 수집에 동의했을 때만 호출한다(수십 초 걸리는 작업 — 원하지 않으면 호출하지 않는다). "
+                "이미 인덱싱된 업로드 PDF 검색은 search_report 를 쓰고, 이 도구는 네이버에서 새로 가져오는 용도다. "
+                "결과 요약은 '리포트에 따르면'으로 출처를 밝혀 전하고 매수/매도 판정으로 제시하지 않는다."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ticker": {"type": "string", "description": "종목코드 6자리(예: 058610)"},
+                },
+                "required": ["ticker"],
+            },
+        },
+    },
 ]
 
 
@@ -188,7 +208,17 @@ TOOLS = [
 # 표시 툴(show_*)은 chat.py 가 tool 결과를 {"ok":True}로만 되먹이고 실데이터는 프론트가
 # 조회(환각 차단). 콘텐츠 툴은 서버가 실행해 실제 텍스트를 되먹여 LLM 이 요약한다.
 # 이름 집합 + 실행 레지스트리가 단일 출처 — chat.py(chat·chat_stream)가 이걸로 분기한다.
-CONTENT_TOOLS = frozenset({"summarize_youtube", "search_report"})
+CONTENT_TOOLS = frozenset({"summarize_youtube", "search_report", "fetch_analyst_reports"})
+
+# 챗에서 애널리스트 리포트 수집 시 상한(지연 캡) — 프론트 '가져오기'(최대 30)보다 작게 잡아
+# 챗 응답이 과도하게 지연되지 않게 한다(각 리포트마다 PDF 다운로드 + LLM 요약이라 느림).
+ANALYST_CHAT_FETCH_LIMIT = 5
+_ANALYST_FEEDBACK_TOP_N = 5  # 되먹임에 실을 최근 리포트 수
+
+
+def _looks_like_ticker(t) -> bool:
+    """6자리 숫자 종목코드 여부(불량 티커로 불필요한 네이버 크롤 방지)."""
+    return isinstance(t, str) and t.isdigit() and len(t) == 6
 
 
 def _impl_search_report(args: dict) -> str:
@@ -226,9 +256,46 @@ def _impl_summarize_youtube(args: dict) -> str:
     )
 
 
+def _impl_fetch_analyst_reports(args: dict) -> str:
+    # 네이버에서 그 종목 애널리스트 리포트를 수집·요약·저장(느림 — 요청 시만 프롬프트가 호출) →
+    # 저장된 요약을 출처 귀속 프레이밍으로 되먹여 LLM 이 인용해 답한다(에이전트 판정 아님).
+    ticker = str((args or {}).get("ticker", "")).strip()
+    if not _looks_like_ticker(ticker):
+        return "종목코드(6자리)를 확인하지 못해 애널리스트 리포트를 수집할 수 없습니다."
+
+    # 지연 import — tools.py 로드가 수집 스택(requests/pdfplumber/OpenAI)에 묶이지 않게.
+    from chat import analyst_service
+    from chat.analyst_store import default_store
+
+    result = analyst_service.fetch_and_summarize_for_ticker(ticker, limit=ANALYST_CHAT_FETCH_LIMIT)
+    reports = default_store().list_reports(ticker)[:_ANALYST_FEEDBACK_TOP_N]
+    if not reports:
+        return (
+            f"네이버에서 {ticker} 관련 애널리스트 리포트를 찾지 못했습니다"
+            f"(발견 {result.get('fetched', 0)}건). 최근 공개된 리포트가 없을 수 있음을 알리고 "
+            "없는 목표주가·의견을 지어내지 마세요."
+        )
+    header = (
+        f"[{ticker} 애널리스트 리포트 수집 결과 — 발견 {result.get('fetched', 0)}·신규 "
+        f"{result.get('new', 0)}·기존 {result.get('skipped', 0)}·실패 {result.get('failed', 0)}건. "
+        "아래는 각 증권사 리포트가 밝힌 의견이다(에이전트 판정 아님). "
+        "'리포트에 따르면'으로 출처를 밝혀 전하고, 매수/매도 단정·수치 날조 금지·면책 유지]"
+    )
+    lines = [header]
+    for e in reports:
+        s = e.get("summary") or {}
+        broker = s.get("증권사") or e.get("broker") or "증권사"
+        opinion = s.get("투자의견") or "의견 명시 없음"
+        target = s.get("목표주가") or "목표가 없음"
+        brief = (s.get("요약") or "")[:120]
+        lines.append(f"- [{broker}] 의견 {opinion} · 목표가 {target} — {brief}")
+    return "\n".join(lines)
+
+
 _TOOL_IMPL = {
     "summarize_youtube": _impl_summarize_youtube,
     "search_report": _impl_search_report,
+    "fetch_analyst_reports": _impl_fetch_analyst_reports,
 }
 
 
