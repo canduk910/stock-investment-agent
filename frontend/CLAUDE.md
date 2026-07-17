@@ -47,6 +47,11 @@
 - **세션 id 는 `App` 이 단일 소유**(리팩터): 좌측 `ChatPanel`(대화)과 우측 리포트 "상담하기"가 **같은 session_id 를 공유**해야 컨텍스트가 대화에 반영된다 → `App` 이 `useRef`로 생성해 두 패널에 prop 전달. `ChatPanel`은 prop 우선, 미전달 시 자체 생성 폴백(구 테스트 호환). 프롭 경로: `App → RightPanel → RightPanelBody → PopupStockReport → StockReportView → AnalystReportsSection`(sessionId·onConsult).
 - `api.js`: `fetchAnalystReports(ticker)`·`fetchNaverReports(limit)`·`setReportContext(sessionId, ticker, reportId)`. 테스트는 jsdom + api.js mock(빈 상태·수집 재조회·상담 콜백·세션 없음 비활성).
 
+## 이동평균선 대순환 (고지로 · 기술적 분석 하단)
+- **`GrandCyclePanel.jsx`**: `StockReportView` 기술적 분석 섹션의 `.report__chart-block` **아래**(칩 다음, 차트 성공 분기). props `cycle`=`bundle.summary.ma_grand_cycle`(백엔드 판정 결과 or null[봉부족]) + `catalog`=`bundle.indicator_config.grand_cycle`(6단계 라벨·기간 **SSOT**). 렌더: 현재 단계 배지(**주황 소프트**)·6단계 사이클 스텝(현재만 `--current` 주황·`stageGlyph`로 방향 ▲▼◆)·밴드/지속/3MA readout·인사이트·**면책 고정**. cycle null → 스텝 없이 "보류" muted. 카탈로그 없으면 현재 배지만(6단계 이름을 프론트가 복제 안 함).
+- **`lib/grandCycle.js`(순수)**: `grandCycleStages(catalog,current)`·`stageGlyph(phase)`·`bandReadout(gc)`·`grandCycleInsight(gc)`. **판정은 백엔드**, 여기선 표시·서술만(매매 지시·수익 보장 표현 없음). **색 규칙**: 단계 방향은 **색이 아니라 글리프**로, 현재 강조는 **주황(`--c-emph`)만** — 가격 방향색(`--c-up/down`)·경보(`--c-danger`) 금지.
+- **캔들 3MA 오버레이**: `KLineChartPanel`이 `indicatorConfig.grand_cycle.periods`(5/20/40) 있으면 단일 MA20 대신 **3선**(`calcParams:[5,20,40]`, 색 **단기=주황(`p.emph`)·중기=회색·장기=남색**)으로 배열을 시각화(없으면 MA20 폴백). `lib/theme.js::readChartPalette`에 `emph`(`--c-emph`) 추가 — 지표선 강조용(방향색 토큰 불변).
+
 ## 현재 보는 화면 → 챗 세션 컨텍스트 (P1)
 - **`App.jsx`가 `rightPanelSpec` 변경 `useEffect`로 현재 화면을 챗 세션에 핀**한다 — 사용자가 잔고/관심종목/종목상세를 열면 챗봇이 그 데이터를 근거로 대화하게 된다. `setViewContext(sessionId, kind, args)`(`api.js`→`POST /api/chat/context`). **화면 데이터는 보내지 않음** — kind/args만 보내고 서버가 재조회(환각 차단).
 - **데이터 kind만 대상** `VIEW_CONTEXT_KINDS={watchlist,balance,stock_report}`(백엔드 `view_context.DATA_BEARING_KINDS`와 SSOT 일치). macro_dashboard·manage_watchlist 등 비데이터/무효 spec은 `kind=null`로 **이전 핀 해제**(스택난 스냅샷 방지). **400ms 디바운스**(빠른 탭전환 KIS 폭주 방지) + **중복 kind+args 스킵**(`useRef` last-key) + **fire-and-forget**(`.catch`). 랜딩(watchlist) 마운트 1회 발화.

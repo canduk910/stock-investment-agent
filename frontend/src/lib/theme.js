@@ -14,6 +14,7 @@ const FALLBACK = {
   '--c-border-strong': '#c2cdda',
   '--c-surface': '#ffffff',
   '--c-white': '#ffffff',
+  '--c-emph': '#e0670f', // 주황 = 강조(대순환 단기선 등). 가격 방향색 아님.
   '--c-chart-up': '#e5322d', // 캔들 상승 = 빨강(한국 관습·차트 예외)
   '--c-chart-down': '#2563eb', // 캔들 하락 = 파랑
 }
@@ -36,6 +37,7 @@ export function readChartPalette() {
     down: t('--c-chart-down'), // 캔들 하락 = 파랑
     navy: t('--c-navy'),
     blueStrong: t('--c-blue-strong'),
+    emph: t('--c-emph'), // 주황 = 강조(대순환 단기선). 가격 방향색(빨/파)과 구분.
     grid: t('--c-border'),
     border: t('--c-border'),
     borderStrong: t('--c-border-strong'),

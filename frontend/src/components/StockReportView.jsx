@@ -1,4 +1,5 @@
 import KLineChartPanel from './KLineChartPanel.jsx'
+import GrandCyclePanel from './GrandCyclePanel.jsx'
 import StatCard from './StatCard.jsx'
 import FinancialTrendTable from './FinancialTrendTable.jsx'
 import AiReportPanel from './AiReportPanel.jsx'
@@ -196,21 +197,28 @@ export default function StockReportView({ bundle, sessionId, onConsult }) {
           차트 데이터 일시 조회 불가 · 나머지 섹션은 정상 표시
         </div>
       ) : (
-        <div className="report__chart-block">
-          <KLineChartPanel
-            candles={chart.candles}
-            indicatorConfig={indicatorConfig}
-            valuation={valuationFailed ? null : valuation}
+        <>
+          <div className="report__chart-block">
+            <KLineChartPanel
+              candles={chart.candles}
+              indicatorConfig={indicatorConfig}
+              valuation={valuationFailed ? null : valuation}
+            />
+            {/* 오버레이 라벨 렌더가 실패해도 값을 읽도록 칩으로 병기(색: 파랑/남색/회색) */}
+            {!valuationFailed && (
+              <div className="report__chips">
+                <span className="chip chip--up">현재가 {num(valuation.price)}원</span>
+                <span className="chip chip--navy">52주 최고 {num(valuation.week52_high)}원</span>
+                <span className="chip chip--down">52주 최저 {num(valuation.week52_low)}원</span>
+              </div>
+            )}
+          </div>
+          {/* 기술적 분석 심화 — 고지로 이동평균선 대순환(3 SMA 배열 6단계). 판정은 백엔드, 표시만. */}
+          <GrandCyclePanel
+            cycle={summary?.ma_grand_cycle}
+            catalog={indicatorConfig?.grand_cycle}
           />
-          {/* 오버레이 라벨 렌더가 실패해도 값을 읽도록 칩으로 병기(색: 파랑/남색/회색) */}
-          {!valuationFailed && (
-            <div className="report__chips">
-              <span className="chip chip--up">현재가 {num(valuation.price)}원</span>
-              <span className="chip chip--navy">52주 최고 {num(valuation.week52_high)}원</span>
-              <span className="chip chip--down">52주 최저 {num(valuation.week52_low)}원</span>
-            </div>
-          )}
-        </div>
+        </>
       )}
 
       {/* 국면정합성 카드(regime_gate)는 폐기(항목3) — 국면은 현금비중만 관리하고 종목별

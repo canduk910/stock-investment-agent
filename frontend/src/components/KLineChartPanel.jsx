@@ -92,6 +92,13 @@ export default function KLineChartPanel({ candles, indicatorConfig, valuation })
   const maPeriod = indicatorConfig?.ma_period ?? 20
   const rsiPeriod = indicatorConfig?.rsi_period ?? 14
 
+  // 고지로 대순환 3MA(단기/중기/장기) 오버레이 — indicatorConfig.grand_cycle.periods(SSOT).
+  // 있으면 단일 MA20 대신 3선을 그려 배열(정배열/역배열)을 눈으로 확인. 없으면 기존 MA20 폴백.
+  const gcp = indicatorConfig?.grand_cycle?.periods
+  const maShort = gcp?.short ?? null
+  const maMedium = gcp?.medium ?? null
+  const maLong = gcp?.long ?? null
+
   // ① 생명주기: init → 테마·지표 세팅 → cleanup 에서 dispose(누수 방지). 지표 기간 변경 시 재구성.
   useEffect(() => {
     const el = containerRef.current
@@ -108,12 +115,15 @@ export default function KLineChartPanel({ candles, indicatorConfig, valuation })
       /* 스타일 스키마 차이 무시 */
     }
     try {
+      // 대순환 3MA(단기 주황·중기 회색·장기 남색)로 배열을 시각화. 색은 강조 주황/중립색(방향색 아님).
+      // 기간·색이 calcParams·lines 순서로 1:1 대응. grand_cycle 없으면 기존 단일 MA20 로 폴백.
+      const gc3 = maShort != null && maMedium != null && maLong != null
+      const calcParams = gc3 ? [maShort, maMedium, maLong] : [maPeriod]
+      const lines = gc3
+        ? [fullLine(p.emph), fullLine(p.borderStrong), fullLine(p.navy)]
+        : [fullLine(p.navy), fullLine(p.borderStrong)]
       chart.createIndicator(
-        {
-          name: 'MA',
-          calcParams: [maPeriod],
-          styles: { lines: [fullLine(p.navy), fullLine(p.borderStrong)] },
-        },
+        { name: 'MA', calcParams, styles: { lines } },
         false,
         { id: 'candle_pane' },
       )
@@ -143,7 +153,7 @@ export default function KLineChartPanel({ candles, indicatorConfig, valuation })
       }
       chartRef.current = null
     }
-  }, [maPeriod, rsiPeriod])
+  }, [maPeriod, rsiPeriod, maShort, maMedium, maLong])
 
   // ② 데이터 주입 + 52주 고저·현재가 수평선 오버레이(현재가는 캐시 금지 원칙에 따라 매 조회 값 반영).
   useEffect(() => {

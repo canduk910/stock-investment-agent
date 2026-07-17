@@ -17,7 +17,9 @@ import pytest
 from stock import constants
 from stock.summary import (
     _cagr,
+    _ma_grand_cycle,
     _rsi,
+    _stage_of,
     _valuation_label,
     build_stock_summary,
     forward_valuation,
@@ -336,6 +338,96 @@ def test_forward_valuation_prev_year_per__forward():
     r = forward_valuation(est, _valuation(price=304000))
     assert r["prev_year_period"] == "202512"
     assert r["prev_year_per"] == pytest.approx(304000 / 6605, abs=0.05)  # ≈ 46.0
+
+
+# ── 고지로 이동평균선 대순환 (3 SMA 배열 6단계 + 밴드 + 지속/전환) ────────────
+
+def test_stage_of_all_six_orderings__grandcycle():
+    """세 선(단기 s·중기 m·장기 l) 상→하 배열 6순열 → 정확히 1~6 단계."""
+    assert _stage_of(3, 2, 1) == 1  # s>m>l  안정 상승기(정배열)
+    assert _stage_of(2, 3, 1) == 2  # m>s>l  상승 둔화기
+    assert _stage_of(1, 3, 2) == 3  # m>l>s  하락 진입기
+    assert _stage_of(1, 2, 3) == 4  # l>m>s  안정 하락기(역배열)
+    assert _stage_of(2, 1, 3) == 5  # l>s>m  하락 둔화기
+    assert _stage_of(3, 1, 2) == 6  # s>l>m  상승 진입기
+
+
+def test_stage_of_tie_or_missing_is_none__grandcycle():
+    """동률(배열 미확정)·결측이면 억지 판정 없이 None."""
+    assert _stage_of(2, 2, 1) is None
+    assert _stage_of(1, 2, 2) is None
+    assert _stage_of(None, 1, 2) is None
+
+
+def test_grand_cycle_uptrend_is_stage1__grandcycle():
+    """단조 상승 종가 → 정배열(단>중>장) = 1단계, 밴드 양수, 라벨 SSOT."""
+    gc = _ma_grand_cycle([float(i) for i in range(1, 61)])
+    assert gc["stage"] == 1
+    assert gc["stage_name"] == "안정 상승기"
+    assert gc["phase"] == "상승"
+    assert gc["ma"]["short"] > gc["ma"]["medium"] > gc["ma"]["long"]
+    assert gc["band_width_pct"] > 0  # 단기MA > 장기MA
+
+
+def test_grand_cycle_downtrend_is_stage4__grandcycle():
+    """단조 하락 종가 → 역배열(장>중>단) = 4단계, 밴드 음수."""
+    gc = _ma_grand_cycle([float(i) for i in range(60, 0, -1)])
+    assert gc["stage"] == 4
+    assert gc["stage_name"] == "안정 하락기"
+    assert gc["phase"] == "하락"
+    assert gc["band_width_pct"] < 0
+
+
+def test_grand_cycle_insufficient_bars_is_none__grandcycle():
+    """장기(40) 미달 종가 → None(graceful)."""
+    assert _ma_grand_cycle([float(i) for i in range(1, 40)]) is None  # 39봉
+    assert _ma_grand_cycle([]) is None
+
+
+def test_grand_cycle_bars_in_stage_and_no_prev__grandcycle():
+    """장기간 정배열 지속 → bars_in_stage 다수·prev_stage None(전환 없음)."""
+    gc = _ma_grand_cycle([float(i) for i in range(1, 81)])  # 80봉 단조 상승
+    assert gc["stage"] == 1
+    assert gc["bars_in_stage"] >= 20
+    assert gc["prev_stage"] is None
+
+
+def test_grand_cycle_transition_sets_prev_stage__grandcycle():
+    """상승→하락 반전 → 현재 하락 국면·직전 단계(prev_stage) 존재."""
+    closes = [float(i) for i in range(1, 61)] + [float(i) for i in range(59, -1, -1)]
+    gc = _ma_grand_cycle(closes)
+    assert gc["stage"] == 4  # 최근 구간 역배열
+    assert gc["prev_stage"] is not None
+    assert gc["prev_stage"] != gc["stage"]
+
+
+def test_grand_cycle_band_direction_expands__grandcycle():
+    """평탄 후 급등(단기·장기선 간격이 벌어짐) → 밴드 확대. band_width_pct 는 상대(%) 측정이라
+    단순 선형/2차 상승은 상대격차가 오히려 좁아질 수 있어, 격차가 명확히 벌어지는 국면으로 검증."""
+    closes = [100.0] * 40 + [100.0 + 5.0 * k for k in range(1, 21)]  # 앞 40봉 평탄 → 뒤 20봉 급등
+    gc = _ma_grand_cycle(closes)
+    assert gc["stage"] == 1  # 급등으로 정배열
+    assert gc["band_direction"] == "확대"  # 전환창 전(평탄, 밴드≈0) 대비 폭 증가
+
+
+def test_grand_cycle_wired_into_summary__grandcycle():
+    """build_stock_summary 가 ma_grand_cycle 키를 실어 반환(엔진 결과와 동일)."""
+    closes = [float(i) for i in range(1, 61)]
+    r = build_stock_summary(_valuation(), _financials(), _valuation(), _chart(closes))
+    assert r["ma_grand_cycle"] is not None
+    assert r["ma_grand_cycle"]["stage"] == 1
+
+
+def test_grand_cycle_summary_none_adds_note__grandcycle():
+    """봉 부족(장기 미달)이면 ma_grand_cycle None + notes 사유 기록(빈 차트는 사유 없음)."""
+    closes = [float(i) for i in range(1, 30)]  # 29봉(< 40)
+    r = build_stock_summary(_valuation(), _financials(), _valuation(), _chart(closes))
+    assert r["ma_grand_cycle"] is None
+    assert any("대순환" in n for n in r["notes"])
+    # 차트 자체가 없으면(빈 candles) 대순환 사유 note 는 남기지 않는다.
+    r_empty = build_stock_summary(_valuation(), _financials(), _valuation(), _chart([]))
+    assert r_empty["ma_grand_cycle"] is None
+    assert not any("대순환" in n for n in r_empty["notes"])
 
 
 # ── 안전: LLM 미개입 (소스에 openai/anthropic import 0건) ────────────────────

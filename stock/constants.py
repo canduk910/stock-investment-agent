@@ -18,6 +18,24 @@ VALUATION_BAND_PCT = 10
 MA_PERIOD = 20
 RSI_PERIOD = 14
 
+# 고지로(小次郎講師) 이동평균선 대순환 — 3 SMA(단기/중기/장기) 기간(일봉 표준 5/20/40).
+# 세 선의 상→하 배열 순서로 6단계 국면을 판정하는 결정적 지표. 차트 3MA 오버레이 기간도
+# INDICATOR_CONFIG 로 프론트에 내려 SSOT 유지(klinecharts 가 4번째 진실이 되지 않게).
+GRAND_CYCLE_MA_PERIODS = (5, 20, 40)   # (단기, 중기, 장기)
+GRAND_CYCLE_MIN_CANDLES = 40           # 장기 SMA 미달(< 40봉) → 대순환 None(graceful)
+GRAND_CYCLE_TRANSITION_WINDOW = 20     # 밴드 확대/축소 판정 비교 창(봉)
+
+# 6단계 라벨 SSOT(1~6, 배열 상→하). name/arrangement/phase 단일 출처 — 프론트·프롬프트 복제 금지.
+# 사이클은 1→2→3→4→5→6→1 순행(인접 두 선 교차로 한 칸씩). 판정은 코드, 서술은 프론트/LLM.
+GRAND_CYCLE_STAGES = {
+    1: {"name": "안정 상승기", "arrangement": "단 > 중 > 장", "phase": "상승"},
+    2: {"name": "상승 둔화기", "arrangement": "중 > 단 > 장", "phase": "상승"},
+    3: {"name": "하락 진입기", "arrangement": "중 > 장 > 단", "phase": "전환"},
+    4: {"name": "안정 하락기", "arrangement": "장 > 중 > 단", "phase": "하락"},
+    5: {"name": "하락 둔화기", "arrangement": "장 > 단 > 중", "phase": "하락"},
+    6: {"name": "상승 진입기", "arrangement": "단 > 장 > 중", "phase": "전환"},
+}
+
 # CAGR·avg_per 계산 최소 표본 연수. 미달 시 해당 필드 None(신규상장 방어, 임의값 금지).
 MIN_HISTORY_YEARS = 3
 
@@ -53,7 +71,22 @@ STOCK_META_TTL_SECONDS = 6 * 3600
 AVG_PER_VERIFIED = True
 
 # 지표 기간을 번들이 프론트(klinecharts)로 내려주는 단일 출처.
-INDICATOR_CONFIG = {"ma_period": MA_PERIOD, "rsi_period": RSI_PERIOD}
+# grand_cycle: 대순환 3MA 오버레이 기간 + 6단계 카탈로그(프론트가 6-스텝 라벨을 복제하지 않게).
+INDICATOR_CONFIG = {
+    "ma_period": MA_PERIOD,
+    "rsi_period": RSI_PERIOD,
+    "grand_cycle": {
+        "periods": {
+            "short": GRAND_CYCLE_MA_PERIODS[0],
+            "medium": GRAND_CYCLE_MA_PERIODS[1],
+            "long": GRAND_CYCLE_MA_PERIODS[2],
+        },
+        "stages": [
+            {"stage": k, "name": v["name"], "arrangement": v["arrangement"], "phase": v["phase"]}
+            for k, v in sorted(GRAND_CYCLE_STAGES.items())
+        ],
+    },
+}
 
 # NOTE: RSI 과매수/과매도 라벨(70/30)·52주 고점권/저점권 라벨은 W08 스코프 밖 —
 # 스펙 §6.5a 는 rsi 원시값만 반환한다. 도입 시 여기 SSOT 상수 추가 + 사용자 확인.

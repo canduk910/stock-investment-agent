@@ -427,6 +427,154 @@ body {
   margin-top: 2px;
 }
 
+/* ── 고지로 이동평균선 대순환 카드(기술적 분석 하단) — 현재 단계만 주황 강조(방향색·경보색 아님). ── */
+.grand-cycle {
+  margin-top: 12px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  padding: 14px;
+}
+.grand-cycle__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.grand-cycle__title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--c-navy);
+}
+.grand-cycle__tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c-text-muted);
+}
+.grand-cycle__current {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.grand-cycle__badge {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--c-emph-strong);
+  background: var(--c-emph-soft);
+  border: 1px solid var(--c-emph-border);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.grand-cycle__stage-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--c-navy);
+}
+.grand-cycle__arr {
+  font-size: 12px;
+  color: var(--c-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.grand-cycle__steps {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.grand-cycle__step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface-2);
+  text-align: center;
+}
+.grand-cycle__step--current {
+  border-color: var(--c-emph-border);
+  background: var(--c-emph-soft);
+}
+.grand-cycle__step-glyph {
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+.grand-cycle__step-no {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--c-text-secondary);
+}
+.grand-cycle__step--current .grand-cycle__step-glyph,
+.grand-cycle__step--current .grand-cycle__step-no {
+  color: var(--c-emph-strong);
+}
+.grand-cycle__step-name {
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--c-text-secondary);
+}
+.grand-cycle__step--current .grand-cycle__step-name {
+  color: var(--c-emph-strong);
+  font-weight: 700;
+}
+.grand-cycle__readouts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.grand-cycle__readout {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface);
+}
+.grand-cycle__readout-label {
+  font-size: 11px;
+  color: var(--c-text-secondary);
+}
+.grand-cycle__readout-value {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--c-navy);
+  font-variant-numeric: tabular-nums;
+}
+.grand-cycle__insight {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--c-text);
+  margin: 0 0 8px;
+}
+.grand-cycle__disclaimer {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--c-text-muted);
+  margin: 0;
+}
+.grand-cycle__empty {
+  font-size: 12px;
+  color: var(--c-text-muted);
+  padding: 10px 0;
+}
+@media (max-width: 560px) {
+  .grand-cycle__steps {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .grand-cycle__readouts {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* 히스토리 오버레이 — 차트 수용 위해 폭 확장(mo-overlay 재사용). */
 .mo-overlay__card--wide {
   max-width: 620px;

@@ -3,7 +3,7 @@
 > 코드에서 자명하지 않은 결정·계약만. 판정은 전부 결정적 순수 함수(dict→dict), LLM 절대 미개입(macro/ 와 동일 철학).
 
 ## 순수 함수 계약 (summary.py)
-- `build_stock_summary(basic, financials, valuation, chart)` → **항상 고정 9키**(rev_cagr, op_cagr, current_per, avg_per, per_vs_avg, valuation_label, rsi, ma20_gap_pct, pos_52w_pct) + sample_years + notes. 미산출은 **키 삭제가 아니라 None**(macro `_result` 계약과 동형). 외부 fetch·LLM 없음.
+- `build_stock_summary(basic, financials, valuation, chart)` → **항상 고정 10키**(rev_cagr, op_cagr, current_per, avg_per, per_vs_avg, valuation_label, rsi, ma20_gap_pct, pos_52w_pct, **ma_grand_cycle**) + sample_years + notes. 미산출은 **키 삭제가 아니라 None**(macro `_result` 계약과 동형). 외부 fetch·LLM 없음.
 - 입력은 **정규화된 필드명**만 소비(raw KIS 명 금지): valuation.`price`/`per`/`week52_high`/`week52_low`, income[].`revenue`/`operating_income`, ratio[].`eps`, financials.`year_end_prices`{period: close}. 조정기준 검증(contract-integrity)으로 이 이름들이 SSOT.
 - **단위(중요·계약)**: 숫자 % 필드는 전부 **퍼센트**로 반환한다 — `rev_cagr`/`op_cagr`(예 10.0 = 10%, 엔진이 ×100), `per_vs_avg`, `ma20_gap_pct`, `pos_52w_pct`(0~100). `rsi`는 0~100. **프론트는 이 값에 ×100을 다시 하지 않는다**(rev_cagr/op_cagr는 이름에 `_pct`가 없지만 스펙 §6.5a 이름 유지일 뿐, 단위는 %). W08 통합에서 프론트가 CAGR를 비율로 오해해 ×100한 버그를 이 규약으로 고정.
 
@@ -25,7 +25,7 @@
 - **연간 필터·창**: `_recent_annual_periods`(avg_per 와 공유)로 최빈 결산월 연간만(분기 interim 제외) 최근 `FINANCIALS_LOOKBACK_YEARS`(5)년. 라이브에서 삼성 op_cagr 이 23년 혼합 +7.5% → 최근 5년 −4.1%(실적 감소 반영)로 의미가 달라짐.
 
 ## 3중 일관성 (constants.py 단일 출처)
-- `VALUATION_BAND_PCT=10`(±10% 라벨, 경계 포함=적정), `MA_PERIOD=20`, `RSI_PERIOD=14`, `MIN_HISTORY_YEARS=3`, `MIN_CHART_CANDLES_*`, `STOCK_META_TTL_SECONDS`. `INDICATOR_CONFIG`={ma_period,rsi_period} 를 번들이 프론트(klinecharts)로 내려 **차트 지표 기간도 이 상수가 단일 출처**(klinecharts 가 4번째 진실이 되지 않게).
+- `VALUATION_BAND_PCT=10`(±10% 라벨, 경계 포함=적정), `MA_PERIOD=20`, `RSI_PERIOD=14`, `MIN_HISTORY_YEARS=3`, `MIN_CHART_CANDLES_*`, `STOCK_META_TTL_SECONDS`. `INDICATOR_CONFIG`={ma_period, rsi_period, **grand_cycle**{periods, stages}} 를 번들이 프론트(klinecharts)로 내려 **차트 지표 기간·대순환 3MA 오버레이 기간·6단계 라벨이 이 상수 단일 출처**(klinecharts·프론트가 4번째 진실이 되지 않게). grand_cycle 추가로 `indicator_config` 는 더 이상 정확 dict 비교 대상 아님(키 단위 검증).
 - **REGIME_PARAMS 는 재정의 금지** — `macro.engine` 에서 import 만. 역발상 현금비중(`cash`)의 SSOT 는 매크로 엔진. 국면은 **현금비중만** 관리한다(항목3 — `single_cap`/`per_max`/`pbr_max` 폐기).
 
 ## 국면 진입게이트(regime_gate)는 폐기 — 항목3
@@ -36,6 +36,12 @@
 ## 기술적 지표
 - RSI = **Wilder 평활**(period=14) — 차트(klinecharts)의 RSI 와 같은 기법으로 마지막 값 일치. 캔들 < period+1 → None. 전량 상승→100 / 전량 하락→0.
 - ma20_gap 현재가는 **라이브 valuation.price**(캔들 종가 아님). 52주 위치는 valuation(inquire_price) w52 를 권위로, chart 는 결측 시 폴백만.
+
+## 고지로 이동평균선 대순환 (`_ma_grand_cycle`)
+- 3 SMA(단기5/중기20/장기40 = `GRAND_CYCLE_MA_PERIODS`, 일봉 표준)의 **상→하 배열 순서**로 6단계 국면을 판정하는 결정적 지표(3! = 6 순열). 사이클 1→2→3→4→5→6→1. `_stage_of(s,m,l)`가 순수 분류(동률·결측 → None, 억지 판정 금지). 라벨(name/arrangement/phase)은 `constants.GRAND_CYCLE_STAGES` **SSOT**.
+- `_ma_grand_cycle(closes)` 입력은 `_sorted_closes`(date 오름차순 종가). **`len < 40`(장기) → None**(graceful; build_stock_summary 가 `closes` 있을 때만 사유 note, 빈 차트는 침묵). 반환: stage/stage_name/arrangement/phase·ma{short,medium,long}·periods·`band_width_pct`((단기−장기)/장기×100)·`band_direction`(전환창 `GRAND_CYCLE_TRANSITION_WINDOW`=20봉 전 **절대폭** 대비 확대/축소/유지)·`bars_in_stage`(현재 단계 연속 봉수, 장기계산 가능 전 구간 기준)·`prev_stage`(직전 전환 단계).
+- **band_width_pct 는 상대(%) 측정** — 단순 선형·2차 가속 상승은 상대격차가 오히려 좁아질 수 있다(테스트가 이 함정을 반영: 확대 검증은 평탄→급등 국면으로). 100봉이면 40+20=60봉으로 충분해 페이지네이션 불요.
+- **판정은 코드, 서술은 프론트/LLM**: 엔진은 구조화 필드만 반환(산문 없음). 6단계 서술 문장은 `frontend/src/lib/grandCycle.js`가 조립하고 면책은 컴포넌트 고정. 라이브 검증(005930): stage 4(역배열)·band −14.7%·전환 3→4 정합.
 
 ## 테스트
 - `tests/unit/stock/test_summary.py` (콜로케이트 아님 — 프로젝트 규약 `tests/unit/{module}/`). 경계 전량 Red-first. `_valuation_label`/`_cagr`/`_rsi` 는 private 이지만 경계 검증 위해 직접 import 테스트.

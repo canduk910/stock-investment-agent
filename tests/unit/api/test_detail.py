@@ -112,7 +112,8 @@ def test_bundle_happy_path_contract_shape(bodies):
     assert bundle["basic"]["sector"] == "반도체와반도체장비"
     assert bundle["valuation"]["price"] == 70500.0
     assert bundle["chart"]["candles"]  # 일봉 시리즈 존재
-    assert bundle["indicator_config"] == {"ma_period": 20, "rsi_period": 14}
+    assert bundle["indicator_config"]["ma_period"] == 20
+    assert bundle["indicator_config"]["rsi_period"] == 14
     assert bundle["partial_failure"] == []
     # 예측 PER: 현재가(valuation.price) ÷ 예측 EPS(추정연도) 로 계산, 컨센서스 출처 동반.
     fv = bundle["forward_valuation"]
@@ -161,6 +162,21 @@ def test_bundle_wires_sections_into_summary_engine(bodies):
     assert summary["pos_52w_pct"] == pytest.approx(54.07, abs=0.1)
     # 항상 고정 키 반환(누락=None).
     assert "rev_cagr" in summary and "valuation_label" in summary
+
+
+def test_bundle_exposes_grand_cycle_contract(bodies):
+    """대순환: summary.ma_grand_cycle(계산 결과) + indicator_config.grand_cycle(카탈로그·SSOT)."""
+    client = RoutingStubClient(bodies)
+    bundle = detail.collect_stock_bundle("005930", client, _judgement_contraction())
+
+    # ① 요약에 대순환 필드(계산 결과 or 봉부족 None) — 키 자체는 항상 존재.
+    assert "ma_grand_cycle" in bundle["summary"]
+
+    # ② indicator_config 에 대순환 카탈로그(프론트 3MA 오버레이 기간 + 6단계 라벨 SSOT).
+    gc = bundle["indicator_config"]["grand_cycle"]
+    assert gc["periods"] == {"short": 5, "medium": 20, "long": 40}
+    assert [s["stage"] for s in gc["stages"]] == [1, 2, 3, 4, 5, 6]
+    assert gc["stages"][0]["name"] == "안정 상승기"
 
 
 def test_bundle_has_no_regime_gate_key(bodies):
@@ -283,7 +299,8 @@ def test_route_returns_bundle_contract(monkeypatch, bodies):
     assert set(body.keys()) == BUNDLE_KEYS
     assert body["valuation"]["price"] == 70500.0
     assert "regime_gate" not in body  # 국면정합성 게이트 폐기(항목3)
-    assert body["indicator_config"] == {"ma_period": 20, "rsi_period": 14}
+    assert body["indicator_config"]["ma_period"] == 20
+    assert body["indicator_config"]["rsi_period"] == 14
     assert body["partial_failure"] == []
 
 

@@ -173,6 +173,114 @@ def _pos_52w(price, high, low):
     return max(0.0, min(100.0, (price - low) / rng * 100.0))
 
 
+# ── 기술적: 고지로 이동평균선 대순환 (3 SMA 배열 6단계 + 밴드) ────────────────
+
+def _sma(closes, period):
+    """말단 단순이동평균(최근 period개 종가 평균). 봉 부족 → None."""
+    if not closes or len(closes) < period:
+        return None
+    return sum(closes[-period:]) / period
+
+
+def _stage_of(s, m, l):
+    """3 SMA(단기 s·중기 m·장기 l) 값 → 대순환 1~6 단계. 결측/동률(경계) → None.
+
+    6단계 = 세 선의 상→하 배열(3! 순열). 동률이면 배열이 미확정이라 None(억지 판정 금지).
+    """
+    if s is None or m is None or l is None:
+        return None
+    if s == m or m == l or s == l:
+        return None
+    if s > m > l:
+        return 1  # 안정 상승기(정배열)
+    if m > s > l:
+        return 2  # 상승 둔화기
+    if m > l > s:
+        return 3  # 하락 진입기
+    if l > m > s:
+        return 4  # 안정 하락기(역배열)
+    if l > s > m:
+        return 5  # 하락 둔화기
+    if s > l > m:
+        return 6  # 상승 진입기
+    return None
+
+
+def _stage_at(closes, i, periods):
+    """closes[..i] 기준 i 번째 봉의 대순환 단계. 장기 SMA 미달 구간이면 None."""
+    s_p, m_p, l_p = periods
+    if i + 1 < l_p:
+        return None
+    s = sum(closes[i - s_p + 1: i + 1]) / s_p
+    m = sum(closes[i - m_p + 1: i + 1]) / m_p
+    l = sum(closes[i - l_p + 1: i + 1]) / l_p
+    return _stage_of(s, m, l)
+
+
+def _ma_grand_cycle(closes):
+    """고지로 이동평균선 대순환 — 3 SMA 배열 6단계 + 밴드 + 지속/전환. 결정적, LLM 미개입.
+
+    입력: date 오름차순 종가(_sorted_closes 결과). len < 장기(GRAND_CYCLE_MIN_CANDLES) → None(graceful).
+    반환: {stage(1~6/None), stage_name, arrangement, phase, ma{short,medium,long},
+           periods{short,medium,long}, band_width_pct, band_direction(확대/축소/유지/None),
+           bars_in_stage, prev_stage}.
+    band_width_pct = (단기MA − 장기MA)/장기MA×100. 방향은 전환창(N봉) 전 절대폭 대비 증감.
+    """
+    periods = C.GRAND_CYCLE_MA_PERIODS
+    s_p, m_p, l_p = periods
+    if not closes or len(closes) < l_p:
+        return None
+
+    ma_s, ma_m, ma_l = _sma(closes, s_p), _sma(closes, m_p), _sma(closes, l_p)
+    stage = _stage_of(ma_s, ma_m, ma_l)
+    meta = C.GRAND_CYCLE_STAGES.get(stage) if stage else None
+
+    band_width = (ma_s - ma_l) / ma_l * 100.0 if ma_l else None
+
+    # 밴드 방향: 전환창 전 절대폭 대비 확대/축소(추세 강화/약화).
+    n = len(closes)
+    prev_i = n - 1 - C.GRAND_CYCLE_TRANSITION_WINDOW
+    band_direction = None
+    if band_width is not None and prev_i >= l_p - 1:
+        s_prev = sum(closes[prev_i - s_p + 1: prev_i + 1]) / s_p
+        l_prev = sum(closes[prev_i - l_p + 1: prev_i + 1]) / l_p
+        if l_prev:
+            band_prev = (s_prev - l_prev) / l_prev * 100.0
+            if abs(band_width) > abs(band_prev):
+                band_direction = "확대"
+            elif abs(band_width) < abs(band_prev):
+                band_direction = "축소"
+            else:
+                band_direction = "유지"
+
+    # 단계 시계열(장기 계산 가능한 전 구간) → 현재 단계 지속 봉수·직전(전환) 단계.
+    stages = [_stage_at(closes, i, periods) for i in range(l_p - 1, n)]
+    bars_in_stage = 0
+    for st in reversed(stages):
+        if st is not None and st == stage:
+            bars_in_stage += 1
+        else:
+            break
+    prev_stage = None
+    for st in reversed(stages):
+        if st is not None and st != stage:
+            prev_stage = st
+            break
+
+    return {
+        "stage": stage,
+        "stage_name": meta["name"] if meta else None,
+        "arrangement": meta["arrangement"] if meta else None,
+        "phase": meta["phase"] if meta else None,
+        "ma": {"short": ma_s, "medium": ma_m, "long": ma_l},
+        "periods": {"short": s_p, "medium": m_p, "long": l_p},
+        "band_width_pct": band_width,
+        "band_direction": band_direction,
+        "bars_in_stage": bars_in_stage,
+        "prev_stage": prev_stage,
+    }
+
+
 # ── 조립 ─────────────────────────────────────────────────────────────────────
 
 def build_stock_summary(basic, financials, valuation, chart):
@@ -220,6 +328,13 @@ def build_stock_summary(basic, financials, valuation, chart):
     ma20_gap_pct = _ma_gap(closes, price, C.MA_PERIOD)
     pos_52w_pct = _pos_52w(price, _num(valuation.get("week52_high")), _num(valuation.get("week52_low")))
 
+    # 고지로 이동평균선 대순환(3 SMA 배열 6단계) — 봉 부족 시 None + 사유 note(차트 자체가 없으면 침묵).
+    ma_grand_cycle = _ma_grand_cycle(closes)
+    if ma_grand_cycle is None and closes:
+        notes.append(
+            f"대순환: 최근 거래일 {len(closes)}봉으로 장기 {C.GRAND_CYCLE_MIN_CANDLES}봉 미달 — 대순환 보류"
+        )
+
     return {
         "rev_cagr": rev_cagr,
         "op_cagr": op_cagr,
@@ -230,6 +345,7 @@ def build_stock_summary(basic, financials, valuation, chart):
         "rsi": rsi,
         "ma20_gap_pct": ma20_gap_pct,
         "pos_52w_pct": pos_52w_pct,
+        "ma_grand_cycle": ma_grand_cycle,
         "sample_years": sample_years,
         "notes": notes,
     }
