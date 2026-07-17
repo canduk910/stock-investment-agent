@@ -10,6 +10,13 @@
 - 테스트: 인메모리 SQLite + `app.dependency_overrides[get_db]`(세션 주입)로 라우트 계약 검증(실 DB 불요). 유저별 라우트 테스트는 `dependency_overrides[get_current_user]`로 고정 유저 주입.
 - **`deps.get_current_user_optional`**: Bearer 있으면 User, 없거나 무효면 **None(401 안 냄)**. 공개 유지 라우트(잔고·종목번들·리포트)가 "로그인+등록 시 본인 KIS 키, 아니면 공유 fallback"을 쓰게 하는 옵션 인증.
 
+## 권한(RBAC) + 질문 한도 (관리자·토큰 사용량 제어)
+- **`User` 확장 컬럼**(`models.py`): `is_admin`(기본 False)·`daily_limit`(기본 `DEFAULT_DAILY_LIMIT`=20)·`used_today`·`usage_date`(KST YYYY-MM-DD)·`total_questions`(누적 통계). 기존 테이블엔 `infra/db._ADDITIVE_COLUMNS`가 `ADD COLUMN … DEFAULT`로 백필(레거시 NULL도 `usage.py`가 방어적 기본 처리).
+- **질문 한도 = 질문 횟수 기반·매일(KST) 리셋·관리자 무제한**(`usage.py`, 순수 로직): `today_kst()`·`effective_used`(usage_date≠오늘→0, 미커밋 리셋 반영)·`is_over_limit`(관리자면 항상 False)·`consume(user, db)`(날짜경계 리셋+used_today/total_questions++·commit)·`quota_snapshot`(→{is_admin,daily_limit,used_today,remaining}; 관리자 remaining=None). 챗 1턴=1소비. **차단·판정은 코드**(LLM 미개입).
+- **`deps.get_admin_user`** = 인증 + `is_admin` 게이트: 비관리자 **403**(get_current_user 위에 얹음). 관리자 전용 라우트(`api/admin.py`)의 진입 스코프.
+- **관리자 부트스트랩**(`admin_seed.seed_admins`, startup·idempotent·graceful): `infra.config.admin_emails()`(env `ADMIN_EMAILS`, 기본 `dukkikim@yonsei.ac.kr`)의 **이미 가입한** 유저를 is_admin=True 로 승격(계정 생성 아님 — 없으면 다음 startup에 승격). `api/main.py`가 `seed_shared_kis_from_env()` 뒤에 호출.
+- `api/auth.py::_user_public`가 `quota_snapshot`을 펼쳐 signup/login/me 응답에 is_admin·잔량 노출(프론트 관리자 UI·질문 잔량 칩). 비밀번호 해시 불변 미노출.
+
 ## 유저별 KIS 자격증명 (암호화 저장)
 - **공유키 폐기 → 유저별 암호화 DB**: `kis_models.KisCredentialRow(scope_key unique = str(user.id)|"__shared__", app_key/secret/account 암호문 + acnt_prdt_cd·env)`. import_models 등록. **DB엔 Fernet 암호문만**(`infra/encryption.py`, 마스터키 `KIS_ENC_KEY`), 복호화는 `kis_store` 에서만·사용 직전 in-memory(로깅·응답 금지).
 - **`kis_store.KisCredentialStore(db)`**(SqlWatchlistStore 패턴): `resolve(user_id)` = 본인 → `__shared__` 순 (KisCreds, source) · `upsert_encrypted`(CANO 하이픈 파싱) · `delete` · `status`(마스킹만, 복호화 원문 금지). 클라이언트 조립은 `api.detail.resolve_kis_client(user, db)`(본인→공유→env fallback→NoKisCredentials).
