@@ -71,6 +71,13 @@ def init_db() -> None:
 _ADDITIVE_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # 매수/매도 목표가 분리(항목): watchlist_items 에 매도 목표가 컬럼 추가.
     ("watchlist_items", "sell_target_price", "FLOAT"),
+    # 권한·토큰 한도(RBAC) — 기존 users 행은 DDL DEFAULT 로 백필(NULL 방지). FALSE/숫자 리터럴은
+    # SQLite(≥3.23)·Postgres 공용. usage_date 는 NULL 허용(아직 사용 없음).
+    ("users", "is_admin", "BOOLEAN DEFAULT FALSE"),
+    ("users", "daily_limit", "INTEGER DEFAULT 20"),
+    ("users", "used_today", "INTEGER DEFAULT 0"),
+    ("users", "usage_date", "VARCHAR(10)"),
+    ("users", "total_questions", "INTEGER DEFAULT 0"),
 )
 
 

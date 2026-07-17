@@ -48,6 +48,11 @@ from auth.kis_seed import seed_shared_kis_from_env  # noqa: E402
 
 seed_shared_kis_from_env()
 
+# 관리자 부트스트랩 — ADMIN_EMAILS(기본 dukkikim@yonsei.ac.kr)의 기존 유저를 is_admin 승격(idempotent·graceful).
+from auth.admin_seed import seed_admins  # noqa: E402
+
+seed_admins()
+
 # 인증 라우터(회원가입/로그인/me) — 유저별 데이터 스코프의 진입점.
 from api.auth import router as auth_router  # noqa: E402
 

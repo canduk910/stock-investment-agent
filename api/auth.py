@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from auth.deps import get_current_user
 from auth.models import User
 from auth.security import create_access_token, hash_password, verify_password
+from auth.usage import quota_snapshot
 from infra.db import get_db
 
 router = APIRouter()
@@ -31,8 +32,9 @@ class LoginRequest(BaseModel):
 
 
 def _user_public(user: User) -> dict:
-    """응답용 유저 표현 — 해시는 절대 포함하지 않는다."""
-    return {"id": user.id, "email": user.email}
+    """응답용 유저 표현 — 해시는 절대 포함하지 않는다. is_admin·오늘 질문 잔량(quota) 포함
+    (프론트가 관리자 UI 노출·질문 잔량 표시에 사용)."""
+    return {"id": user.id, "email": user.email, **quota_snapshot(user)}
 
 
 @router.post("/api/auth/signup")

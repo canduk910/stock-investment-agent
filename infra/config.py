@@ -90,3 +90,13 @@ def dart_api_key() -> str:
 def openai_api_key() -> str:
     """W09 LLM 챗봇용. 미설정 시 ConfigError(LLM 계층에서만 호출 — 조회/엔진 계층은 무관)."""
     return _require("OPENAI_API_KEY")
+
+
+def admin_emails() -> list[str]:
+    """관리자로 부트스트랩할 이메일 목록(env `ADMIN_EMAILS`, 콤마 구분·소문자). 기본 dukkikim@yonsei.ac.kr.
+
+    startup 시드(`auth.admin_seed.seed_admins`)가 이 이메일의 기존 유저를 is_admin=True 로 승격한다
+    (존재할 때만·idempotent). 계정 생성·권한 자동부여가 아니라, 이미 가입한 유저의 승격일 뿐이다.
+    """
+    raw = _optional("ADMIN_EMAILS") or "dukkikim@yonsei.ac.kr"
+    return [e.strip().lower() for e in raw.split(",") if e.strip()]

@@ -41,6 +41,16 @@ def get_current_user(
     return user
 
 
+def get_admin_user(user: User = Depends(get_current_user)) -> User:
+    """인증 + 관리자 권한(is_admin) 검증. 관리자 전용 라우트의 진입 스코프.
+
+    토큰 부재·무효 → 401(get_current_user), 인증됐으나 관리자 아님 → 403. 관리자면 통과.
+    """
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다.")
+    return user
+
+
 def get_current_user_optional(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
