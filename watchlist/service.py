@@ -16,7 +16,7 @@ judgement 있으면 {regime}(국면명만), 없으면 None + partial_failure "re
 from __future__ import annotations
 
 import datetime as dt
-from concurrent.futures import ThreadPoolExecutor
+from infra.parallel import fetch_parallel
 
 from collectors.kis import chart, inquire_price
 from watchlist.constants import (
@@ -112,20 +112,9 @@ def _worker_count(n_tickers: int) -> int:
 
 
 def _fetch_prices_parallel(kis_client, tickers: list[str]) -> tuple[dict, list[str]]:
-    """종목별 inquire_price 병렬(ThreadPool, api/detail 패턴). 실패는 partial_failure 로 표면화."""
-    valuations: dict = {}
-    partial_failure: list[str] = []
-    if not tickers:
-        return valuations, partial_failure
-    with ThreadPoolExecutor(max_workers=_worker_count(len(tickers))) as ex:
-        futures = {t: ex.submit(inquire_price.inquire_price, kis_client, t) for t in tickers}
-        for ticker, fut in futures.items():
-            try:
-                valuations[ticker] = fut.result(timeout=_FETCH_TIMEOUT)
-            except Exception:
-                valuations[ticker] = None
-                partial_failure.append(ticker)
-    return valuations, partial_failure
+    """종목별 inquire_price 병렬(공용 fetch_parallel). 실패는 partial_failure 로 표면화."""
+    jobs = {t: (lambda t=t: inquire_price.inquire_price(kis_client, t)) for t in tickers}
+    return fetch_parallel(jobs, max_workers=_worker_count(len(tickers)), timeout=_FETCH_TIMEOUT)
 
 
 # ── 스파크라인(미니차트 종가 시계열) ─────────────────────────────────────────
@@ -167,17 +156,10 @@ def fetch_sparks_parallel(kis_client, tickers: list[str]) -> dict:
 
     워치리스트·잔고 등 여러 패널이 공유하는 공용 스파크 조회(현재가 캐시 금지·per-item graceful).
     """
-    sparks: dict = {}
-    if not tickers:
-        return sparks
-    with ThreadPoolExecutor(max_workers=_worker_count(len(tickers))) as ex:
-        futures = {t: ex.submit(_fetch_one_spark, kis_client, t) for t in tickers}
-        for ticker, fut in futures.items():
-            try:
-                sparks[ticker] = fut.result(timeout=_FETCH_TIMEOUT)
-            except Exception:
-                sparks[ticker] = None
-    return sparks
+    # 스파크는 선택적 시각화 — 실패 key(failed)는 버려 partial_failure 를 오염시키지 않는다(계약).
+    jobs = {t: (lambda t=t: _fetch_one_spark(kis_client, t)) for t in tickers}
+    results, _ = fetch_parallel(jobs, max_workers=_worker_count(len(tickers)), timeout=_FETCH_TIMEOUT)
+    return results
 
 
 # ── 오케스트레이터 ───────────────────────────────────────────────────────────
