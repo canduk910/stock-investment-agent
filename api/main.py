@@ -68,6 +68,11 @@ from api.kis_credentials import router as kis_credentials_router  # noqa: E402
 
 app.include_router(kis_credentials_router)
 
+# 관리자 라우터(유저 관리·이용 통계·질문 한도 제어) — get_admin_user 게이트(비관리자 403).
+from api.admin import router as admin_router  # noqa: E402
+
+app.include_router(admin_router)
+
 
 def live_judgement() -> tuple[dict, dict, list[str]]:
     """실시간 수집(캐시 미경유) → 매핑(deps SSOT) → judge_regime.
