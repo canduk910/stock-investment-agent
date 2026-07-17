@@ -35,6 +35,7 @@
 | 2026-07-05 | 초기 구성 (에이전트 5 + 스킬 5) | 전체 | - |
 | 2026-07-05 | 팀 도구 매핑 명시(Agent+SendMessage+Task*), KIS 미확정 함수 분리, 설명 질문 트리거 제외 | skills/invest-dev, skills/kis-data-pipeline | 정합성 감사 권고 반영 |
 | 2026-07-05 | TDD 원칙 내장: tdd-workflow 스킬 신설, 구현 에이전트 4명 TDD 원칙 추가, QA에 TDD 준수 검증(§3.5) 추가, 오케스트레이터 Red→Green→Refactor 강제 | skills/tdd-workflow(신규), agents/*, skills/invest-qa-checklist, skills/invest-dev, skills/quant-engine-rules | 사용자 요청: 구축 흐름에 TDD 적용 |
+| 2026-07-17 | **backend-architect 에이전트 신설(백엔드 총괄 리드·아키텍처 거버넌스·리팩토링·기술부채)** + `backend-architecture` 스킬(계층 판정=코드/LLM=설명·SSOT 3중일관성·경계 계약 설계·캐시 3원칙·안전 불변식·행동보존 리팩토링·QA 분업). 오케스트레이터에 팀원 추가(투입 기준=교차 관심사·리팩토링·아키텍처 점검·QA 반복 이슈 시만·상시 아님)·데이터흐름(아키텍트↔QA 루프)·에러핸들링·리팩토링 시나리오 반영. **QA와 역할 분리**: QA=동작 검증(반응형), 아키텍트=구조 거버넌스(선제형). 에이전트 5→6, 스킬 8→9 | agents/backend-architect(신규), skills/backend-architecture(신규), skills/invest-dev | 사용자 요청: 백엔드 총괄+리팩토링/아키텍처 점검 에이전트 필요 |
 | 2026-07-05 | UI 디자인 시스템 신설: 흰색/회색/파랑/남색/검정 팔레트 + theme.css 토큰 SSOT, frontend-engineer 원칙0에 반영, 대시보드 라이트 톤 적용 | skills/ui-design-system(신규), agents/frontend-engineer, frontend/src/theme.css·styles.css | 사용자 요청: UI 톤 통일 |
 | 2026-07-05 | doc-commit 스킬 신설, W06 완료 + 디렉토리별 CLAUDE.md 정리(collectors/cache/api/frontend), 첫 커밋 | skills/doc-commit(신규), 각 디렉토리 CLAUDE.md, CLAUDE.md | 사용자 요청: 진행상황 문서화 후 커밋/푸시 |
 | 2026-07-06 | W07 매크로 엔진(2축 경기×심리 + 역발상 현금비중) + /api/macro/regime + 2×2 게이지 UI | macro/(engine·CLAUDE), api/, frontend/(RegimeGauge) | 사용자 결정: 2축 판정 + 역발상 |
