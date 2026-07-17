@@ -18,26 +18,15 @@
 """
 from __future__ import annotations
 
-import json
-
-from pydantic import ValidationError
+import json  # _build_report_prompt 이 정량요약을 JSON 으로 직렬화(프롬프트 컨텍스트)
 
 from chat.build_prompt import build_criteria_text
 from chat.report_schema import StockReport
-from chat.tools import CHAT_MODEL, CHAT_MODEL_PARAMS
+from chat.structured_summary import generate_validated, make_client
 
 _FALLBACK_MESSAGE = (
     "AI 서술 생성 실패 — 정량 분석 요약만 표시합니다. 아래 수치는 코드가 계산한 값입니다."
 )
-
-
-def _make_client():
-    """기본 OpenAI 클라이언트(키는 환경변수에서만). 테스트는 client 를 주입한다."""
-    from openai import OpenAI
-
-    from infra.config import openai_api_key
-
-    return OpenAI(api_key=openai_api_key())
 
 
 def _regime_block(judgement: dict) -> str:
@@ -113,53 +102,25 @@ def _build_report_prompt(bundle: dict, judgement: dict) -> str:
 - 면책고지에는 "이 설명은 참고용이며 면허 있는 투자자문이 아니다"를 반드시 담아라."""
 
 
-def _request_report(client, prompt: str) -> str:
-    """CHAT_MODEL 에 JSON 리포트 1회 요청 → content 문자열."""
-    resp = client.chat.completions.create(
-        model=CHAT_MODEL,
-        messages=[{"role": "system", "content": prompt}],
-        response_format={"type": "json_object"},
-        **CHAT_MODEL_PARAMS,
-    )
-    return resp.choices[0].message.content or ""
-
-
-def _parse_and_validate(content: str) -> StockReport | None:
-    """content(JSON) → StockReport. 파싱·검증 실패는 None(폴백 판단은 호출부)."""
-    try:
-        data = json.loads(content)
-    except (json.JSONDecodeError, TypeError):
-        return None
-    try:
-        return StockReport(**data)
-    except (ValidationError, TypeError):
-        return None
-
-
 def generate_stock_report(bundle: dict, judgement: dict, *, client=None) -> dict:
     """정량요약을 근거로 구조화 리포트 생성·검증. 실패 시 1회 재요청 → 폴백.
 
     반환은 항상 dict(크래시 없음). validation_failed=True 면 report=None + 정량요약만.
     """
     if client is None:
-        client = _make_client()
+        client = make_client()
 
     summary = bundle.get("summary")
     prompt = _build_report_prompt(bundle, judgement)
 
-    # 최초 시도 + 검증 실패 시 1회 재요청(총 2회). 예외도 폴백으로 흡수.
-    for _ in range(2):
-        try:
-            content = _request_report(client, prompt)
-        except Exception:
-            break  # OpenAI 예외 → 폴백(크래시 금지)
-        report = _parse_and_validate(content)
-        if report is not None:
-            return {
-                "report": report.model_dump(),
-                "validation_failed": False,
-                "quant_summary": summary,
-            }
+    # 최초 시도 + 검증 실패 시 1회 재요청 + 예외 폴백은 generate_validated 가 처리(None 반환).
+    report = generate_validated(client, prompt, StockReport)
+    if report is not None:
+        return {
+            "report": report.model_dump(),
+            "validation_failed": False,
+            "quant_summary": summary,
+        }
 
     # 재요청까지 실패 → 폴백(정량요약만, §5.1 부분실패 보존).
     return {

@@ -6,23 +6,11 @@ JSON 요약을 요청 → MarketOutlookSummary 검증 → 실패 1회 재요청 
 """
 from __future__ import annotations
 
-import json
-
-from pydantic import ValidationError
-
 from chat.market_outlook_schema import MarketOutlookSummary
-from chat.tools import CHAT_MODEL, CHAT_MODEL_PARAMS
+from chat.structured_summary import generate_validated, make_client
 
 _MAX_TEXT_CHARS = 8000  # 요약 컨텍스트 원문 상한(프롬프트 예산)
 _FALLBACK_MESSAGE = "시황 요약을 생성하지 못했습니다."
-
-
-def _make_client():
-    from openai import OpenAI
-
-    from infra.config import openai_api_key
-
-    return OpenAI(api_key=openai_api_key())
 
 
 def _build_summary_prompt(text: str, meta: dict) -> str:
@@ -45,27 +33,6 @@ def _build_summary_prompt(text: str, meta: dict) -> str:
 JSON 객체 하나만 출력하라."""
 
 
-def _request(client, prompt: str) -> str:
-    resp = client.chat.completions.create(
-        model=CHAT_MODEL,
-        messages=[{"role": "system", "content": prompt}],
-        response_format={"type": "json_object"},
-        **CHAT_MODEL_PARAMS,
-    )
-    return resp.choices[0].message.content or ""
-
-
-def _parse_and_validate(content: str) -> MarketOutlookSummary | None:
-    try:
-        data = json.loads(content)
-    except (json.JSONDecodeError, TypeError):
-        return None
-    try:
-        return MarketOutlookSummary(**data)
-    except (ValidationError, TypeError):
-        return None
-
-
 def summarize_market_outlook(text: str, meta: dict, *, client=None) -> dict:
     """시황 리포트 원문 → {summary|None, validation_failed}. 항상 dict(크래시 없음).
 
@@ -74,14 +41,9 @@ def summarize_market_outlook(text: str, meta: dict, *, client=None) -> dict:
     if not text or not text.strip():
         return {"summary": None, "validation_failed": True, "message": _FALLBACK_MESSAGE}
     if client is None:
-        client = _make_client()
+        client = make_client()
     prompt = _build_summary_prompt(text, meta)
-    for _ in range(2):  # 최초 + 검증 실패 시 1회 재요청
-        try:
-            content = _request(client, prompt)
-        except Exception:
-            break  # OpenAI 예외 → 폴백(크래시 금지)
-        summary = _parse_and_validate(content)
-        if summary is not None:
-            return {"summary": summary.model_dump(), "validation_failed": False}
+    summary = generate_validated(client, prompt, MarketOutlookSummary)
+    if summary is not None:
+        return {"summary": summary.model_dump(), "validation_failed": False}
     return {"summary": None, "validation_failed": True, "message": _FALLBACK_MESSAGE}

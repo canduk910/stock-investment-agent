@@ -6,24 +6,12 @@ CHAT_MODEL 에 JSON 요약을 요청 → AnalystReportSummary 검증 → 실패 
 """
 from __future__ import annotations
 
-import json
-
-from pydantic import ValidationError
-
 from chat.analyst_schema import AnalystReportSummary
-from chat.tools import CHAT_MODEL, CHAT_MODEL_PARAMS
+from chat.structured_summary import generate_validated, make_client
 
 # 요약 컨텍스트로 넣을 원문 상한(프롬프트 예산). 애널리스트 리포트는 보통 2~5쪽.
 _MAX_TEXT_CHARS = 8000
 _FALLBACK_MESSAGE = "리포트 요약을 생성하지 못했습니다."
-
-
-def _make_client():
-    from openai import OpenAI
-
-    from infra.config import openai_api_key
-
-    return OpenAI(api_key=openai_api_key())
 
 
 def _build_summary_prompt(text: str, meta: dict) -> str:
@@ -43,27 +31,6 @@ def _build_summary_prompt(text: str, meta: dict) -> str:
 - JSON 키(한글): 증권사, 종목, 목표주가, 투자의견, 요약, 핵심요지(문자열 배열), 리스크요인(문자열 배열), 면책고지.
 
 JSON 객체 하나만 출력하라."""
-
-
-def _request(client, prompt: str) -> str:
-    resp = client.chat.completions.create(
-        model=CHAT_MODEL,
-        messages=[{"role": "system", "content": prompt}],
-        response_format={"type": "json_object"},
-        **CHAT_MODEL_PARAMS,
-    )
-    return resp.choices[0].message.content or ""
-
-
-def _parse_and_validate(content: str) -> AnalystReportSummary | None:
-    try:
-        data = json.loads(content)
-    except (json.JSONDecodeError, TypeError):
-        return None
-    try:
-        return AnalystReportSummary(**data)
-    except (ValidationError, TypeError):
-        return None
 
 
 def format_report_context(entry: dict) -> str:
@@ -101,14 +68,9 @@ def summarize_report(text: str, meta: dict, *, client=None) -> dict:
     if not text or not text.strip():
         return {"summary": None, "validation_failed": True, "message": _FALLBACK_MESSAGE}
     if client is None:
-        client = _make_client()
+        client = make_client()
     prompt = _build_summary_prompt(text, meta)
-    for _ in range(2):  # 최초 + 검증 실패 시 1회 재요청
-        try:
-            content = _request(client, prompt)
-        except Exception:
-            break  # OpenAI 예외 → 폴백(크래시 금지)
-        summary = _parse_and_validate(content)
-        if summary is not None:
-            return {"summary": summary.model_dump(), "validation_failed": False}
+    summary = generate_validated(client, prompt, AnalystReportSummary)
+    if summary is not None:
+        return {"summary": summary.model_dump(), "validation_failed": False}
     return {"summary": None, "validation_failed": True, "message": _FALLBACK_MESSAGE}
