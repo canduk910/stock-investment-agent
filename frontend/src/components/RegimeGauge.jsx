@@ -1,13 +1,7 @@
 import { fetchMacroRegime } from '../api.js'
 import { useFetch } from '../lib/useFetch.js'
-import { regimeMarkerPos } from '../lib/regimeTrajectory.js'
 import MacroIndicatorCards from './MacroIndicatorCards.jsx'
 import RegimeTrajectory from './RegimeTrajectory.jsx'
-
-// 2×2 사분면 셀 — 세로축 경기(위 양호/아래 악화) · 가로축 심리(좌 공포/우 탐욕).
-// 배치: 회복=좌상, 확장=우상, 수축=좌하, 과열=우하.
-// 렌더 순서(2열 grid) = 회복 → 확장 → 수축 → 과열. 엔진 classify 의 모서리 해석과 동일.
-const QUADRANT_CELLS = ['회복', '확장', '수축', '과열']
 
 // 국면별 짧은 해설(결정적·정적, LLM 아님) — 축 조합의 의미를 한 줄로.
 const REGIME_DESC = {
@@ -33,7 +27,7 @@ const ENGINE_KEY_LABEL = {
 }
 
 export default function RegimeGauge() {
-  const { data, loading, error } = useFetch(fetchMacroRegime)
+  const { data, loading, error, reload } = useFetch(fetchMacroRegime)
 
   if (loading) {
     return (
@@ -49,7 +43,7 @@ export default function RegimeGauge() {
       <section className="gauge gauge--state gauge--state-error">
         <span className="gauge__badge">W07</span>
         <span className="gauge__state-text">국면 조회 실패: {error}</span>
-        <button className="refresh" onClick={load}>
+        <button className="refresh" onClick={reload}>
           ↻ 재시도
         </button>
       </section>
@@ -73,11 +67,10 @@ export default function RegimeGauge() {
   const sentimentSign = axes?.sentiment?.sign ?? '중립'
   const missingLabels = missing_indicators.map((k) => ENGINE_KEY_LABEL[k] ?? k)
 
-  // 사분면 위 실제 위치 마커 — 축 점수(-2..+2)를 평면 좌표로(중립=정중앙). 좌표 변환은
-  // lib/regimeTrajectory.regimeMarkerPos 단일 출처(궤적 트레일과 동일 공식 — 어긋남 방지).
+  // 라이브 현재 판정을 통합 사분면(RegimeTrajectory)에 넘길 축 점수. 좌표 변환은 궤적 컴포넌트가
+  // regimeMarkerPos(단일 출처)로 수행 — 게이지가 별도 마커를 그리지 않는다(정적 사분면 흡수).
   const cycleScore = axes?.cycle?.score ?? 0
   const sentimentScore = axes?.sentiment?.score ?? 0
-  const { x: markerX, y: markerY } = regimeMarkerPos(cycleScore, sentimentScore)
 
   // ⑤ 손실경고 — 수축(급락장 매수 제안) 또는 VIX 패닉이면 남색 강조 배너.
   const showLossWarning = regime === '수축' || vix_panic === true
@@ -108,57 +101,25 @@ export default function RegimeGauge() {
         </div>
       )}
 
-      {/* ① 2×2 사분면 — 세로축 경기(위 양호/아래 악화), 가로축 심리(좌 공포/우 탐욕) */}
-      <div className="quadrant" aria-label="경기·심리 2축 국면 매트릭스">
-        <div className="quadrant__xhead">
-          <span className="quadrant__pole">공포</span>
-          <span className="quadrant__axis">심리</span>
-          <span className="quadrant__pole">탐욕</span>
-        </div>
-
-        <div className="quadrant__yhead">
-          <span className="quadrant__pole">양호</span>
-          <span className="quadrant__axis">경기</span>
-          <span className="quadrant__pole">악화</span>
-        </div>
-
-        <div className="quadrant__grid" role="list" aria-label="시장 국면 사분면">
-          {QUADRANT_CELLS.map((cellRegime) => {
-            const active = cellRegime === regime
-            return (
-              <div
-                key={cellRegime}
-                role="listitem"
-                className={`qcell ${active ? 'qcell--active' : ''}`}
-                aria-current={active ? 'true' : undefined}
-              >
-                <span className="qcell__name">{cellRegime}</span>
-              </div>
-            )
-          })}
-          {/* 실제 축 위치 마커 — 강조 셀 + 이 점으로 "정확히 어디인지"까지 보여준다 */}
-          <div
-            className="quadrant__marker"
-            style={{ left: `${markerX}%`, top: `${markerY}%` }}
-            aria-hidden="true"
-          >
-            <span className="quadrant__marker-dot" />
-          </div>
-        </div>
-
-        <div className="quadrant__pos">
-          경기: <strong>{cycleSign}</strong> · 심리: <strong>{sentimentSign}</strong>
-        </div>
-      </div>
+      {/* ① 통합 사분면 — 현재 판정(라이브 마커+활성 셀) + 최근 이동 경로를 하나의 경기×심리 매트릭스로.
+          정적 사분면을 흡수(중복 제거). 라이브 판정을 props 로 주입, 좌표는 궤적이 regimeMarkerPos 로 그린다. */}
+      <RegimeTrajectory
+        live={{
+          cs: cycleScore,
+          ss: sentimentScore,
+          regime,
+          cash: recommended_cash_ratio,
+          confidence,
+          cycleSign,
+          sentimentSign,
+        }}
+      />
 
       {/* 국면 해설 — 축 조합의 의미(결정적 정적 텍스트) */}
       <p className="regime-desc">
         <strong className="regime-desc__name">{regime}</strong>
         {REGIME_DESC[regime] ? ` · ${REGIME_DESC[regime]}` : ''}
       </p>
-
-      {/* 국면 이동 궤적 — 같은 매트릭스 위에 최근 N개월 족적(자체 조회·독립 실패 격리) */}
-      <RegimeTrajectory />
 
       <div className="gauge__body">
         {/* ② 권장 현금비중 큰 숫자 — 역발상 값 자동 반영(엔진 REGIME_PARAMS 단일 출처) */}

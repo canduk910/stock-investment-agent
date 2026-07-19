@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { regimeMarkerPos, buildRegimePath } from './regimeTrajectory.js'
+import { regimeMarkerPos, buildRegimePath, stopLabelGroups } from './regimeTrajectory.js'
 
 describe('regimeMarkerPos (RegimeGauge 마커와 동일 공식 SSOT)', () => {
   it('중립(0,0) = 정중앙(50,50)', () => {
@@ -74,5 +74,28 @@ describe('buildRegimePath (단순 경로 — 인접 동일 셀 접기)', () => {
     expect(stops).toHaveLength(1)
     expect(stops[0].opacity).toBe(1)
     expect(pathD.startsWith('M') && !pathD.includes('L')).toBe(true)
+  })
+})
+
+describe('stopLabelGroups (재방문 좌표 라벨 병합 — 겹침 방지)', () => {
+  const P = (date, cs, ss, regime) => ({ date, cycle_score: cs, sentiment_score: ss, regime })
+
+  it('같은 좌표(재방문) 정차점의 시작월을 한 그룹으로 모은다', () => {
+    const { stops } = buildRegimePath([
+      P('2024-01-01', 2, 2, '확장'),
+      P('2024-02-01', -2, -2, '수축'),
+      P('2024-03-01', 2, 2, '확장'), // 확장 재방문 → 확장 좌표에 2개
+    ])
+    const groups = stopLabelGroups(stops)
+    expect(groups).toHaveLength(2) // 확장 좌표 1 + 수축 좌표 1
+    const exp = groups.find((g) => g.x === stops[0].x && g.y === stops[0].y)
+    expect(exp.startDates).toEqual(['2024-01-01', '2024-03-01']) // 두 방문 병합(시간순)
+    const con = groups.find((g) => g !== exp)
+    expect(con.startDates).toEqual(['2024-02-01'])
+  })
+
+  it('빈 입력은 안전', () => {
+    expect(stopLabelGroups([])).toEqual([])
+    expect(stopLabelGroups(null)).toEqual([])
   })
 })

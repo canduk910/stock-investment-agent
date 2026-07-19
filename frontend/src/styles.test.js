@@ -12,7 +12,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const stylesCss = readFileSync(join(__dirname, 'styles.css'), 'utf8')
 
 describe('styles.css — 키프레임 5종 신규(§3)', () => {
-  const frames = ['marker-ring', 'rise-in', 'shimmer', 'flash-up', 'flash-down']
+  // marker-ring(HTML box-shadow 펄스)은 통합 사분면에서 SVG-safe `rtraj-pulse`(transform scale)로 대체됨.
+  const frames = ['rtraj-pulse', 'rise-in', 'shimmer', 'flash-up', 'flash-down']
   for (const name of frames) {
     it(`@keyframes ${name} 정의`, () => {
       expect(stylesCss).toMatch(new RegExp(`@keyframes\\s+${name}\\b`))

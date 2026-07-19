@@ -83,4 +83,58 @@ describe('RegimeTrajectory', () => {
     await waitFor(() => expect(screen.getByText(/불러오지 못했습니다/)).toBeInTheDocument())
     expect(screen.getByRole('button', { name: /재시도/ })).toBeInTheDocument()
   })
+
+  it('live prop → 활성 셀 음영·라이브 마커+콜아웃·경기심리 readout, 마지막 정차점은 현재 아님', async () => {
+    const live = { cs: 2, ss: 0, regime: '확장', cash: 60, confidence: 'high', cycleSign: '양호', sentimentSign: '중립' }
+    const { container } = render(<RegimeTrajectory live={live} />)
+    await waitFor(() => expect(container.querySelector('svg.rtraj__svg')).toBeTruthy())
+    expect(container.querySelector('circle.rtraj__live-dot')).toBeTruthy() // 라이브 주황 마커
+    expect(container.querySelector('rect.rtraj__cellfill')).toBeTruthy() // 활성 셀 음영
+    expect(screen.getByText(/현재 · 확장/)).toBeInTheDocument() // 콜아웃
+    expect(screen.getByText(/경기:/)).toBeInTheDocument() // 경기/심리 readout
+    // 라이브가 있으면 마지막 정차점을 '현재'로 강조하지 않는다(강조는 라이브 마커 하나).
+    expect(container.querySelector('circle.rtraj__dot--current')).toBeNull()
+  })
+
+  it('재방문 좌표의 월 라벨은 한 라벨로 병합(", " 조인)', async () => {
+    fetchRegimeTrajectory.mockResolvedValue({
+      months: 24, interval: 'monthly', available: true, partial_failure: [],
+      points: [
+        { date: '2024-01-01', cycle_score: 2, sentiment_score: 2, regime: '확장' },
+        { date: '2024-02-01', cycle_score: -2, sentiment_score: -2, regime: '수축' },
+        { date: '2024-03-01', cycle_score: 2, sentiment_score: 2, regime: '확장' }, // 확장 재방문
+      ],
+    })
+    // live 주입 → 모든 정차점이 그룹 라벨 대상(레거시 현재 제외 없음).
+    const live = { cs: 0, ss: 0, regime: '확장', cash: 60, confidence: 'high', cycleSign: '중립', sentimentSign: '중립' }
+    const { container } = render(<RegimeTrajectory live={live} />)
+    await waitFor(() => expect(container.querySelector('svg.rtraj__svg')).toBeTruthy())
+    const labels = [...container.querySelectorAll('text.rtraj__stoplabel')].map((t) => t.textContent)
+    expect(labels).toContain('24.01, 24.03') // 확장 재방문 두 월이 한 라벨로
+    expect(labels).toContain('24.02') // 수축은 단일
+  })
+
+  it('라이브 셀 == 마지막 확정월 셀(안정 국면)이면 그 월 라벨을 억제(콜아웃과 겹침 방지)', async () => {
+    fetchRegimeTrajectory.mockResolvedValue({
+      months: 24, interval: 'monthly', available: true, partial_failure: [],
+      points: [
+        { date: '2024-05-01', cycle_score: -2, sentiment_score: -2, regime: '수축' },
+        { date: '2024-06-01', cycle_score: 2, sentiment_score: 0, regime: '확장' }, // 마지막 확정월 = 확장 셀
+      ],
+    })
+    // 라이브도 확장 셀(2,0) — 마지막 정차점과 동일 좌표(브릿지 없음·라벨 겹칠 자리).
+    const live = { cs: 2, ss: 0, regime: '확장', cash: 60, confidence: 'high', cycleSign: '양호', sentimentSign: '중립' }
+    const { container } = render(<RegimeTrajectory live={live} />)
+    await waitFor(() => expect(container.querySelector('circle.rtraj__live-dot')).toBeTruthy())
+    const labels = [...container.querySelectorAll('text.rtraj__stoplabel')].map((t) => t.textContent)
+    expect(labels).not.toContain('24.06') // 라이브 셀의 확정월 라벨 억제(콜아웃이 담당)
+    expect(labels).toContain('24.05') // 다른 셀(수축)은 유지
+    expect(screen.getByText(/현재 · 확장/)).toBeInTheDocument() // 콜아웃은 표시
+  })
+
+  it('라이브 없어도 마지막 정차점을 현재로 강조하면 범례에 "현재" 표기(불일치 회귀 잠금)', async () => {
+    const { container } = render(<RegimeTrajectory />)
+    await waitFor(() => expect(container.querySelector('circle.rtraj__dot--current')).toBeTruthy())
+    expect(container.querySelector('.rtraj__legend')?.textContent).toContain('현재')
+  })
 })

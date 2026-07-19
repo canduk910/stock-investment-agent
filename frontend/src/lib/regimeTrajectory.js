@@ -54,3 +54,22 @@ export function buildRegimePath(rawPoints) {
     .join(' ')
   return { stops, pathD }
 }
+
+// 재방문 셀(같은 좌표)의 정차점 라벨이 겹치는 문제 — 좌표별로 시작월(startDate)들을 **한 자리에 모은다**.
+// 반환: [{x, y, opacity(그 좌표 중 최댓값=가장 최근), startDates:[시간순]}]. 컴포넌트가 ym 포맷 + ", " 조인해
+// 한 라벨로 표시(예: "24.01, 24.05"). 좌표는 float 이라 소수 2자리로 키잉(regimeMarkerPos 값은 안정적).
+export function stopLabelGroups(stops) {
+  const arr = Array.isArray(stops) ? stops : []
+  const byCoord = new Map()
+  for (const s of arr) {
+    const key = `${s.x.toFixed(2)},${s.y.toFixed(2)}`
+    const g = byCoord.get(key)
+    if (g) {
+      g.startDates.push(s.startDate)
+      if (s.opacity > g.opacity) g.opacity = s.opacity
+    } else {
+      byCoord.set(key, { x: s.x, y: s.y, opacity: s.opacity, startDates: [s.startDate] })
+    }
+  }
+  return [...byCoord.values()]
+}

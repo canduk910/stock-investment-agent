@@ -145,135 +145,8 @@ body {
   border: 1px solid var(--c-border-strong);
 }
 
-/* ① 2×2 사분면 — 세로축 경기(위 양호/아래 악화) · 가로축 심리(좌 공포/우 탐욕) */
-.quadrant {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-areas:
-    '.     xhead'
-    'yhead grid'
-    'pos   pos';
-  gap: 6px 8px;
-  margin-bottom: 18px;
-}
-
-/* 가로축(심리) 캡션 — 공포(좌) · 심리 · 탐욕(우) */
-.quadrant__xhead {
-  grid-area: xhead;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 4px;
-  font-size: 11px;
-  color: var(--c-text-muted);
-}
-/* 세로축(경기) 캡션 — 양호(위) · 경기 · 악화(아래) */
-.quadrant__yhead {
-  grid-area: yhead;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  padding: 2px 0;
-  min-width: 34px;
-  font-size: 11px;
-  color: var(--c-text-muted);
-}
-.quadrant__yhead .quadrant__axis {
-  writing-mode: vertical-rl;
-  text-orientation: upright;
-  letter-spacing: 0.08em;
-}
-.quadrant__axis {
-  font-weight: 700;
-  color: var(--c-text-secondary);
-  letter-spacing: 0.04em;
-}
-.quadrant__pole {
-  font-weight: 500;
-}
-
-/* 2×2 셀 그리드 (회복·확장 / 수축·과열) + 실제 위치 마커 */
-.quadrant__grid {
-  grid-area: grid;
-  position: relative; /* 마커 절대배치 기준 */
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(2, 1fr);
-  gap: 6px;
-}
-.qcell {
-  position: relative;
-  min-height: 68px;
-  padding: 10px 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  border-radius: var(--radius-sm);
-  background: var(--c-surface-2);
-  color: var(--c-text-secondary);
-  border: 1px solid var(--c-border);
-  transition: background 0.15s, border-color 0.15s;
-}
-.qcell__name {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-.qcell--active {
-  background: var(--c-blue);
-  color: var(--c-white);
-  border-color: var(--c-blue-strong);
-  box-shadow: var(--shadow-card);
-}
-.qcell--active .qcell__name {
-  font-weight: 700;
-}
-
-/* 실제 축 위치 마커 — (심리 x, 경기 y) 좌표에 놓인 점. 중립이면 정중앙. */
-.quadrant__marker {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  z-index: 2;
-  transition: left 0.35s ease, top 0.35s ease;
-}
-.quadrant__marker-dot {
-  position: relative;
-  display: block;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  background: var(--c-navy);
-  border: 3px solid var(--c-white);
-  box-shadow: 0 0 0 1.5px var(--c-navy), var(--shadow-raise);
-}
-/* 현재 위치 강조 — 파랑 링 확산 펄스(marker-ring). */
-.quadrant__marker-dot::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  animation: marker-ring 1.8s ease-out infinite;
-}
-
-/* 현재 위치 요약 — "경기: 악화 · 심리: 탐욕" */
-.quadrant__pos {
-  grid-area: pos;
-  margin-top: 4px;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--c-surface-2);
-  border: 1px solid var(--c-border);
-  font-size: 13px;
-  color: var(--c-text-secondary);
-  text-align: center;
-}
-.quadrant__pos strong {
-  color: var(--c-navy);
-  font-weight: 700;
-}
+/* (정적 2×2 사분면 `.quadrant*`/`.qcell*` 은 통합 사분면[RegimeTrajectory SVG]로 흡수·제거됨.
+    현재 위치 마커·활성 셀·경기/심리 readout 은 이제 `.rtraj__*`(SVG)가 담당한다.) */
 
 /* VIX 패닉 칩 — 극단 변동성(>35) 시 헤드에 빨강 경보 칩(위험 전용색) */
 .panic-chip {
@@ -3571,14 +3444,6 @@ body {
 /* ══════════════════════════════════════════════════════════════════════════
  * 리디자인 키프레임 + 스켈레톤 유틸(Phase 0). stage-pulse·blink 는 위 챗 영역에 이미 존재.
  * ═════════════════════════════════════════════════════════════════════════ */
-@keyframes marker-ring {
-  0% {
-    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45);
-  }
-  100% {
-    box-shadow: 0 0 0 12px rgba(37, 99, 235, 0);
-  }
-}
 @keyframes rise-in {
   from {
     opacity: 0;
@@ -3895,6 +3760,58 @@ body {
   font-size: 2.9px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
+}
+/* 활성 셀 음영 — 라이브 현재 국면의 사분면 1칸(주황 소프트, 경로/마커보다 뒤). */
+.rtraj__cellfill {
+  fill: var(--c-emph-soft);
+}
+/* 라이브 현재 마커 — 주황 채움 + 흰 링(정차점보다 큼). */
+.rtraj__live-dot {
+  fill: var(--c-emph);
+  stroke: var(--c-white);
+  stroke-width: 1;
+}
+/* 확산 펄스 링(SVG-safe: transform scale). */
+.rtraj__live-pulse {
+  fill: none;
+  stroke: var(--c-emph);
+  stroke-width: 0.7;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: rtraj-pulse 1.9s ease-out infinite;
+}
+@keyframes rtraj-pulse {
+  0% {
+    transform: scale(1);
+    stroke-opacity: 0.55;
+  }
+  100% {
+    transform: scale(2.6);
+    stroke-opacity: 0;
+  }
+}
+.rtraj__live-label {
+  fill: var(--c-emph-strong);
+  font-size: 3.6px;
+  font-weight: 700;
+}
+/* 확정월 → 라이브 현재 브릿지(좌표 다를 때만) — 주황 파선. */
+.rtraj__bridge {
+  stroke: var(--c-emph);
+  stroke-width: 0.8;
+  stroke-dasharray: 1.6 1.6;
+  opacity: 0.7;
+}
+/* 경기/심리 상태 readout(정적 사분면에서 이관). */
+.rtraj__pos {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--c-text-secondary);
+  text-align: center;
+}
+.rtraj__pos strong {
+  color: var(--c-navy);
+  font-weight: 700;
 }
 .rtraj__legend {
   display: flex;
