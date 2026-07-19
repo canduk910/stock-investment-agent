@@ -995,6 +995,67 @@ body {
   color: var(--c-emph-strong);
   font-weight: 700;
 }
+
+/* 차트 주기·기간 선택기 — 세그먼트 버튼(네이비 active). 색 토큰만·방향색/경보색 금지. */
+.chart-section {
+  display: flex;
+  flex-direction: column;
+}
+.report__chart-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 10px;
+}
+.chart-controls__group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.chart-controls__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+}
+.chart-controls__seg {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  background: var(--c-flat-soft);
+  border-radius: var(--radius-sm);
+}
+.chart-control-btn {
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.16s, color 0.16s;
+}
+.chart-control-btn:hover:not(:disabled) {
+  color: var(--c-navy);
+}
+.chart-control-btn[aria-pressed='true'] {
+  background: var(--c-navy);
+  color: var(--c-white);
+  font-weight: 700;
+}
+.chart-control-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.chart-controls__status {
+  font-size: 12px;
+  color: var(--c-text-secondary);
+  margin-left: auto;
+}
+.chart-controls__status--muted {
+  color: var(--c-text-muted);
+}
 .report__chips {
   display: flex;
   flex-wrap: wrap;

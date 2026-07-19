@@ -315,3 +315,81 @@ def test_route_regime_failure_does_not_affect_bundle(monkeypatch, bodies):
     assert "regime" not in body["partial_failure"]
     # 매크로가 죽어도 종목 섹션은 정상.
     assert body["valuation"]["price"] == 70500.0
+
+
+# ── 라우트 GET /api/detail/{ticker}/chart (선택형 일봉/주봉 × 기간) ────────────
+
+def _ascending_candles(n):
+    """오름차순 종가 캔들 n개(날짜 사전식 정렬 = 시간순). 60봉이면 정배열 → 대순환 stage 1."""
+    return [
+        {"date": f"2026{i:04d}", "open": 1.0, "high": 1.0, "low": 1.0,
+         "close": float(i), "volume": 1000}
+        for i in range(1, n + 1)
+    ]
+
+
+def _chart_route_client(monkeypatch, fetch=None, fail=False):
+    monkeypatch.setattr(detail, "_resolve_client", lambda *a, **k: object())
+    if fail:
+        def boom(*a, **k):
+            raise RuntimeError("kis down")
+        monkeypatch.setattr(detail.chart, "fetch_chart_series", boom)
+    elif fetch is not None:
+        monkeypatch.setattr(detail.chart, "fetch_chart_series", fetch)
+    return TestClient(main.app)
+
+
+def test_chart_route_shape_and_recomputed_segments(monkeypatch):
+    def fake(client, ticker, **kw):
+        return {"ticker": ticker, "candles": _ascending_candles(60)}
+
+    client = _chart_route_client(monkeypatch, fetch=fake)
+    resp = client.get("/api/detail/005930/chart?period=D&range=1y")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ticker"] == "005930" and body["period"] == "D" and body["range"] == "1y"
+    assert len(body["candles"]) == 60 and body["partial_failure"] == []
+    # 리본은 표시 시계열로 재계산 → 정배열 60봉이면 stage 1.
+    assert body["stage_segments"] and body["current_stage"] == 1
+    assert body["stage_segments"][-1]["stage"] == body["current_stage"]
+
+
+def test_chart_route_maps_period_and_range_to_fetch(monkeypatch):
+    captured = {}
+
+    def fake(client, ticker, **kw):
+        captured.update(kw)
+        return {"ticker": ticker, "candles": _ascending_candles(45)}
+
+    client = _chart_route_client(monkeypatch, fetch=fake)
+    resp = client.get("/api/detail/005930/chart?period=W&range=3y")
+    assert resp.status_code == 200 and resp.json()["period"] == "W" and resp.json()["range"] == "3y"
+    assert captured["period"] == "W"
+    assert "start_date" in captured and "end_date" in captured  # 기간→날짜 창 전달
+
+
+def test_chart_route_bad_period_range_default_to_daily_1y(monkeypatch):
+    captured = {}
+
+    def fake(client, ticker, **kw):
+        captured.update(kw)
+        return {"ticker": ticker, "candles": []}
+
+    client = _chart_route_client(monkeypatch, fetch=fake)
+    body = client.get("/api/detail/005930/chart?period=X&range=zzz").json()
+    assert body["period"] == "D" and body["range"] == "1y"  # 화이트리스트 폴백
+    assert captured["period"] == "D"
+
+
+def test_chart_route_graceful_on_kis_failure(monkeypatch):
+    client = _chart_route_client(monkeypatch, fail=True)
+    resp = client.get("/api/detail/005930/chart?period=D&range=10y")
+    assert resp.status_code == 200  # 항상 200 graceful
+    body = resp.json()
+    assert body["candles"] == [] and body["stage_segments"] == []
+    assert body["current_stage"] is None and body["partial_failure"] == ["chart"]
+
+
+def test_chart_route_bad_ticker_400(monkeypatch):
+    client = _chart_route_client(monkeypatch, fetch=lambda *a, **k: {"ticker": "x", "candles": []})
+    assert client.get("/api/detail/ab/chart").status_code == 400  # 6자 아님

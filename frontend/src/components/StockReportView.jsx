@@ -1,4 +1,4 @@
-import KLineChartPanel from './KLineChartPanel.jsx'
+import ChartSection from './ChartSection.jsx'
 import GrandCyclePanel from './GrandCyclePanel.jsx'
 import StatCard from './StatCard.jsx'
 import FinancialTrendTable from './FinancialTrendTable.jsx'
@@ -189,12 +189,15 @@ export default function StockReportView({ bundle, sessionId, onConsult }) {
       ) : (
         <>
           <div className="report__chart-block">
-            <KLineChartPanel
-              candles={chart.candles}
+            {/* 주기(일봉/주봉)·기간(3개월/1년/3년/10년) 선택 + 캔들 스왑. 정량 요약·GrandCyclePanel 은
+                번들(일봉)에 pin — 아래 fallback 이 초기/실패 시 번들 차트를 그대로 보여준다. */}
+            <ChartSection
+              ticker={ticker}
+              fallbackCandles={chart.candles}
+              fallbackSegments={summary?.ma_grand_cycle?.stage_segments}
+              fallbackStage={summary?.ma_grand_cycle?.stage}
               indicatorConfig={indicatorConfig}
               valuation={valuationFailed ? null : valuation}
-              stageSegments={summary?.ma_grand_cycle?.stage_segments}
-              currentStage={summary?.ma_grand_cycle?.stage}
             />
             {/* 오버레이 라벨 렌더가 실패해도 값을 읽도록 칩으로 병기(색: 파랑/남색/회색) */}
             {!valuationFailed && (

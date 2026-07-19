@@ -320,6 +320,18 @@ def _ma_grand_cycle(closes, dates=None):
     }
 
 
+def stage_segments_for_chart(chart) -> dict:
+    """차트(candles) → 대순환 스테이지 구간(리본용) + 현재 단계. **표시 차트 시계열로 리본을 재계산**할 때
+    쓴다(일봉/주봉·기간 선택 차트 엔드포인트). `_ma_grand_cycle` 세그먼트와 **동일 로직·SSOT**(순수·
+    결정적·LLM 0). 봉<40·빈 차트는 `stage_segments=[]`·`current_stage=None`(graceful).
+    반환: `{"stage_segments": [{stage,start_date,end_date}...], "current_stage": int|None}`.
+    """
+    dated = _sorted_dated_closes(chart)
+    segments = _grand_cycle_segments(dated, C.GRAND_CYCLE_MA_PERIODS)
+    current = segments[-1]["stage"] if segments else None
+    return {"stage_segments": segments, "current_stage": current}
+
+
 # ── 조립 ─────────────────────────────────────────────────────────────────────
 
 def build_stock_summary(basic, financials, valuation, chart):

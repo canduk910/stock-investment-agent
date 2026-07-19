@@ -27,6 +27,7 @@ from infra.parallel import fetch_parallel
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from api.deps import assert_valid_ticker  # {ticker} 라우트 진입부 400 차단(공용)
 from api.deps import build_judgement as _build_judgement  # 국면 판정 빌더 SSOT(IMP-06)
 from auth.deps import get_current_user_optional
 from auth.models import User
@@ -44,12 +45,15 @@ from collectors.kis import (
 )
 from infra.config import KisConfig, kis_account
 from stock.constants import INDICATOR_CONFIG, STOCK_META_TTL_SECONDS
-from stock.summary import build_stock_summary, forward_valuation
+from stock.summary import build_stock_summary, forward_valuation, stage_segments_for_chart
 
 router = APIRouter()
 
 _FETCH_TIMEOUT = 15
-_CHART_LOOKBACK_DAYS = 190  # ~6개월 일봉(기술적 지표 창)
+_CHART_LOOKBACK_DAYS = 190  # ~6개월 일봉(기술적 지표 창·번들 요약용)
+# 선택형 차트 기간(일수) — 사용자 선택 3개월/1년/3년/10년. KIS ~100/콜이라 장기간은 페이지네이션.
+_CHART_RANGE_DAYS = {"3m": 92, "1y": 366, "3y": 1096, "10y": 3653}
+_CHART_PERIODS = {"D", "W"}  # 일봉/주봉(월/년은 현재 미노출)
 # 일봉(기술적): 수정주가 — 액면분할이 인위적 갭을 만들지 않게(RSI/MA 연속성).
 _DAILY_ADJ_PRICE = "0"
 # 월봉(avg_per 결산기말 종가): 원주가 — 재무제표 원본 EPS 와 조정기준 정합.
@@ -309,3 +313,45 @@ def stock_detail_bundle(
     # 번들은 judgement 를 소비하지 않는다(regime_gate 폐기) — 낭비 FRED 호출 없이 None 전달.
     client = _resolve_client(user, db)
     return collect_stock_bundle(ticker, client, None, cache=_META_CACHE)
+
+
+@router.get("/api/detail/{ticker}/chart")
+def stock_detail_chart(
+    ticker: str,
+    period: str = "D",
+    range: str = "1y",  # noqa: A002 — 쿼리 키(?range=)로 노출. 함수 내 builtin range() 미사용.
+    user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+) -> dict:
+    """선택형 차트 — **일봉/주봉 × 3개월/1년/3년/10년**. KIS ~100/콜 상한을 페이지네이션으로 넘는다.
+
+    스테이지 리본(`stage_segments`)은 **표시 시계열로 재계산**(대순환은 각 timeframe 유효). **정량 요약
+    (RSI/MA/현재 대순환 단계)은 번들[일봉]에 pin** — 여기선 표시 데이터만. **일봉 무캐시**(오늘봉 형성,
+    원칙1). 불량 ticker 400, KIS 실패는 **항상 200 graceful**(빈 candles + partial_failure).
+    """
+    assert_valid_ticker(ticker)
+    period = period if period in _CHART_PERIODS else "D"
+    range_key = range if range in _CHART_RANGE_DAYS else "1y"
+    lookback = _CHART_RANGE_DAYS[range_key]
+    client = _resolve_client(user, db)
+    try:
+        raw = chart.fetch_chart_series(
+            client, ticker, period=period,
+            start_date=_days_ago(lookback), end_date=_today(),
+            adj_price=_DAILY_ADJ_PRICE,
+        )
+        candles = raw.get("candles") or []
+        seg = stage_segments_for_chart({"candles": candles})  # 표시 차트로 리본 재계산
+        return {
+            "ticker": ticker, "period": period, "range": range_key,
+            "candles": candles,
+            "stage_segments": seg["stage_segments"],
+            "current_stage": seg["current_stage"],
+            "partial_failure": [],
+        }
+    except Exception:  # noqa: BLE001 — KIS/자격증명 실패는 삼키지 않되 graceful(빈 차트)
+        return {
+            "ticker": ticker, "period": period, "range": range_key,
+            "candles": [], "stage_segments": [], "current_stage": None,
+            "partial_failure": ["chart"],
+        }

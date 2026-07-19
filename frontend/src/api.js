@@ -58,6 +58,18 @@ export async function fetchStockBundle(ticker) {
   return res.json()
 }
 
+// 선택형 차트 — 일봉/주봉 × 3개월/1년/3년/10년. GET /api/detail/{ticker}/chart?period=&range=
+// → {ticker, period, range, candles:[...], stage_segments:[{stage,start_date,end_date}], current_stage,
+//    partial_failure:[]}. 장기간은 백엔드 페이지네이션(KIS ~100/콜). 스테이지 리본은 표시 시계열로 재계산.
+// **정량 요약(RSI/MA/현재 대순환 단계)은 번들[일봉]에 pin** — 차트 탐색이 판정을 바꾸지 않는다.
+// KIS 실패는 항상 200 graceful(빈 candles + partial_failure). throw 는 네트워크/HTTP 오류만.
+export async function fetchStockChart(ticker, period = 'D', range = '1y') {
+  const qs = new URLSearchParams({ period, range })
+  const res = await authFetch(`/api/detail/${encodeURIComponent(ticker)}/chart?${qs}`)
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
 // ── 대화기록(대화 목록·생성·메시지·삭제, 유저 스코프) ─────────────────────────
 // session_id(챗)는 conversation.id 를 쓴다. 모두 인증 필수(authFetch).
 

@@ -24,6 +24,7 @@ from stock.summary import (
     _valuation_label,
     build_stock_summary,
     forward_valuation,
+    stage_segments_for_chart,
 )
 
 CORE_KEYS = {
@@ -481,6 +482,18 @@ def test_grand_cycle_summary_exposes_segments__grandcycle():
     gc = r["ma_grand_cycle"]
     assert gc["stage_segments"], "세그먼트가 있어야 한다"
     assert gc["stage_segments"][-1]["stage"] == gc["stage"]  # 마지막 구간 = 현재 단계
+
+
+def test_stage_segments_for_chart_public_helper__grandcycle():
+    # 표시 차트 시계열로 리본 재계산(엔드포인트용) — _ma_grand_cycle 세그먼트와 동일 로직·SSOT.
+    up = stage_segments_for_chart(_chart([float(i) for i in range(1, 61)]))  # 60봉 상승
+    assert up["stage_segments"] and up["current_stage"] == up["stage_segments"][-1]["stage"]
+    assert up["current_stage"] == 1  # 정배열
+    # 봉 부족·빈 차트 graceful.
+    assert stage_segments_for_chart(_chart([float(i) for i in range(1, 30)])) == {
+        "stage_segments": [], "current_stage": None,
+    }
+    assert stage_segments_for_chart({"candles": []}) == {"stage_segments": [], "current_stage": None}
 
 
 # ── 안전: LLM 미개입 (소스에 openai/anthropic import 0건) ────────────────────

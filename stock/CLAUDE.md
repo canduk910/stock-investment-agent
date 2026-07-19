@@ -43,6 +43,7 @@
 - **band_width_pct 는 상대(%) 측정** — 단순 선형·2차 가속 상승은 상대격차가 오히려 좁아질 수 있다(테스트가 이 함정을 반영: 확대 검증은 평탄→급등 국면으로). 100봉이면 40+20=60봉으로 충분해 페이지네이션 불요.
 - **판정은 코드, 서술은 프론트/LLM**: 엔진은 구조화 필드만 반환(산문 없음). 6단계 서술 문장은 `frontend/src/lib/grandCycle.js`가 조립하고 면책은 컴포넌트 고정. 라이브 검증(005930): stage 4(역배열)·band −14.7%·전환 3→4 정합.
 - **스테이지 시계열 세그먼트(`stage_segments`) — 차트 하단 리본용**: `_ma_grand_cycle(closes, dates=None)` 이 `dates` 를 받으면 `_grand_cycle_segments(dated_closes, periods)`(순수)로 **연속 동일 단계 구간**을 `[{stage, start_date, end_date}]`(날짜 키·시간 오름차순)로 낸다. 각 봉을 `_stage_at` 로 분류해 같은 단계 런을 묶고, None(봉<40·동률)은 런을 끊는다(구간 미포함). **날짜 키**라 프론트 캔들 정렬/결측 차이에 안전(klinecharts timestamp 로 위치). `dates` 없으면 `stage_segments=[]`(하위호환). `build_stock_summary` 가 `_sorted_dated_closes`(신규, `_sorted_closes` 를 이걸로 파생)로 (date,close)를 뽑아 dates 를 넘긴다 → **`ma_grand_cycle` 하위 키로만 추가**(build 최상위 10키 계약 불변). 마지막 세그먼트 stage == 현재 stage(리본 '현재' 표시 근거). 판정=코드, 노출·그룹핑만(LLM 0).
+- **`stage_segments_for_chart(chart)`**(public): 임의 차트(candles)에서 스테이지 구간+현재단계만 계산 → `{stage_segments, current_stage}`. `_sorted_dated_closes`+`_grand_cycle_segments` 재사용(동일 SSOT·순수·결정적). **선택형 차트 라우트**(`GET /api/detail/{ticker}/chart` 일봉/주봉·기간)가 **표시 시계열로 리본을 재계산**할 때 쓴다 — 대순환은 timeframe 무관 유효(주봉=주봉 대순환·10년=10년 단계 이력). 봉<40·빈 차트 graceful. **정량 요약(build_stock_summary)은 번들[일봉]에 pin** — 차트 탐색이 판정을 바꾸지 않는다.
 
 ## 테스트
 - `tests/unit/stock/test_summary.py` (콜로케이트 아님 — 프로젝트 규약 `tests/unit/{module}/`). 경계 전량 Red-first. `_valuation_label`/`_cagr`/`_rsi` 는 private 이지만 경계 검증 위해 직접 import 테스트.

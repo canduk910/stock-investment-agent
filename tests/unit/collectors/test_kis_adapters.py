@@ -70,6 +70,110 @@ def test_daily_chart_returns_normalized(load_fixture):
     assert client.calls[0]["params"]["FID_PERIOD_DIV_CODE"] == "D"
 
 
+# ── fetch_chart_series: ~100/호출 상한 date-window 후진 페이지네이션 ───────────
+
+class PagingStubClient:
+    """KIS 페이지네이션 모사 — 전체 날짜셋을 갖고, [DATE_1, DATE_2] 중 **최근 page개**만 반환.
+
+    실제 KIS 처럼 한 호출당 상한(page)을 넘지 않는다. 호출 인자를 calls 에 기록.
+    """
+
+    def __init__(self, all_dates, page=100, env="real"):
+        self.all = sorted(all_dates)  # 오름차순 YYYYMMDD
+        self.page = page
+        self.env = env
+        self.calls = []
+
+    def get(self, tr_id, path, params, extra_headers=None):
+        self.calls.append(params)
+        start, end = params["FID_INPUT_DATE_1"], params["FID_INPUT_DATE_2"]
+        eligible = [d for d in self.all if start <= d <= end]
+        window = eligible[-self.page :]  # 최근 page개(상한)
+        return {
+            "output1": {"stck_shrn_iscd": "005930"},
+            "output2": [
+                {"stck_bsop_date": d, "stck_oprc": "1", "stck_hgpr": "1",
+                 "stck_lwpr": "1", "stck_clpr": "100", "acml_vol": "1000"}
+                for d in window
+            ],
+        }
+
+
+def _date_range(n):
+    """오름차순 YYYYMMDD n개(2020-01-01부터 일 단위)."""
+    base = __import__("datetime").date(2020, 1, 1)
+    td = __import__("datetime").timedelta
+    return [(base + td(days=i)).strftime("%Y%m%d") for i in range(n)]
+
+
+def test_fetch_chart_series_single_page_one_call():
+    dates = _date_range(60)  # 100 미만 → 1콜로 충분
+    client = PagingStubClient(dates, page=100)
+    result = chart.fetch_chart_series(
+        client, "005930", period="D", start_date=dates[0], end_date=dates[-1]
+    )
+    assert len(result["candles"]) == 60
+    assert len(client.calls) == 1  # 페이지네이션 불필요
+    got = [c["date"] for c in result["candles"]]
+    assert got == sorted(got)  # date 오름차순
+
+
+def test_fetch_chart_series_paginates_backward_and_merges():
+    dates = _date_range(250)  # 100 상한 → 3콜(100+100+50)
+    client = PagingStubClient(dates, page=100)
+    result = chart.fetch_chart_series(
+        client, "005930", period="D", start_date=dates[0], end_date=dates[-1]
+    )
+    assert len(result["candles"]) == 250  # 전 구간 병합
+    assert len(client.calls) == 3
+    got = [c["date"] for c in result["candles"]]
+    assert got == dates  # 중복 제거·정렬 완전 복원
+
+
+def test_fetch_chart_series_respects_max_pages_cap():
+    dates = _date_range(250)
+    client = PagingStubClient(dates, page=100)
+    result = chart.fetch_chart_series(
+        client, "005930", period="D", start_date=dates[0], end_date=dates[-1], max_pages=2
+    )
+    assert len(client.calls) == 2  # 캡에서 중단
+    assert len(result["candles"]) == 200  # 2페이지분만
+
+
+def test_fetch_chart_series_stops_on_no_progress():
+    # cursor 를 무시하고 항상 같은 윈도우를 주는 stub → 무진행 감지로 2콜 후 종료(무한루프 방지).
+    class StuckClient(PagingStubClient):
+        def get(self, tr_id, path, params, extra_headers=None):
+            self.calls.append(params)
+            window = self.all[-self.page :]  # 항상 최근 100(cursor 무시)
+            return {
+                "output1": {"stck_shrn_iscd": "005930"},
+                "output2": [
+                    {"stck_bsop_date": d, "stck_oprc": "1", "stck_hgpr": "1",
+                     "stck_lwpr": "1", "stck_clpr": "100", "acml_vol": "1000"}
+                    for d in window
+                ],
+            }
+
+    dates = _date_range(250)
+    client = StuckClient(dates, page=100)
+    result = chart.fetch_chart_series(
+        client, "005930", period="D", start_date=dates[0], end_date=dates[-1]
+    )
+    assert len(client.calls) == 2  # 1콜 수집 → 2콜째 새 데이터 0 → 종료
+    assert len(result["candles"]) == 100
+
+
+def test_fetch_chart_series_forwards_period_and_adj():
+    dates = _date_range(30)
+    client = PagingStubClient(dates, page=100)
+    chart.fetch_chart_series(
+        client, "005930", period="W", start_date=dates[0], end_date=dates[-1], adj_price="0"
+    )
+    assert client.calls[0]["FID_PERIOD_DIV_CODE"] == "W"
+    assert client.calls[0]["FID_ORG_ADJ_PRC"] == "0"
+
+
 def test_multiprice_returns_normalized(load_fixture):
     client = StubClient(load_fixture("kis_intstock_multprice"))
     result = multiprice.intstock_multprice(client, ["005930", "000660"])
