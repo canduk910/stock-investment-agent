@@ -17,6 +17,7 @@ import pytest
 from stock import constants
 from stock.summary import (
     _cagr,
+    _grand_cycle_segments,
     _ma_grand_cycle,
     _rsi,
     _stage_of,
@@ -428,6 +429,58 @@ def test_grand_cycle_summary_none_adds_note__grandcycle():
     r_empty = build_stock_summary(_valuation(), _financials(), _valuation(), _chart([]))
     assert r_empty["ma_grand_cycle"] is None
     assert not any("대순환" in n for n in r_empty["notes"])
+
+
+# ── 대순환 스테이지 세그먼트 (차트 리본 오버레이용, 날짜 키) ──────────────────
+
+def _dated(closes):
+    """오름차순 종가 → (date, close). 실제 KIS YYYYMMDD 처럼 **사전식 정렬=시간순**이 되도록 zero-pad."""
+    return [(f"2024{i:04d}", float(c)) for i, c in enumerate(closes, start=1)]
+
+
+def test_grand_cycle_segments_single_run_uptrend__grandcycle():
+    """단조 상승(정배열 지속) → 단일 세그먼트(stage 1), 날짜 키(인덱스 아님)."""
+    dated = _dated([float(i) for i in range(1, 61)])  # 60봉
+    segs = _grand_cycle_segments(dated, constants.GRAND_CYCLE_MA_PERIODS)
+    assert len(segs) == 1
+    assert segs[0]["stage"] == 1
+    assert segs[0]["start_date"] == dated[39][0]  # 첫 판정 가능 봉(장기40 충족)
+    assert segs[0]["end_date"] == dated[-1][0]
+    assert isinstance(segs[0]["start_date"], str)  # 날짜 키
+
+
+def test_grand_cycle_segments_transition_splits_chronological__grandcycle():
+    """상승→하락 반전 → 여러 세그먼트, 시간 오름차순, 마지막=역배열(4)."""
+    closes = [float(i) for i in range(1, 61)] + [float(i) for i in range(59, -1, -1)]
+    segs = _grand_cycle_segments(_dated(closes), constants.GRAND_CYCLE_MA_PERIODS)
+    assert len(segs) >= 2
+    stages = [s["stage"] for s in segs]
+    assert stages[0] == 1 and stages[-1] == 4  # 정배열 시작 → 역배열 끝
+    assert all(a["start_date"] <= a["end_date"] for a in segs)  # 각 구간 정합
+    assert [s["start_date"] for s in segs] == sorted(s["start_date"] for s in segs)  # 오름차순
+
+
+def test_grand_cycle_segments_insufficient_bars_empty__grandcycle():
+    """장기(40) 미달 → 전 봉 None → 빈 세그먼트."""
+    assert _grand_cycle_segments(_dated([float(i) for i in range(1, 40)]), constants.GRAND_CYCLE_MA_PERIODS) == []
+    assert _grand_cycle_segments([], constants.GRAND_CYCLE_MA_PERIODS) == []
+
+
+def test_ma_grand_cycle_includes_segments_only_with_dates__grandcycle():
+    """dates 주면 stage_segments 채우고, 없으면 [](하위호환 — 기존 직접호출 테스트 불변)."""
+    closes = [float(i) for i in range(1, 61)]
+    with_dates = _ma_grand_cycle(closes, dates=[d for d, _ in _dated(closes)])
+    assert with_dates["stage_segments"] and with_dates["stage_segments"][-1]["stage"] == 1
+    assert _ma_grand_cycle(closes)["stage_segments"] == []  # dates 없음
+
+
+def test_grand_cycle_summary_exposes_segments__grandcycle():
+    """build_stock_summary 의 ma_grand_cycle 이 stage_segments 를 싣고, 마지막 세그먼트 stage == 현재 stage."""
+    closes = [float(i) for i in range(1, 61)]
+    r = build_stock_summary(_valuation(), _financials(), _valuation(), _chart(closes))
+    gc = r["ma_grand_cycle"]
+    assert gc["stage_segments"], "세그먼트가 있어야 한다"
+    assert gc["stage_segments"][-1]["stage"] == gc["stage"]  # 마지막 구간 = 현재 단계
 
 
 # ── 안전: LLM 미개입 (소스에 openai/anthropic import 0건) ────────────────────

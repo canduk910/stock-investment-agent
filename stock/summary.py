@@ -124,13 +124,18 @@ def _valuation_label(per_vs_avg):
 
 # ── 기술적: RSI / 이동평균 / 52주 위치 ───────────────────────────────────────
 
-def _sorted_closes(chart):
-    """chart.candles → date 오름차순 종가 리스트(미정렬 입력도 정렬)."""
+def _sorted_dated_closes(chart):
+    """chart.candles → (date, close) date 오름차순(결측 제외). 대순환 세그먼트가 **날짜 키**로 정합되게."""
     candles = (chart or {}).get("candles") or []
     rows = [(c.get("date"), _num(c.get("close"))) for c in candles]
     rows = [(d, v) for (d, v) in rows if d is not None and v is not None]
     rows.sort(key=lambda x: x[0])
-    return [v for (_, v) in rows]
+    return rows
+
+
+def _sorted_closes(chart):
+    """chart.candles → date 오름차순 종가 리스트(미정렬 입력도 정렬)."""
+    return [v for (_, v) in _sorted_dated_closes(chart)]
 
 
 def _rsi(closes, period):
@@ -217,13 +222,39 @@ def _stage_at(closes, i, periods):
     return _stage_of(s, m, l)
 
 
-def _ma_grand_cycle(closes):
+def _grand_cycle_segments(dated_closes, periods):
+    """(date, close) 오름차순 → **연속 동일 단계 구간** 리스트(차트 하단 스테이지 리본용).
+
+    각 봉을 `_stage_at` 로 분류해 같은 단계가 이어지는 구간을 `{stage, start_date, end_date}`(날짜 키)로
+    묶는다. None(봉<장기·동률)은 런을 끊고 구간에 넣지 않는다. 시간 오름차순. 판정은 코드(엔진), 여기선
+    노출·그룹핑만(순수·결정적).
+    """
+    closes = [c for (_, c) in dated_closes]
+    dates = [d for (d, _) in dated_closes]
+    segments: list[dict] = []
+    cur: dict | None = None
+    for i in range(len(closes)):
+        st = _stage_at(closes, i, periods)
+        if st is None:
+            cur = None  # 판정 불가 봉 → 런 끊김(구간 미포함)
+            continue
+        if cur is not None and cur["stage"] == st:
+            cur["end_date"] = dates[i]  # 같은 단계 연장
+        else:
+            cur = {"stage": st, "start_date": dates[i], "end_date": dates[i]}
+            segments.append(cur)  # 참조 보관 → 이후 end_date in-place 연장
+    return segments
+
+
+def _ma_grand_cycle(closes, dates=None):
     """고지로 이동평균선 대순환 — 3 SMA 배열 6단계 + 밴드 + 지속/전환. 결정적, LLM 미개입.
 
     입력: date 오름차순 종가(_sorted_closes 결과). len < 장기(GRAND_CYCLE_MIN_CANDLES) → None(graceful).
+    `dates`(선택, closes 와 정렬 일치): 주면 `stage_segments`(연속 단계 구간, 날짜 키)를 함께 낸다 —
+    차트 하단 스테이지 리본용. 없으면 `stage_segments=[]`(하위호환).
     반환: {stage(1~6/None), stage_name, arrangement, phase, ma{short,medium,long},
            periods{short,medium,long}, band_width_pct, band_direction(확대/축소/유지/None),
-           bars_in_stage, prev_stage}.
+           bars_in_stage, prev_stage, stage_segments}.
     band_width_pct = (단기MA − 장기MA)/장기MA×100. 방향은 전환창(N봉) 전 절대폭 대비 증감.
     """
     periods = C.GRAND_CYCLE_MA_PERIODS
@@ -267,6 +298,13 @@ def _ma_grand_cycle(closes):
             prev_stage = st
             break
 
+    # 스테이지 리본용 구간(날짜 키) — dates 가 있을 때만(하위호환).
+    stage_segments = (
+        _grand_cycle_segments(list(zip(dates, closes)), periods)
+        if dates is not None and len(dates) == len(closes)
+        else []
+    )
+
     return {
         "stage": stage,
         "stage_name": meta["name"] if meta else None,
@@ -278,6 +316,7 @@ def _ma_grand_cycle(closes):
         "band_direction": band_direction,
         "bars_in_stage": bars_in_stage,
         "prev_stage": prev_stage,
+        "stage_segments": stage_segments,
     }
 
 
@@ -321,15 +360,17 @@ def build_stock_summary(basic, financials, valuation, chart):
         per_vs_avg = None
     valuation_label = _valuation_label(per_vs_avg)
 
-    # 기술적
-    closes = _sorted_closes(chart)
+    # 기술적 — 대순환 스테이지 리본이 날짜 키로 정합되게 (date, close) 를 한 번에 뽑는다.
+    dated_closes = _sorted_dated_closes(chart)
+    closes = [c for (_, c) in dated_closes]
     price = _num(valuation.get("price"))
     rsi = _rsi(closes, C.RSI_PERIOD)
     ma20_gap_pct = _ma_gap(closes, price, C.MA_PERIOD)
     pos_52w_pct = _pos_52w(price, _num(valuation.get("week52_high")), _num(valuation.get("week52_low")))
 
     # 고지로 이동평균선 대순환(3 SMA 배열 6단계) — 봉 부족 시 None + 사유 note(차트 자체가 없으면 침묵).
-    ma_grand_cycle = _ma_grand_cycle(closes)
+    # dates 를 넘겨 스테이지 구간(리본)도 함께 산출.
+    ma_grand_cycle = _ma_grand_cycle(closes, dates=[d for (d, _) in dated_closes])
     if ma_grand_cycle is None and closes:
         notes.append(
             f"대순환: 최근 거래일 {len(closes)}봉으로 장기 {C.GRAND_CYCLE_MIN_CANDLES}봉 미달 — 대순환 보류"

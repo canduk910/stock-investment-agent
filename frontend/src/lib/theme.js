@@ -13,8 +13,13 @@ const FALLBACK = {
   '--c-border': '#d8e0ea',
   '--c-border-strong': '#c2cdda',
   '--c-surface': '#ffffff',
+  '--c-surface-2': '#eef2f8', // 스테이지 리본 뉴트럴 톤(상승 구간)
+  '--c-surface-3': '#f8fafd', // 스테이지 리본 뉴트럴 톤(전환 구간, 가장 옅음)
+  '--c-flat-soft': '#f0f3f9', // 스테이지 리본 뉴트럴 톤(하락 구간)
   '--c-white': '#ffffff',
-  '--c-emph': '#e0670f', // 주황 = 강조(대순환 단기선 등). 가격 방향색 아님.
+  '--c-emph': '#e0670f', // 주황 = 강조(대순환 단기선·현재 스테이지). 가격 방향색 아님.
+  '--c-emph-soft': '#fbe8d6', // 현재 스테이지 리본 배경(주황 소프트)
+  '--c-emph-strong': '#b8500a', // 현재 스테이지 리본 텍스트(주황 강)
   '--c-chart-up': '#e5322d', // 캔들 상승 = 빨강(한국 관습·차트 예외)
   '--c-chart-down': '#2563eb', // 캔들 하락 = 파랑
 }
@@ -45,5 +50,11 @@ export function readChartPalette() {
     tooltipText: t('--c-text-secondary'),
     surface: t('--c-surface'),
     white: t('--c-white'),
+    // 스테이지 리본 뉴트럴 톤(상승/전환/하락 구간 구분) + 현재 주황. 방향색·경보색 아님.
+    surface2: t('--c-surface-2'),
+    surface3: t('--c-surface-3'),
+    flatSoft: t('--c-flat-soft'),
+    emphSoft: t('--c-emph-soft'),
+    emphStrong: t('--c-emph-strong'),
   }
 }

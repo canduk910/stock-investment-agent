@@ -4,6 +4,7 @@ import {
   stageGlyph,
   bandReadout,
   grandCycleInsight,
+  ribbonSegments,
 } from './grandCycle.js'
 
 // 고지로 이동평균선 대순환 표현 로직(순수) — 브라우저 없이 검증. 판정(단계·밴드)은 백엔드가,
@@ -52,6 +53,36 @@ describe('grandCycleStages', () => {
   it('현재 단계 null(동률·미판정)이면 isCurrent 전부 false', () => {
     const list = grandCycleStages(CATALOG, null)
     expect(list.every((s) => s.isCurrent === false)).toBe(true)
+  })
+})
+
+describe('ribbonSegments', () => {
+  const SEGS = [
+    { stage: 1, start_date: '20260417', end_date: '20260626' },
+    { stage: 3, start_date: '20260703', end_date: '20260714' },
+    { stage: 4, start_date: '20260715', end_date: '20260716' },
+  ]
+
+  it('세그먼트마다 카탈로그 라벨·글리프 부여, 마지막=현재', () => {
+    const r = ribbonSegments(SEGS, CATALOG, 4)
+    expect(r).toHaveLength(3)
+    expect(r[0]).toMatchObject({ stage: 1, name: '안정 상승기', glyph: '▲', isCurrent: false })
+    expect(r[1]).toMatchObject({ stage: 3, name: '하락 진입기', glyph: '◆' })
+    expect(r[2]).toMatchObject({ stage: 4, name: '안정 하락기', glyph: '▼', isCurrent: true })
+    expect(r[2].start_date).toBe('20260715') // 날짜 키 보존
+  })
+
+  it('마지막 세그먼트 stage 가 현재 stage 와 다르면 isCurrent 아님(방어)', () => {
+    const r = ribbonSegments(SEGS, CATALOG, 1) // 현재 1인데 마지막 구간은 4
+    expect(r[r.length - 1].isCurrent).toBe(false)
+  })
+
+  it('빈 입력·카탈로그 없음 graceful', () => {
+    expect(ribbonSegments([], CATALOG, 1)).toEqual([])
+    expect(ribbonSegments(null, null, null)).toEqual([])
+    // 카탈로그 없어도 stage/날짜는 나오고 라벨만 null.
+    const r = ribbonSegments(SEGS, null, 4)
+    expect(r[0]).toMatchObject({ stage: 1, name: null, glyph: '─' })
   })
 })
 

@@ -16,6 +16,29 @@ export function grandCycleStages(catalog, current) {
   }))
 }
 
+// 백엔드 스테이지 구간(stage_segments = [{stage, start_date, end_date}]) + catalog + 현재 단계
+//   → 차트 하단 리본 렌더 데이터 [{stage, name, glyph, phase, isCurrent, start_date, end_date}].
+// 판정·구간은 백엔드가 확정(여기선 라벨·글리프 조회·현재 표시만). name/phase 는 catalog(SSOT)에서.
+// isCurrent = **마지막 구간**(현재 단계 런) — 백엔드가 마지막 구간 stage == 현재 stage 를 보장.
+export function ribbonSegments(stageSegments, catalog, currentStage) {
+  const segs = Array.isArray(stageSegments) ? stageSegments : []
+  const byStage = new Map(
+    (catalog && Array.isArray(catalog.stages) ? catalog.stages : []).map((s) => [s.stage, s]),
+  )
+  return segs.map((seg, i) => {
+    const meta = byStage.get(seg.stage) || {}
+    return {
+      stage: seg.stage,
+      name: meta.name ?? null,
+      phase: meta.phase ?? null,
+      glyph: stageGlyph(meta.phase),
+      isCurrent: i === segs.length - 1 && seg.stage === currentStage,
+      start_date: seg.start_date,
+      end_date: seg.end_date,
+    }
+  })
+}
+
 // 국면 → 방향 글리프. 색이 아니라 형태로 방향을 표기(가격 방향색 오용 금지 규칙 준수).
 export function stageGlyph(phase) {
   if (phase === '상승') return '▲'

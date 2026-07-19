@@ -977,6 +977,24 @@ body {
   width: 100%;
   height: 440px;
 }
+/* 대순환 스테이지 리본 범례 — 하단 띠 의미(단계·방향 글리프·현재 주황). 색은 토큰만. */
+.kline-wrap {
+  display: flex;
+  flex-direction: column;
+}
+.kline__ribbon-legend {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--c-text-muted);
+}
+.kline__ribbon-legend b {
+  color: var(--c-text-secondary);
+  font-weight: 700;
+}
+.kline__ribbon-now {
+  color: var(--c-emph-strong);
+  font-weight: 700;
+}
 .report__chips {
   display: flex;
   flex-wrap: wrap;

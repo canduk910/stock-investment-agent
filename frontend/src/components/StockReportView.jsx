@@ -193,6 +193,8 @@ export default function StockReportView({ bundle, sessionId, onConsult }) {
               candles={chart.candles}
               indicatorConfig={indicatorConfig}
               valuation={valuationFailed ? null : valuation}
+              stageSegments={summary?.ma_grand_cycle?.stage_segments}
+              currentStage={summary?.ma_grand_cycle?.stage}
             />
             {/* 오버레이 라벨 렌더가 실패해도 값을 읽도록 칩으로 병기(색: 파랑/남색/회색) */}
             {!valuationFailed && (
