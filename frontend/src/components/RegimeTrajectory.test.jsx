@@ -36,17 +36,20 @@ describe('RegimeTrajectory', () => {
     expect(screen.getByText(/미래 예측이 아닙니다/)).toBeInTheDocument()
   })
 
-  it('전환 세그먼트에 화살표 — 국면 바뀐 지점 + 마지막', async () => {
+  it('방향 화살표는 끝점 하나만(과밀 제거) — 전환마다 붙던 seg 라인 없음', async () => {
     const { container } = render(<RegimeTrajectory />)
-    // 확장→과열→수축: 두 전환 모두 화살표 세그먼트(마지막도 전환이라 중복 아님) → 2개.
-    await waitFor(() => expect(container.querySelectorAll('line.rtraj__seg').length).toBeGreaterThanOrEqual(1))
-    const segs = container.querySelectorAll('line.rtraj__seg')
-    segs.forEach((s) => expect(s.getAttribute('marker-end')).toContain('rtraj-arrow'))
+    await waitFor(() => expect(container.querySelector('path.rtraj__trail')).toBeTruthy())
+    // 방향은 경로 끝점 화살표 하나(marker-end)로만 표시.
+    expect(container.querySelector('path.rtraj__trail').getAttribute('marker-end')).toContain(
+      'rtraj-arrow',
+    )
+    // 전환 세그먼트마다 붙던 화살표 라인은 제거됐다.
+    expect(container.querySelectorAll('line.rtraj__seg')).toHaveLength(0)
   })
 
-  it('기간 탭(1년) 클릭 → months=12 로 재조회', async () => {
+  it('기간 탭(1년) 클릭 → months=12 로 재조회(기본은 2년)', async () => {
     render(<RegimeTrajectory />)
-    await waitFor(() => expect(fetchRegimeTrajectory).toHaveBeenCalledWith(36)) // 기본 3년
+    await waitFor(() => expect(fetchRegimeTrajectory).toHaveBeenCalledWith(24)) // 기본 2년(단순화)
     fireEvent.click(screen.getByRole('button', { name: '1년' }))
     await waitFor(() => expect(fetchRegimeTrajectory).toHaveBeenCalledWith(12))
   })

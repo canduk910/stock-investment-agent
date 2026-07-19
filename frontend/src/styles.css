@@ -3865,16 +3865,13 @@ body {
 .rtraj__axis--r {
   text-anchor: end;
 }
+/* 단순 경로 — 정차점을 잇는 회색 선 하나(끝점 주황 화살표). 깔끔하게 약간 더 진하게. */
 .rtraj__trail {
   stroke: var(--c-text-muted);
-  stroke-width: 0.9;
+  stroke-width: 1.1;
   stroke-linecap: round;
   stroke-linejoin: round;
-  opacity: 0.5;
-}
-.rtraj__seg {
-  stroke: var(--c-emph);
-  stroke-width: 0.9;
+  opacity: 0.7;
 }
 .rtraj__arrow {
   fill: var(--c-emph);

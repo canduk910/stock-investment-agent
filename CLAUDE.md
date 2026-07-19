@@ -32,6 +32,7 @@
 **변경 이력:**
 | 날짜 | 변경 내용 | 대상 | 사유 |
 |------|----------|------|------|
+| 2026-07-19 | **국면 이동 궤적 단순화 — 정차점 경로 + 끝점 화살표 하나**. 시황(시장 국면) 궤적이 36개 월별 점을 황금각 나선으로 흩고 전환마다 화살표를 붙여 **너무 복잡**했음(사용자 피드백) → **인접 동일 국면 월들을 하나의 정차점으로 접고**(`lib/regimeTrajectory.buildRegimePath` — dwell=머문 개월수, 셀 중심 좌표·오프셋 0) 셀 중심을 잇는 **깔끔한 폴리라인 하나** + **끝점 화살표 하나**(→현재)로 정리. 정차점은 과거 회색 흐림→현재 주황, 크기는 dwell 로 은은하게. per-transition 화살표(`.rtraj__seg`)·`buildTrajectory`/`offsetForVisit`/`trailOpacity` 폐기, 기본 기간 36→**24개월**. `regimeMarkerPos`(게이지 마커 SSOT)·판정 백엔드·면책·graceful 불변. TDD(lib buildRegimePath·컴포넌트 단일 화살표/seg 0). 프론트 348 green, build clean, 안전 grep 0. 실데이터 프리뷰(24·36개월 정차점 경로) | frontend/(lib/regimeTrajectory·RegimeTrajectory·styles·CLAUDE) + 테스트 | 사용자: 이동경로 화살표가 너무 복잡 → 단순화 |
 | 2026-07-05 | 초기 구성 (에이전트 5 + 스킬 5) | 전체 | - |
 | 2026-07-05 | 팀 도구 매핑 명시(Agent+SendMessage+Task*), KIS 미확정 함수 분리, 설명 질문 트리거 제외 | skills/invest-dev, skills/kis-data-pipeline | 정합성 감사 권고 반영 |
 | 2026-07-05 | TDD 원칙 내장: tdd-workflow 스킬 신설, 구현 에이전트 4명 TDD 원칙 추가, QA에 TDD 준수 검증(§3.5) 추가, 오케스트레이터 Red→Green→Refactor 강제 | skills/tdd-workflow(신규), agents/*, skills/invest-qa-checklist, skills/invest-dev, skills/quant-engine-rules | 사용자 요청: 구축 흐름에 TDD 적용 |

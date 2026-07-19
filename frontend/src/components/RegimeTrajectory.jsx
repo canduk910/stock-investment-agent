@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import { fetchRegimeTrajectory } from '../api.js'
 import { useFetch } from '../lib/useFetch.js'
-import { buildTrajectory } from '../lib/regimeTrajectory.js'
+import { buildRegimePath } from '../lib/regimeTrajectory.js'
 
-// 국면 이동 궤적(족적) — 같은 경기×심리 매트릭스 위에 최근 N개월 국면 이동을 트레일로 남긴다.
+// 국면 이동 궤적 — 같은 경기×심리 매트릭스 위에 최근 N개월 국면 이동을 **단순 경로**로 남긴다.
 // 판정(cs/ss/regime)은 백엔드 엔진이 결정적으로 재현(과거 지표 → judge_regime), 여기선 표시만.
-// 색: 과거=회색(저opacity)→현재=주황(--c-emph 강조), 화살표=전환/최근 방향 — 가격 방향색·경보색 금지.
+// 인접 동일 국면은 하나의 정차점으로 접어(dwell) 점·선을 최소화하고, 방향은 **끝점 화살표 하나**로.
+// 색: 과거=회색(흐림)→현재=주황(--c-emph 강조) — 가격 방향색·경보색 금지.
 // 자체 조회(환각 차단)·독립 실패 격리(궤적 실패해도 게이지 정상). 예측 아님·면책 고정.
 
-// 기간 옵션(개월) — 백엔드 clamp 1..60 과 정합. 기본 36(3년).
+// 기본 기간(개월) — 단순화로 기본을 2년으로(3년은 탭으로 선택). 백엔드 clamp 1..60 과 정합.
 const RANGES = [
   { months: 12, label: '1년' },
   { months: 24, label: '2년' },
@@ -20,13 +21,19 @@ function ym(date) {
   return typeof date === 'string' && date.length >= 7 ? date.slice(0, 7).replace('-', '.') : date
 }
 
+// 정차점 반지름 — 머문 개월수(dwell)로 은은하게(오래 머물수록 큼). 현재는 강조로 크게.
+function dotRadius(stop) {
+  if (stop.isLast) return 3.4
+  return 2 + Math.min(stop.dwell, 12) * 0.16 // 1개월 2.16 → 12개월+ 3.9
+}
+
 export default function RegimeTrajectory() {
-  const [months, setMonths] = useState(36)
+  const [months, setMonths] = useState(24)
   const { data, loading, error, reload } = useFetch(() => fetchRegimeTrajectory(months), [months])
 
   const raw = data?.points ?? []
-  const { points, pathD } = buildTrajectory(raw)
-  const current = points.length > 0 ? points[points.length - 1] : null
+  const { stops, pathD } = buildRegimePath(raw)
+  const current = stops.length > 0 ? stops[stops.length - 1] : null
   const fearGreedMissing = (data?.partial_failure ?? []).includes('fear_greed')
 
   return (
@@ -57,7 +64,7 @@ export default function RegimeTrajectory() {
             ↻ 재시도
           </button>
         </div>
-      ) : !data?.available || points.length === 0 ? (
+      ) : !data?.available || stops.length === 0 ? (
         <div className="rtraj__state">{data?.note || '표시할 국면 궤적이 없습니다.'}</div>
       ) : (
         <>
@@ -98,36 +105,25 @@ export default function RegimeTrajectory() {
             <text className="rtraj__axis rtraj__axis--l" x="2" y="51">공포</text>
             <text className="rtraj__axis rtraj__axis--r" x="98" y="51">탐욕</text>
 
-            {/* 연속 트레일(균일 회색 walk) */}
-            {pathD && <path className="rtraj__trail" d={pathD} fill="none" />}
+            {/* 단순 경로 — 정차점을 잇는 폴리라인 하나, 방향은 끝점 화살표 하나로(과밀 제거) */}
+            {pathD && (
+              <path
+                className="rtraj__trail"
+                d={pathD}
+                fill="none"
+                markerEnd="url(#rtraj-arrow)"
+              />
+            )}
 
-            {/* 방향 화살표 — 국면 전환·최근 세그먼트에만(과밀 방지) */}
-            {points.map((p, i) => {
-              if (i === 0) return null
-              if (!p.isTransition && !p.isLast) return null
-              const a = points[i - 1]
-              return (
-                <line
-                  key={`seg-${i}`}
-                  className="rtraj__seg"
-                  x1={a.x}
-                  y1={a.y}
-                  x2={p.x}
-                  y2={p.y}
-                  markerEnd="url(#rtraj-arrow)"
-                />
-              )
-            })}
-
-            {/* 월별 점 — 과거 회색(저opacity)→현재 주황 */}
-            {points.map((p, i) => (
+            {/* 정차점 — 과거 회색(흐림)→현재 주황, 크기는 머문 개월수(dwell)로 은은하게 */}
+            {stops.map((s, i) => (
               <circle
-                key={`dot-${i}`}
-                className={`rtraj__dot ${p.isLast ? 'rtraj__dot--current' : ''}`}
-                cx={p.x}
-                cy={p.y}
-                r={p.isLast ? 2.8 : 1.7}
-                opacity={p.opacity}
+                key={`stop-${i}`}
+                className={`rtraj__dot ${s.isLast ? 'rtraj__dot--current' : ''}`}
+                cx={s.x}
+                cy={s.y}
+                r={dotRadius(s)}
+                opacity={s.opacity}
               />
             ))}
 
@@ -139,7 +135,7 @@ export default function RegimeTrajectory() {
                 y={current.y - 4}
                 textAnchor={current.x > 70 ? 'end' : current.x < 30 ? 'start' : 'middle'}
               >
-                {ym(current.date)} · {current.regime}
+                {ym(current.endDate)} · {current.regime}
               </text>
             )}
           </svg>
@@ -151,7 +147,7 @@ export default function RegimeTrajectory() {
             <span className="rtraj__legend-item">
               <span className="rtraj__swatch rtraj__swatch--now" aria-hidden="true" /> 현재
             </span>
-            <span className="rtraj__legend-item">→ 국면 전환·최근</span>
+            <span className="rtraj__legend-item">→ 이동 방향</span>
             <span className="rtraj__legend-range">
               {ym(raw[0]?.date)} → {ym(raw[raw.length - 1]?.date)} · {data.months}개월
             </span>
