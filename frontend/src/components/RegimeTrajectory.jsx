@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import { fetchRegimeTrajectory } from '../api.js'
 import { useFetch } from '../lib/useFetch.js'
-import { buildRegimePath, regimeMarkerPos, stopLabelGroups } from '../lib/regimeTrajectory.js'
+import {
+  buildRegimePath,
+  regimeMarkerPos,
+  stopLabelGroups,
+  labelYearShades,
+} from '../lib/regimeTrajectory.js'
 
 // 시장 국면 사분면(통합) — 같은 경기×심리 매트릭스 하나에 **과거 이동 경로**(회색·단순 경로)와
 // **라이브 현재 판정**(주황 마커+활성 셀 음영)을 함께 담는다. 정적 판정 사분면을 흡수(중복 제거).
@@ -158,16 +163,17 @@ export default function RegimeTrajectory({ live = null }) {
             ))}
 
             {/* 정차점 월 라벨(시작월) — **같은 좌표(재방문 셀)는 한 라벨로 모아** ", " 로 잇는다(겹침 방지).
-                위/아래 절반 바깥 배치. 레거시 현재점(라이브 없음)은 별도 강조 라벨이라 그룹에서 제외. */}
-            {stopLabelGroups(labelSource).map(
+                위/아래 절반 바깥 배치. 레거시 현재점(라이브 없음)은 별도 강조 라벨이라 그룹에서 제외.
+                **년도별 밝기 그라데이션**: labelYearShades 가 준 shadeLevel(0=과거 옅게→3=최근 짙게)을
+                `--y{n}` 클래스로 매핑(색은 styles.css 토큰). opacity 페이드 대신 색 짙기로 시간 방향을 읽는다. */}
+            {labelYearShades(stopLabelGroups(labelSource)).map(
               (g, i) => (
                 <text
                   key={`lbl-${i}`}
-                  className="rtraj__stoplabel"
+                  className={`rtraj__stoplabel rtraj__stoplabel--y${g.shadeLevel}`}
                   x={g.x}
                   y={g.y < 50 ? g.y - 3.6 : g.y + 5.4}
                   textAnchor={g.x > 70 ? 'end' : g.x < 30 ? 'start' : 'middle'}
-                  opacity={g.opacity}
                 >
                   {g.startDates.map(ym).join(', ')}
                 </text>

@@ -114,6 +114,29 @@ describe('RegimeTrajectory', () => {
     expect(labels).toContain('24.02') // 수축은 단일
   })
 
+  it('년도별 밝기 그라데이션 — 과거 연도 라벨 옅게(--y0)·최근 연도 짙게(--y3) 클래스', async () => {
+    fetchRegimeTrajectory.mockResolvedValue({
+      months: 36, interval: 'monthly', available: true, partial_failure: [],
+      points: [
+        { date: '2024-05-01', cycle_score: 2, sentiment_score: 2, regime: '확장' },
+        { date: '2025-06-01', cycle_score: -2, sentiment_score: -2, regime: '수축' },
+        { date: '2026-01-01', cycle_score: 2, sentiment_score: 0, regime: '확장' },
+      ],
+    })
+    // live 중앙(0,0) — 세 정차점과 좌표 달라 모두 라벨 대상.
+    const live = { cs: 0, ss: 0, regime: '확장', cash: 60, confidence: 'high', cycleSign: '중립', sentimentSign: '중립' }
+    const { container } = render(<RegimeTrajectory live={live} />)
+    await waitFor(() => expect(container.querySelector('svg.rtraj__svg')).toBeTruthy())
+    const labels = [...container.querySelectorAll('text.rtraj__stoplabel')]
+    // 모든 라벨에 년도 밝기 레벨 클래스가 붙는다(색이 최근성을 전달).
+    expect(labels.every((t) => /rtraj__stoplabel--y[0-3]/.test(t.getAttribute('class')))).toBe(true)
+    // 가장 과거 연도(2024) = 옅게(y0), 가장 최근 연도(2026) = 짙게(y3).
+    const y2024 = labels.find((t) => t.textContent.includes('24.'))
+    const y2026 = labels.find((t) => t.textContent.includes('26.'))
+    expect(y2024.getAttribute('class')).toContain('--y0')
+    expect(y2026.getAttribute('class')).toContain('--y3')
+  })
+
   it('라이브 셀 == 마지막 확정월 셀(안정 국면)이면 그 월 라벨을 억제(콜아웃과 겹침 방지)', async () => {
     fetchRegimeTrajectory.mockResolvedValue({
       months: 24, interval: 'monthly', available: true, partial_failure: [],

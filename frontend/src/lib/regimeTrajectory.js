@@ -73,3 +73,31 @@ export function stopLabelGroups(stops) {
   }
   return [...byCoord.values()]
 }
+
+// 라벨 **년도별 그라데이션 레벨** — 시간 방향을 색 짙기로 읽게 한다(과거년도 옅게 → 최근년도 짙게).
+// 라벨 그룹에 대표 년도(그룹 내 가장 최근 startDate 의 연도 — 재방문 셀이 여러 해면 최근 해로, 그룹 opacity
+// 최댓값 관점과 동일)를 매기고, 그 화면에 등장한 **서로 다른 연도**를 오래→최근으로 정렬해 0..N-1 인덱스를
+// 4단계 밝기 램프(0=옅은 회색 muted → 3=짙은 남색 navy, styles.css `.rtraj__stoplabel--y0..y3`)에 매핑한다.
+// **판정 아님·표시만**: 색 토큰만 쓰고(방향색/경보색 금지), 같은 해 라벨은 같은 짙기가 되도록 연도 인덱스로만
+// 정한다(월별로 흩지 않음 = 사용자 요구 "년도별"). 단일 연도(대비 없음)·연도 불명은 레벨 0(현 회색 유지·무해).
+export const LABEL_SHADE_LEVELS = 4 // styles.css 의 --y0..--y3 과 SSOT (레벨 수 바뀌면 CSS 도 함께)
+
+export function labelYearShades(groups) {
+  const arr = Array.isArray(groups) ? groups : []
+  const yearOf = (g) => {
+    const dates = (g?.startDates ?? []).filter((d) => typeof d === 'string' && d.length >= 4)
+    if (dates.length === 0) return null
+    const latest = dates.reduce((a, b) => (b > a ? b : a)) // ISO 날짜 사전식 최대 = 가장 최근
+    return latest.slice(0, 4)
+  }
+  const withYear = arr.map((g) => ({ ...g, year: yearOf(g) }))
+  const years = [...new Set(withYear.map((g) => g.year).filter(Boolean))].sort()
+  const k = years.length
+  const idx = new Map(years.map((y, i) => [y, i]))
+  const maxLevel = LABEL_SHADE_LEVELS - 1
+  return withYear.map((g) => ({
+    ...g,
+    // k<=1(대비 없음) 또는 연도 불명 → 레벨 0(현 회색 유지). 그 외 오래(0)→최근(maxLevel) 균등 매핑.
+    shadeLevel: g.year == null || k <= 1 ? 0 : Math.round((idx.get(g.year) / (k - 1)) * maxLevel),
+  }))
+}

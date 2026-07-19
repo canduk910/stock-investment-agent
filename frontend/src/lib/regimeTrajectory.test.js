@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { regimeMarkerPos, buildRegimePath, stopLabelGroups } from './regimeTrajectory.js'
+import {
+  regimeMarkerPos,
+  buildRegimePath,
+  stopLabelGroups,
+  labelYearShades,
+  LABEL_SHADE_LEVELS,
+} from './regimeTrajectory.js'
 
 describe('regimeMarkerPos (RegimeGauge 마커와 동일 공식 SSOT)', () => {
   it('중립(0,0) = 정중앙(50,50)', () => {
@@ -97,5 +103,53 @@ describe('stopLabelGroups (재방문 좌표 라벨 병합 — 겹침 방지)', (
   it('빈 입력은 안전', () => {
     expect(stopLabelGroups([])).toEqual([])
     expect(stopLabelGroups(null)).toEqual([])
+  })
+})
+
+describe('labelYearShades (년도별 밝기 그라데이션 — 과거 옅게→최근 짙게)', () => {
+  const G = (year, month) => ({ x: 1, y: 1, startDates: [`${year}-${month}-01`] })
+  const maxLevel = LABEL_SHADE_LEVELS - 1
+
+  it('서로 다른 연도 → 오래=레벨0, 최근=최대레벨, 단조 증가', () => {
+    const out = labelYearShades([G('2024', '03'), G('2025', '06'), G('2026', '01')])
+    expect(out.map((g) => g.year)).toEqual(['2024', '2025', '2026'])
+    expect(out[0].shadeLevel).toBe(0) // 가장 과거 연도 = 가장 옅게
+    expect(out[2].shadeLevel).toBe(maxLevel) // 가장 최근 연도 = 가장 짙게
+    expect(out[0].shadeLevel).toBeLessThan(out[1].shadeLevel)
+    expect(out[1].shadeLevel).toBeLessThan(out[2].shadeLevel)
+  })
+
+  it('두 연도 → 옅음(0)·짙음(최대) 두 단계로 뚜렷', () => {
+    const out = labelYearShades([G('2025', '11'), G('2026', '02')])
+    expect(out[0].shadeLevel).toBe(0)
+    expect(out[1].shadeLevel).toBe(maxLevel)
+  })
+
+  it('같은 연도의 라벨은 같은 짙기(월별로 흩지 않음 = 년도별)', () => {
+    const out = labelYearShades([G('2025', '01'), G('2025', '09'), G('2026', '03')])
+    expect(out[0].shadeLevel).toBe(out[1].shadeLevel) // 2025 두 라벨 동일
+    expect(out[2].shadeLevel).toBeGreaterThan(out[0].shadeLevel) // 2026 은 더 짙게
+  })
+
+  it('단일 연도(대비 없음) → 전부 레벨0(현 회색 유지·무해)', () => {
+    const out = labelYearShades([G('2026', '01'), G('2026', '05')])
+    expect(out.every((g) => g.shadeLevel === 0)).toBe(true)
+  })
+
+  it('재방문 셀이 여러 해에 걸치면 대표 연도 = 가장 최근 해', () => {
+    const out = labelYearShades([
+      { x: 1, y: 1, startDates: ['2024-12-01', '2026-01-01'] }, // 재방문(24·26)
+      { x: 2, y: 2, startDates: ['2025-06-01'] },
+    ])
+    expect(out[0].year).toBe('2026') // 최근 해로 대표
+    expect(out[0].shadeLevel).toBe(maxLevel) // 2026 = 최근 → 최대 짙기
+  })
+
+  it('연도 불명(잘못된 날짜)·빈 입력은 graceful', () => {
+    expect(labelYearShades([])).toEqual([])
+    expect(labelYearShades(null)).toEqual([])
+    const bad = labelYearShades([{ x: 1, y: 1, startDates: [] }])
+    expect(bad[0].year).toBeNull()
+    expect(bad[0].shadeLevel).toBe(0) // 불명 → 옅게(무해)
   })
 })
