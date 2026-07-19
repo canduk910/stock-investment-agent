@@ -359,3 +359,129 @@ def test_macro_regime_passes_vix_panic_flag_through(monkeypatch):
     assert "override" not in body
     assert body["key_drivers"] == [["변동성 급등", "심리", "공포"]]
     assert body["indicators_used"] == {"vix": 40.0}
+
+
+# ── GET /api/macro/regime/history (국면 이동 궤적) ─────────────────────────────
+
+# 월별 지표(2개월): 1월 전지표 양호/탐욕 → 확장, 2월 전지표 악화/공포 → 수축.
+_FRED_HISTORY = {
+    "T10Y2Y": [{"date": "2024-01-01", "value": 0.6}, {"date": "2024-02-01", "value": -0.2}],
+    "BAMLH0A0HYM2": [{"date": "2024-01-01", "value": 2.5}, {"date": "2024-02-01", "value": 6.0}],
+    "VIXCLS": [{"date": "2024-01-01", "value": 12.0}, {"date": "2024-02-01", "value": 30.0}],
+}
+
+
+def _fake_fred_hist(series_id, api_key, months=12):
+    return _FRED_HISTORY[series_id]
+
+
+def _fake_fg_hist(months=12):
+    return [{"date": "2024-01-01", "value": 80.0}, {"date": "2024-02-01", "value": 20.0}]
+
+
+def test_regime_history_reconstructs_monthly_trajectory(monkeypatch):
+    # 판정은 실제 엔진(judge_regime)으로 재현 — 월별 (cycle,sentiment,regime) 정확·시간 오름차순.
+    monkeypatch.setattr(main, "fetch_fred_series_history", _fake_fred_hist)
+    monkeypatch.setattr(main, "fetch_fear_greed_history", _fake_fg_hist)
+    client = _client(monkeypatch)
+
+    body = client.get("/api/macro/regime/history?months=12").json()
+    assert body["available"] is True and body["interval"] == "monthly" and body["months"] == 12
+    assert body["partial_failure"] == []
+    pts = body["points"]
+    assert [p["date"] for p in pts] == ["2024-01-01", "2024-02-01"]
+    assert (pts[0]["cycle_score"], pts[0]["sentiment_score"], pts[0]["regime"]) == (2, 2, "확장")
+    assert pts[0]["recommended_cash_ratio"] == 60
+    assert (pts[1]["cycle_score"], pts[1]["sentiment_score"], pts[1]["regime"]) == (-2, -2, "수축")
+
+
+def test_regime_history_clamps_months_forwarded_to_collectors(monkeypatch):
+    seen = []
+    monkeypatch.setattr(
+        main, "fetch_fred_series_history",
+        lambda series_id, api_key, months=12: seen.append(months) or [{"date": "2024-01-01", "value": 0.6}],
+    )
+    fg_seen = []
+    monkeypatch.setattr(main, "fetch_fear_greed_history", lambda months=12: fg_seen.append(months) or None)
+    client = _client(monkeypatch)
+    b999 = client.get("/api/macro/regime/history?months=999").json()  # → 60 클램프
+    b0 = client.get("/api/macro/regime/history?months=0").json()      # → 1 클램프
+    # (1) FRED·(2) fear_greed 둘 다 클램프된 months 를 받고 (3) 응답 months 도 클램프 반영.
+    assert 60 in seen and 1 in seen and max(seen) == 60
+    assert 60 in fg_seen and 1 in fg_seen  # fear_greed 도 동일 클램프 전달
+    assert b999["months"] == 60 and b0["months"] == 1
+
+
+def test_regime_history_partial_when_fear_greed_missing(monkeypatch):
+    # 공포탐욕(CNN) 결측이어도 심리축은 VIX 로 판정 → 궤적 유지, partial_failure 에 fear_greed 만.
+    monkeypatch.setattr(main, "fetch_fred_series_history", _fake_fred_hist)
+    monkeypatch.setattr(main, "fetch_fear_greed_history", lambda months=12: None)
+    client = _client(monkeypatch)
+
+    body = client.get("/api/macro/regime/history?months=12").json()
+    assert body["available"] is True
+    assert body["partial_failure"] == ["fear_greed"]
+    # 1월 심리축은 VIX(12<14) 단독 → +1(fear_greed 없이도).
+    assert body["points"][0]["sentiment_score"] == 1
+    assert "fear_greed" in body["points"][0]["missing_indicators"]
+
+
+def test_regime_history_all_fail_is_graceful(monkeypatch):
+    monkeypatch.setattr(main, "fetch_fred_series_history", lambda series_id, api_key, months=12: None)
+    monkeypatch.setattr(main, "fetch_fear_greed_history", lambda months=12: None)
+    client = _client(monkeypatch)
+
+    resp = client.get("/api/macro/regime/history")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["available"] is False and body["points"] == []
+    assert "note" in body
+    assert set(body["partial_failure"]) == {"yield_spread", "hy_spread", "vix", "fear_greed"}
+
+
+def test_regime_history_caches_available(monkeypatch):
+    calls = {"fred": 0}
+
+    def counting_fred(series_id, api_key, months=12):
+        calls["fred"] += 1
+        return _FRED_HISTORY[series_id]
+
+    monkeypatch.setattr(main, "fetch_fred_series_history", counting_fred)
+    monkeypatch.setattr(main, "fetch_fear_greed_history", _fake_fg_hist)
+    client = _client(monkeypatch)
+    client.get("/api/macro/regime/history?months=12")
+    client.get("/api/macro/regime/history?months=12")  # 캐시 히트
+    assert calls["fred"] == 3  # 3 FRED 시계열 1회씩(두 번째 요청은 캐시)
+
+
+def test_regime_history_excludes_current_in_progress_month(monkeypatch):
+    # 진행 중 당월(부분 데이터)은 결정적으로 제외 — 라우트가 KST 당월을 빌더에 넘긴다.
+    monkeypatch.setattr(main, "_current_month_kst", lambda: "2024-02")
+    monkeypatch.setattr(main, "fetch_fred_series_history", _fake_fred_hist)  # 2024-01·02
+    monkeypatch.setattr(main, "fetch_fear_greed_history", _fake_fg_hist)
+    client = _client(monkeypatch)
+    body = client.get("/api/macro/regime/history?months=12").json()
+    assert [p["date"] for p in body["points"]] == ["2024-01-01"]  # 당월(2024-02) 제외
+
+
+def test_regime_history_clean_collection_but_empty_is_graceful_and_uncached(monkeypatch):
+    # 4지표 모두 수집 성공(partial_failure=[])이나 서로 다른 달만 커버 → 어느 달도 양축 동시 충족 못 함
+    #   → available:false + note, 미저장(재요청 시 재수집). all-fail(partial_failure 가득) 과 구분되는 분기.
+    calls = {"n": 0}
+
+    def disjoint_fred(series_id, api_key, months=12):
+        calls["n"] += 1
+        if series_id == "VIXCLS":
+            return [{"date": "2020-02-01", "value": 30.0}]  # 심리(vix)만, 2월
+        return [{"date": "2020-01-01", "value": 0.6}]  # 경기(yield/hy), 1월
+
+    monkeypatch.setattr(main, "fetch_fred_series_history", disjoint_fred)
+    monkeypatch.setattr(main, "fetch_fear_greed_history", lambda months=12: [{"date": "2020-03-01", "value": 50.0}])
+    client = _client(monkeypatch)
+    body = client.get("/api/macro/regime/history?months=12").json()
+    assert body["available"] is False and body["points"] == []
+    assert body["partial_failure"] == []  # 수집은 전부 성공(빈 궤적은 정합 실패 탓)
+    assert "note" in body
+    before = calls["n"]
+    client.get("/api/macro/regime/history?months=12")  # 미저장 → 재수집
+    assert calls["n"] > before

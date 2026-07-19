@@ -1,6 +1,8 @@
 import { fetchMacroRegime } from '../api.js'
 import { useFetch } from '../lib/useFetch.js'
+import { regimeMarkerPos } from '../lib/regimeTrajectory.js'
 import MacroIndicatorCards from './MacroIndicatorCards.jsx'
+import RegimeTrajectory from './RegimeTrajectory.jsx'
 
 // 2×2 사분면 셀 — 세로축 경기(위 양호/아래 악화) · 가로축 심리(좌 공포/우 탐욕).
 // 배치: 회복=좌상, 확장=우상, 수축=좌하, 과열=우하.
@@ -71,12 +73,11 @@ export default function RegimeGauge() {
   const sentimentSign = axes?.sentiment?.sign ?? '중립'
   const missingLabels = missing_indicators.map((k) => ENGINE_KEY_LABEL[k] ?? k)
 
-  // 사분면 위 실제 위치 마커 — 축 점수(-2..+2)를 평면 좌표로. 중립(0)이면 정중앙.
-  // x: 심리(좌 공포 → 우 탐욕), y: 경기(위 양호 → 아래 악화). 셀 밖으로 안 나가게 12~88%.
+  // 사분면 위 실제 위치 마커 — 축 점수(-2..+2)를 평면 좌표로(중립=정중앙). 좌표 변환은
+  // lib/regimeTrajectory.regimeMarkerPos 단일 출처(궤적 트레일과 동일 공식 — 어긋남 방지).
   const cycleScore = axes?.cycle?.score ?? 0
   const sentimentScore = axes?.sentiment?.score ?? 0
-  const markerX = 12 + ((sentimentScore + 2) / 4) * 76
-  const markerY = 12 + ((2 - cycleScore) / 4) * 76
+  const { x: markerX, y: markerY } = regimeMarkerPos(cycleScore, sentimentScore)
 
   // ⑤ 손실경고 — 수축(급락장 매수 제안) 또는 VIX 패닉이면 남색 강조 배너.
   const showLossWarning = regime === '수축' || vix_panic === true
@@ -155,6 +156,9 @@ export default function RegimeGauge() {
         <strong className="regime-desc__name">{regime}</strong>
         {REGIME_DESC[regime] ? ` · ${REGIME_DESC[regime]}` : ''}
       </p>
+
+      {/* 국면 이동 궤적 — 같은 매트릭스 위에 최근 N개월 족적(자체 조회·독립 실패 격리) */}
+      <RegimeTrajectory />
 
       <div className="gauge__body">
         {/* ② 권장 현금비중 큰 숫자 — 역발상 값 자동 반영(엔진 REGIME_PARAMS 단일 출처) */}

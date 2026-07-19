@@ -34,6 +34,17 @@ export async function fetchMacroIndicatorHistory(key, months = 12) {
   return res.json()
 }
 
+// 국면 이동 궤적(족적) — 최근 N개월 월별 국면 판정을 엔진으로 재현. GET /api/macro/regime/history?months=
+// → {months, interval:"monthly", points:[{date, cycle_score, sentiment_score, regime,
+//    recommended_cash_ratio, vix_panic, missing_indicators}], available, partial_failure, note?}.
+// 항상 200 graceful — 불가/실패는 available:false + note(공포탐욕 결측이어도 심리축은 VIX 로 판정).
+// 판정은 코드(엔진 결정적 재현)이지 예측이 아니다.
+export async function fetchRegimeTrajectory(months = 36) {
+  const res = await fetch(`/api/macro/regime/history?months=${months}`)
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
 // 종목 종합리포트 번들(W08). GET /api/detail/{ticker}/bundle 을 1회 호출한다(N+1 금지).
 // 응답 계약(계획 "번들 계약"): {ticker, basic|null, valuation|null, financials|null, chart|null,
 //   summary|null, forward_valuation|null, indicator_config:{ma_period,rsi_period}, partial_failure:[]}.

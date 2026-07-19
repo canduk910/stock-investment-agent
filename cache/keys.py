@@ -20,6 +20,15 @@ def macro_history_key(indicator: str, months: int) -> str:
     return f"macro:history:{indicator}:{months}m"
 
 
+def regime_history_key(months: int) -> str:
+    """국면 이동 궤적(월별 판정 재현) 캐시 키.
+
+    지표 히스토리와 동일하게 **확정 과거값**이라 캐시 가능(`macro:history:` 프리픽스로 policy 통과).
+    지표 단위(macro_history_key)와 구분해 `regime` 슬롯을 쓴다. 불가/실패 응답은 라우트가 미저장.
+    """
+    return f"macro:history:regime:{months}m"
+
+
 def stock_meta_key(ticker: str) -> str:
     return f"stock:meta:{ticker}"
 

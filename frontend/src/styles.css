@@ -3711,3 +3711,156 @@ body {
 .admin__retry {
   margin-left: 8px;
 }
+
+/* ── 국면 이동 궤적(족적) — 경기×심리 매트릭스 위 월별 트레일. 색: 과거 회색·현재 주황·화살표 주황. ── */
+.rtraj {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--c-hairline);
+}
+.rtraj__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.rtraj__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--c-text);
+  margin: 0;
+}
+.rtraj__range {
+  display: inline-flex;
+  gap: 4px;
+}
+.rtraj__range-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--c-surface);
+  color: var(--c-text-secondary);
+  cursor: pointer;
+}
+.rtraj__range-btn[aria-pressed='true'] {
+  background: var(--c-navy);
+  border-color: var(--c-navy);
+  color: var(--c-white);
+}
+.rtraj__svg {
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
+  display: block;
+  aspect-ratio: 1 / 1;
+}
+.rtraj__frame {
+  fill: var(--c-surface-2);
+  stroke: var(--c-border);
+  stroke-width: 0.5;
+}
+.rtraj__cross {
+  stroke: var(--c-border-strong);
+  stroke-width: 0.5;
+  stroke-dasharray: 2 2;
+}
+.rtraj__cell {
+  fill: var(--c-text-muted);
+  font-size: 4px;
+  font-weight: 700;
+  text-anchor: middle;
+  opacity: 0.55;
+}
+.rtraj__axis {
+  fill: var(--c-text-muted);
+  font-size: 3.4px;
+  font-weight: 600;
+  text-anchor: middle;
+}
+.rtraj__axis--l {
+  text-anchor: start;
+}
+.rtraj__axis--r {
+  text-anchor: end;
+}
+.rtraj__trail {
+  stroke: var(--c-text-muted);
+  stroke-width: 0.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.5;
+}
+.rtraj__seg {
+  stroke: var(--c-emph);
+  stroke-width: 0.9;
+}
+.rtraj__arrow {
+  fill: var(--c-emph);
+}
+.rtraj__dot {
+  fill: var(--c-flat);
+}
+.rtraj__dot--current {
+  fill: var(--c-emph);
+  stroke: var(--c-white);
+  stroke-width: 0.9;
+}
+.rtraj__label {
+  fill: var(--c-emph-strong);
+  font-size: 3.6px;
+  font-weight: 700;
+}
+.rtraj__legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: 11px;
+  color: var(--c-text-secondary);
+  margin: 8px 0 0;
+}
+.rtraj__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.rtraj__swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.rtraj__swatch--past {
+  background: var(--c-flat);
+}
+.rtraj__swatch--now {
+  background: var(--c-emph);
+}
+.rtraj__legend-range {
+  margin-left: auto;
+  color: var(--c-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.rtraj__note {
+  font-size: 11px;
+  color: var(--c-text-muted);
+  margin: 6px 0 0;
+}
+.rtraj__disc {
+  font-size: 10.5px;
+  color: var(--c-text-faint);
+  margin: 6px 0 0;
+  line-height: 1.4;
+}
+.rtraj__state {
+  padding: 18px 8px;
+  text-align: center;
+  color: var(--c-text-secondary);
+  font-size: 13px;
+}
+.rtraj__retry {
+  margin-left: 8px;
+}

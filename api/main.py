@@ -7,20 +7,23 @@
 """
 from __future__ import annotations
 
+import datetime as _dt
 import logging
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.deps import map_engine_input  # 국면 4지표 매핑 SSOT(IMP-06) — detail/report 경로와 공유
-from cache.keys import macro_history_key
+from cache.keys import macro_history_key, regime_history_key
 from cache.local import LocalCache
 from cache.policy import cache_if_clean
 from collectors.fear_greed import fetch_fear_greed_history
 from collectors.fred import fetch_fred_series_history
 from collectors.macro_snapshot import collect_macro_indicators
 from infra.config import fred_api_key
+from infra.parallel import fetch_parallel
 from macro.engine import indicator_meta, judge_regime, regime_breakdown
+from macro.regime_history import build_trajectory
 
 _log = logging.getLogger(__name__)
 
@@ -220,6 +223,65 @@ def macro_indicator_history(key: str, months: int = 12) -> dict:
     }
     if not available:
         result["note"] = "이 지표는 히스토리를 제공하지 못했습니다(현재값만 참고하세요)."
+    else:
+        cache_if_clean(_MACRO_HISTORY_CACHE, cache_key, result, MACRO_HISTORY_TTL_SECONDS)
+    return result
+
+
+# 국면 이동 궤적 — 4지표 엔진 키(경기→심리 순, partial_failure 정렬용 SSOT).
+_REGIME_ENGINE_KEYS = [*_HISTORY_FRED_SERIES, "fear_greed"]  # yield_spread, hy_spread, vix, fear_greed
+_REGIME_TRAJECTORY_MAX_MONTHS = 60
+_KST = _dt.timezone(_dt.timedelta(hours=9))  # 진행 중 당월 판정 기준(앱 KST 관습과 일치)
+
+
+def _current_month_kst() -> str:
+    """오늘(KST) 'YYYY-MM' — 진행 중 당월(부분 데이터) 제외 기준. 라우트가 빌더에 넘긴다(빌더는 순수)."""
+    return _dt.datetime.now(_KST).strftime("%Y-%m")
+
+
+@app.get("/api/macro/regime/history")
+def macro_regime_history(months: int = 36) -> dict:
+    """최근 N개월 **국면 이동 궤적**(경기×심리 매트릭스 족적) — 월별 지표를 판정 엔진에 재현.
+
+    FRED 3지표(yield_spread/hy_spread/vix)의 월단위 히스토리 + 공포탐욕(CNN best-effort)을 **병렬**
+    수집 → `macro.regime_history.build_trajectory` 가 월별로 `judge_regime` 을 돌려 (cycle_score,
+    sentiment_score, regime, ...) 점을 만든다. **판정은 코드(엔진)·결정적**(과거 지표 재현), LLM 미개입.
+    확정 과거값이라 캐시(`macro:history:regime:`, TTL 1일; 불가/실패는 미저장). **항상 200 graceful**.
+    지표별 수집 실패는 그 지표만 제외(공포탐욕 결측이어도 심리축은 VIX 로 판정 → 궤적 유지).
+
+    반환: {months, interval:"monthly", points:[{date, cycle_score, sentiment_score, regime,
+    recommended_cash_ratio, vix_panic, missing_indicators}], available, partial_failure, note?}.
+    """
+    months = max(1, min(months, _REGIME_TRAJECTORY_MAX_MONTHS))
+
+    cache_key = regime_history_key(months)
+    cached = _MACRO_HISTORY_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    # 4지표 월 시계열 병렬 수집 — 각 job 실패(예외/타임아웃)는 그 지표만 None(fetch_parallel graceful).
+    jobs = {
+        key: (lambda sid=sid: fetch_fred_series_history(sid, fred_api_key(), months=months))
+        for key, sid in _HISTORY_FRED_SERIES.items()
+    }
+    jobs["fear_greed"] = lambda: fetch_fear_greed_history(months=months)
+    results, _failed = fetch_parallel(jobs, max_workers=4, timeout=20.0)
+
+    series_by_key = {k: v for k, v in results.items() if v}  # None·빈 시계열 제외
+    partial_failure = [k for k in _REGIME_ENGINE_KEYS if k not in series_by_key]
+
+    # 진행 중 당월(FRED 부분월 평균)은 결정적으로 제외 — 확정 과거값만 궤적/캐시에 남긴다.
+    points = build_trajectory(series_by_key, exclude_month=_current_month_kst())  # 순수·결정적(엔진 재현)
+    available = bool(points)
+    result = {
+        "months": months,
+        "interval": "monthly",
+        "points": points,
+        "available": available,
+        "partial_failure": partial_failure,
+    }
+    if not available:
+        result["note"] = "국면 궤적을 불러오지 못했습니다(지표 히스토리 조회 실패)."
     else:
         cache_if_clean(_MACRO_HISTORY_CACHE, cache_key, result, MACRO_HISTORY_TTL_SECONDS)
     return result
