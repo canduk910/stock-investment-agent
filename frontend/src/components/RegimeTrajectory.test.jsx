@@ -24,14 +24,21 @@ beforeEach(() => {
 })
 
 describe('RegimeTrajectory', () => {
-  it('매트릭스 트레일 렌더 — 점 N개·연결선·현재 주황 점·현재 라벨', async () => {
+  it('매트릭스 트레일 렌더 — 정차점 N개(균일)·연결선·현재 주황·정차점 월 라벨', async () => {
     const { container } = render(<RegimeTrajectory />)
     await waitFor(() => expect(container.querySelector('svg.rtraj__svg')).toBeTruthy())
-    expect(container.querySelectorAll('circle.rtraj__dot')).toHaveLength(3)
+    const dots = container.querySelectorAll('circle.rtraj__dot')
+    expect(dots).toHaveLength(3)
+    // 크기 균일 — 모든 정차점 반지름이 동일(크기로 구분하지 않음).
+    const radii = [...dots].map((d) => d.getAttribute('r'))
+    expect(new Set(radii).size).toBe(1)
     expect(container.querySelector('circle.rtraj__dot--current')).toBeTruthy()
     expect(container.querySelector('path.rtraj__trail')).toBeTruthy()
-    // 현재 지점 라벨(월·국면).
-    expect(screen.getByText(/2024\.03 · 수축/)).toBeInTheDocument()
+    // 각 과거 정차점에 시작월 라벨(현재는 별도 강조 라벨).
+    const stopLabels = [...container.querySelectorAll('text.rtraj__stoplabel')].map((t) => t.textContent)
+    expect(stopLabels).toEqual(['24.01', '24.02'])
+    // 현재 지점 강조 라벨(월·국면).
+    expect(screen.getByText(/24\.03 · 수축/)).toBeInTheDocument()
     // 면책 상시.
     expect(screen.getByText(/미래 예측이 아닙니다/)).toBeInTheDocument()
   })

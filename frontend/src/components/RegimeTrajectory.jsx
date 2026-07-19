@@ -16,16 +16,13 @@ const RANGES = [
   { months: 36, label: '3년' },
 ]
 
-// "2024-01-01" → "2024.01"(캡션용). 잘못된 값은 원문 그대로(graceful).
+// "2024-01-01" → "24.01"(컴팩트 라벨용). 잘못된 값은 원문 그대로(graceful).
 function ym(date) {
-  return typeof date === 'string' && date.length >= 7 ? date.slice(0, 7).replace('-', '.') : date
+  return typeof date === 'string' && date.length >= 7 ? date.slice(2, 7).replace('-', '.') : date
 }
 
-// 정차점 반지름 — 머문 개월수(dwell)로 은은하게(오래 머물수록 큼). 현재는 강조로 크게.
-function dotRadius(stop) {
-  if (stop.isLast) return 3.4
-  return 2 + Math.min(stop.dwell, 12) * 0.16 // 1개월 2.16 → 12개월+ 3.9
-}
+// 정차점 반지름 — **균일**(크기로 구분하지 않는다). 현재는 색(주황)+흰 링으로만 구분(크기 동일).
+const STOP_R = 2.6
 
 export default function RegimeTrajectory() {
   const [months, setMonths] = useState(24)
@@ -115,24 +112,41 @@ export default function RegimeTrajectory() {
               />
             )}
 
-            {/* 정차점 — 과거 회색(흐림)→현재 주황, 크기는 머문 개월수(dwell)로 은은하게 */}
+            {/* 정차점 — 균일 크기(과거 회색 흐림→현재 주황+흰 링). 크기로 구분하지 않는다. */}
             {stops.map((s, i) => (
               <circle
                 key={`stop-${i}`}
                 className={`rtraj__dot ${s.isLast ? 'rtraj__dot--current' : ''}`}
                 cx={s.x}
                 cy={s.y}
-                r={dotRadius(s)}
+                r={STOP_R}
                 opacity={s.opacity}
               />
             ))}
 
-            {/* 현재 지점 라벨(월·국면) */}
+            {/* 정차점 월 라벨 — 각 국면에 '언제' 들어갔는지(시작월). 위/아래 절반에 따라 바깥으로 배치해 겹침↓.
+                현재 정차점은 아래 강조 라벨(월·국면)로 별도 표기. */}
+            {stops.map((s, i) =>
+              s.isLast ? null : (
+                <text
+                  key={`lbl-${i}`}
+                  className="rtraj__stoplabel"
+                  x={s.x}
+                  y={s.y < 50 ? s.y - 3.6 : s.y + 5.4}
+                  textAnchor={s.x > 70 ? 'end' : s.x < 30 ? 'start' : 'middle'}
+                  opacity={s.opacity}
+                >
+                  {ym(s.startDate)}
+                </text>
+              ),
+            )}
+
+            {/* 현재 지점 강조 라벨(월·국면) */}
             {current && (
               <text
                 className="rtraj__label"
                 x={current.x}
-                y={current.y - 4}
+                y={current.y < 50 ? current.y - 4 : current.y + 6}
                 textAnchor={current.x > 70 ? 'end' : current.x < 30 ? 'start' : 'middle'}
               >
                 {ym(current.endDate)} · {current.regime}

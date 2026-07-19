@@ -3889,6 +3889,13 @@ body {
   font-size: 3.6px;
   font-weight: 700;
 }
+/* 정차점 월 라벨(각 국면 시작월) — 회색 소형. 방향색 아님. */
+.rtraj__stoplabel {
+  fill: var(--c-text-muted);
+  font-size: 2.9px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
 .rtraj__legend {
   display: flex;
   flex-wrap: wrap;
