@@ -154,6 +154,26 @@ describe('RegimeTrajectory', () => {
     await waitFor(() => expect(screen.getByText(/분기별/)).toBeInTheDocument())
   })
 
+  it('최상단 표본 라벨은 경기 양호 축 구역(상단 여백)으로 안 올라간다(겹침 방지·점 아래로 뒤집힘)', async () => {
+    fetchRegimeTrajectory.mockResolvedValue({
+      months: 12, interval: 'quarterly', available: true, partial_failure: [],
+      points: [
+        { date: '2024-03-01', cycle_score: 2, sentiment_score: 0, regime: '확장' }, // 최상단 y=12
+        { date: '2024-06-01', cycle_score: -2, sentiment_score: -2, regime: '수축' },
+      ],
+    })
+    const live = { cs: 0, ss: 0, regime: '확장', cash: 60, confidence: 'high', cycleSign: '중립', sentimentSign: '중립' }
+    const { container } = render(<RegimeTrajectory live={live} />)
+    await waitFor(() => expect(container.querySelector('svg.rtraj__svg')).toBeTruthy())
+    const labelEls = [...container.querySelectorAll('text.rtraj__stoplabel')]
+    const ys = labelEls.map((t) => parseFloat(t.getAttribute('y')))
+    // 축 pole 라벨(경기 양호 y=5)과 겹치지 않게 라벨은 프레임 안쪽(y>10)에 머문다.
+    expect(Math.min(...ys)).toBeGreaterThan(10)
+    // 최상단 표본(y=12) 라벨은 점 아래로 뒤집힘(>12).
+    const top = labelEls.find((t) => t.textContent === '24.03')
+    expect(parseFloat(top.getAttribute('y'))).toBeGreaterThan(12)
+  })
+
   it('라이브 셀 == 마지막 확정월 셀(안정 국면)이면 그 월 라벨을 억제(콜아웃과 겹침 방지)', async () => {
     fetchRegimeTrajectory.mockResolvedValue({
       months: 24, interval: 'monthly', available: true, partial_failure: [],

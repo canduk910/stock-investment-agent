@@ -88,6 +88,15 @@ export function buildSampledTrajectory(rawPoints, livePos = null) {
 // 4단계 밝기 램프(0=옅은 회색 muted → 3=짙은 남색 navy, styles.css `.rtraj__stoplabel--y0..y3`)에 매핑한다.
 // **판정 아님·표시만**: 색 토큰만 쓰고(방향색/경보색 금지), 같은 해 라벨은 같은 짙기가 되도록 연도 인덱스로만
 // 정한다(월별로 흩지 않음 = 사용자 요구 "년도별"). 단일 연도(대비 없음)·연도 불명은 레벨 0(현 회색 유지·무해).
+// 라벨 세로 위치 — 점 위/아래 바깥에 두되, **매트릭스 상/하단(축 pole 라벨 '경기 양호'·'경기 악화' 구역)과
+// 겹치지 않게** 가장자리에서는 안쪽으로 뒤집는다. y<20(상단 경기 양호 근처)→점 아래(down)·y>80(하단
+// 경기 악화 근처)→점 위(up)·그 외는 위/아래 절반 규칙. up/down 은 라벨 종류별 여백(px, viewBox 0..100).
+export function placeLabelY(y, up, down) {
+  if (y < 20) return y + down // 상단 → 아래로(경기 양호 pole 회피)
+  if (y > 80) return y - up // 하단 → 위로(경기 악화 pole 회피)
+  return y < 50 ? y - up : y + down
+}
+
 export const LABEL_SHADE_LEVELS = 4 // styles.css 의 --y0..--y3 과 SSOT (레벨 수 바뀌면 CSS 도 함께)
 
 export function labelYearShades(groups) {

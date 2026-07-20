@@ -5,6 +5,7 @@ import {
   buildSampledTrajectory,
   regimeMarkerPos,
   labelYearShades,
+  placeLabelY,
 } from '../lib/regimeTrajectory.js'
 
 // 시장 국면 사분면(통합) — 같은 경기×심리 매트릭스 하나에 **표본별 개별 이동 점**(회색)과 **라이브 현재
@@ -180,7 +181,7 @@ export default function RegimeTrajectory({ live = null }) {
                 key={`lbl-${i}`}
                 className={`rtraj__stoplabel rtraj__stoplabel--y${nd.shadeLevel}`}
                 x={nd.x}
-                y={nd.y < 50 ? nd.y - 3.6 : nd.y + 5.4}
+                y={placeLabelY(nd.y, 3.6, 5.4)}
                 textAnchor={nd.x > 70 ? 'end' : nd.x < 30 ? 'start' : 'middle'}
               >
                 {ym(nd.date)}
@@ -192,7 +193,7 @@ export default function RegimeTrajectory({ live = null }) {
               <text
                 className="rtraj__label"
                 x={legacyCurrent.x}
-                y={legacyCurrent.y < 50 ? legacyCurrent.y - 4 : legacyCurrent.y + 6}
+                y={placeLabelY(legacyCurrent.y, 4, 6)}
                 textAnchor={
                   legacyCurrent.x > 70 ? 'end' : legacyCurrent.x < 30 ? 'start' : 'middle'
                 }
@@ -220,7 +221,7 @@ export default function RegimeTrajectory({ live = null }) {
                 <text
                   className="rtraj__live-label"
                   x={livePos.x}
-                  y={livePos.y < 50 ? livePos.y - 4.4 : livePos.y + 6.6}
+                  y={placeLabelY(livePos.y, 4.4, 6.6)}
                   textAnchor={livePos.x > 70 ? 'end' : livePos.x < 30 ? 'start' : 'middle'}
                 >
                   현재 · {live.regime}

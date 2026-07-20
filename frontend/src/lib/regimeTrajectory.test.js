@@ -3,6 +3,7 @@ import {
   regimeMarkerPos,
   buildSampledTrajectory,
   labelYearShades,
+  placeLabelY,
   LABEL_SHADE_LEVELS,
 } from './regimeTrajectory.js'
 
@@ -91,6 +92,21 @@ describe('buildSampledTrajectory (표본별 개별 노드 — 같은 칸 반복 
     const empty = { nodes: [], visible: [], pathD: '', deferLast: false }
     expect(buildSampledTrajectory([])).toEqual(empty)
     expect(buildSampledTrajectory(null)).toEqual(empty)
+  })
+})
+
+describe('placeLabelY (라벨 세로 위치 — 상/하단 pole 라벨 회피 뒤집기)', () => {
+  it('상단 점(경기 양호 근처, y<20)은 라벨을 점 아래로(축 pole 라벨 회피)', () => {
+    expect(placeLabelY(12, 3.6, 5.4)).toBeCloseTo(17.4, 5) // 위(8.4)가 아니라 아래
+    expect(placeLabelY(12, 3.6, 5.4)).toBeGreaterThan(12) // 점보다 아래
+  })
+  it('하단 점(경기 악화 근처, y>80)은 라벨을 점 위로', () => {
+    expect(placeLabelY(88, 3.6, 5.4)).toBeCloseTo(84.4, 5)
+    expect(placeLabelY(88, 3.6, 5.4)).toBeLessThan(88)
+  })
+  it('중간대는 위/아래 절반 규칙 유지(상단 절반=위·하단 절반=아래)', () => {
+    expect(placeLabelY(31, 3.6, 5.4)).toBeCloseTo(27.4, 5) // 상단 절반 → 위
+    expect(placeLabelY(60, 3.6, 5.4)).toBeCloseTo(65.4, 5) // 하단 절반 → 아래
   })
 })
 
