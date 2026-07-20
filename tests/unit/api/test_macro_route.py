@@ -386,13 +386,35 @@ def test_regime_history_reconstructs_monthly_trajectory(monkeypatch):
     client = _client(monkeypatch)
 
     body = client.get("/api/macro/regime/history?months=12").json()
-    assert body["available"] is True and body["interval"] == "monthly" and body["months"] == 12
+    # months=12 → 분기 간격(step 3). 2개월 픽스처는 2점 이하라 표본화 안 함(월별 유지).
+    assert body["available"] is True and body["months"] == 12
+    assert body["interval"] == "quarterly" and body["step_months"] == 3
     assert body["partial_failure"] == []
     pts = body["points"]
     assert [p["date"] for p in pts] == ["2024-01-01", "2024-02-01"]
     assert (pts[0]["cycle_score"], pts[0]["sentiment_score"], pts[0]["regime"]) == (2, 2, "확장")
     assert pts[0]["recommended_cash_ratio"] == 60
     assert (pts[1]["cycle_score"], pts[1]["sentiment_score"], pts[1]["regime"]) == (-2, -2, "수축")
+
+
+def test_regime_history_samples_quarterly_over_full_year(monkeypatch):
+    # 12개월 전체 데이터 → 분기 간격(step 3)으로 표본화: 4점(03·06·09·12)·최근 앵커·오름차순.
+    #   (엔진 재현 정확성은 build_trajectory 단위 테스트가 담당 — 여기선 표본화 계약만.)
+    def fred12(series_id, api_key, months=12):
+        base = {"T10Y2Y": 0.6, "BAMLH0A0HYM2": 2.5, "VIXCLS": 12.0}[series_id]
+        return [{"date": f"2024-{m:02d}-01", "value": base} for m in range(1, 13)]
+
+    monkeypatch.setattr(main, "fetch_fred_series_history", fred12)
+    monkeypatch.setattr(
+        main, "fetch_fear_greed_history",
+        lambda months=12: [{"date": f"2024-{m:02d}-01", "value": 80.0} for m in range(1, 13)],
+    )
+    client = _client(monkeypatch)
+    body = client.get("/api/macro/regime/history?months=12").json()
+    assert body["interval"] == "quarterly" and body["step_months"] == 3
+    assert [p["date"] for p in body["points"]] == [
+        "2024-03-01", "2024-06-01", "2024-09-01", "2024-12-01",
+    ]
 
 
 def test_regime_history_clamps_months_forwarded_to_collectors(monkeypatch):

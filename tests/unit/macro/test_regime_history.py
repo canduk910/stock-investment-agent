@@ -4,7 +4,7 @@ judge_regime 을 그대로 재사용하므로 라이브 판정과 3중 일관성
 """
 from __future__ import annotations
 
-from macro.regime_history import build_trajectory
+from macro.regime_history import build_trajectory, downsample_trajectory, trajectory_step
 
 
 def _series(*pairs):
@@ -127,3 +127,47 @@ def test_vix_panic_flag_carried_per_month():
     )
     assert traj[0]["vix_panic"] is True  # 40 > 35
     assert traj[1]["vix_panic"] is False
+
+
+# ── 표본 간격(다운샘플) ──────────────────────────────────────────────────────
+def test_trajectory_step_by_range():
+    # 1년=분기 · 2년=반기 · 3년=연 (사용자 규칙).
+    assert trajectory_step(12) == (3, "quarterly")
+    assert trajectory_step(24) == (6, "semiannual")
+    assert trajectory_step(36) == (12, "annual")
+    # 사이값·상한 일반화(경계 <=).
+    assert trajectory_step(6) == (3, "quarterly")
+    assert trajectory_step(18) == (6, "semiannual")
+    assert trajectory_step(60) == (12, "annual")
+
+
+def test_downsample_anchors_latest_and_steps_back():
+    # 12개월 분기(step 3) → 최근(12월) 앵커에서 3개월씩 뒤로 = 03·06·09·12 (등간격·오름차순).
+    pts = [{"date": f"2024-{m:02d}-01"} for m in range(1, 13)]
+    out = downsample_trajectory(pts, 3)
+    assert [p["date"] for p in out] == ["2024-03-01", "2024-06-01", "2024-09-01", "2024-12-01"]
+    assert out[-1] == pts[-1]  # 가장 최근 점 항상 포함(브릿지 연결 보존)
+
+
+def test_downsample_annual_over_36_months_keeps_three_points():
+    # 36개월 연(step 12) → 3점, 최근 포함.
+    pts = [{"date": f"{2024 + i // 12}-{i % 12 + 1:02d}-01"} for i in range(36)]
+    out = downsample_trajectory(pts, 12)
+    assert len(out) == 3
+    assert out[-1] == pts[-1]
+
+
+def test_downsample_noop_when_step1_or_tiny():
+    assert downsample_trajectory([], 3) == []
+    one = [{"date": "2024-01-01"}]
+    assert downsample_trajectory(one, 3) == one
+    pair = [{"date": "2024-01-01"}, {"date": "2024-02-01"}]
+    assert downsample_trajectory(pair, 3) == pair  # 2점 이하 → 표본화 안 함(월별 유지)
+    assert downsample_trajectory(pair, 1) == pair  # step 1 = 원본(월별 그대로)
+
+
+def test_downsample_guards_against_over_thinning():
+    # 창이 step 보다 짧아 표본이 1점으로 과박되면 가장 과거 점을 보강 → 최소 2점(선이 그려지게).
+    pts = [{"date": f"2024-{m:02d}-01"} for m in range(1, 4)]  # 3개월
+    out = downsample_trajectory(pts, 3)  # 분기 간격 > 창(3개월)
+    assert [p["date"] for p in out] == ["2024-01-01", "2024-03-01"]  # 과거+최근 2점

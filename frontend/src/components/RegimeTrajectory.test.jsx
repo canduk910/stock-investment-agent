@@ -137,6 +137,19 @@ describe('RegimeTrajectory', () => {
     expect(y2026.getAttribute('class')).toContain('--y3')
   })
 
+  it('범례에 표본 간격 라벨 표시(interval → 분기별/반기별/연별) — 기준 명시', async () => {
+    fetchRegimeTrajectory.mockResolvedValue({
+      months: 12, interval: 'quarterly', step_months: 3, available: true, partial_failure: [],
+      points: [
+        { date: '2024-03-01', cycle_score: 2, sentiment_score: 2, regime: '확장' },
+        { date: '2024-06-01', cycle_score: -2, sentiment_score: -2, regime: '수축' },
+        { date: '2024-09-01', cycle_score: 2, sentiment_score: 0, regime: '확장' },
+      ],
+    })
+    render(<RegimeTrajectory />)
+    await waitFor(() => expect(screen.getByText(/분기별/)).toBeInTheDocument())
+  })
+
   it('라이브 셀 == 마지막 확정월 셀(안정 국면)이면 그 월 라벨을 억제(콜아웃과 겹침 방지)', async () => {
     fetchRegimeTrajectory.mockResolvedValue({
       months: 24, interval: 'monthly', available: true, partial_failure: [],

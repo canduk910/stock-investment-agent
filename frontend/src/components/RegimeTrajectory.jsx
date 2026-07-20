@@ -22,6 +22,15 @@ const RANGES = [
   { months: 36, label: '3년' },
 ]
 
+// 표본 간격 코드(백엔드 `interval`) → 한글 라벨. 범례에 표시해 "무슨 기준으로 찍히나"를 명확히 한다
+// (1년=분기·2년=반기·3년=연). 백엔드 macro.regime_history.trajectory_step 과 코드 SSOT.
+const INTERVAL_LABEL = {
+  monthly: '월별',
+  quarterly: '분기별',
+  semiannual: '반기별',
+  annual: '연별',
+}
+
 // "2024-01-01" → "24.01"(컴팩트 라벨용). 잘못된 값은 원문 그대로(graceful).
 function ym(date) {
   return typeof date === 'string' && date.length >= 7 ? date.slice(2, 7).replace('-', '.') : date
@@ -243,6 +252,7 @@ export default function RegimeTrajectory({ live = null }) {
                 <span className="rtraj__legend-item">→ 이동 방향</span>
                 <span className="rtraj__legend-range">
                   {ym(raw[0]?.date)} → {ym(raw[raw.length - 1]?.date)} · {data.months}개월
+                  {INTERVAL_LABEL[data.interval] ? ` · ${INTERVAL_LABEL[data.interval]}` : ''}
                 </span>
               </>
             )}

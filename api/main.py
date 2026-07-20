@@ -23,7 +23,7 @@ from collectors.macro_snapshot import collect_macro_indicators
 from infra.config import fred_api_key
 from infra.parallel import fetch_parallel
 from macro.engine import indicator_meta, judge_regime, regime_breakdown
-from macro.regime_history import build_trajectory
+from macro.regime_history import build_trajectory, downsample_trajectory, trajectory_step
 
 _log = logging.getLogger(__name__)
 
@@ -249,8 +249,12 @@ def macro_regime_history(months: int = 36) -> dict:
     확정 과거값이라 캐시(`macro:history:regime:`, TTL 1일; 불가/실패는 미저장). **항상 200 graceful**.
     지표별 수집 실패는 그 지표만 제외(공포탐욕 결측이어도 심리축은 VIX 로 판정 → 궤적 유지).
 
-    반환: {months, interval:"monthly", points:[{date, cycle_score, sentiment_score, regime,
-    recommended_cash_ratio, vix_panic, missing_indicators}], available, partial_failure, note?}.
+    월별 원본은 창이 길수록 과밀·불규칙(라벨이 국면 전환마다)이라 **범위별 표본 간격으로 다운샘플**한다:
+    1년(≤12개월)=분기(step 3) · 2년(≤24개월)=반기(6) · 3년+ = 연(12). 판정은 그대로 엔진 재현·표시 밀도만 조정.
+
+    반환: {months, interval:"quarterly|semiannual|annual", step_months, points:[{date, cycle_score,
+    sentiment_score, regime, recommended_cash_ratio, vix_panic, missing_indicators}], available,
+    partial_failure, note?}.
     """
     months = max(1, min(months, _REGIME_TRAJECTORY_MAX_MONTHS))
 
@@ -272,10 +276,14 @@ def macro_regime_history(months: int = 36) -> dict:
 
     # 진행 중 당월(FRED 부분월 평균)은 결정적으로 제외 — 확정 과거값만 궤적/캐시에 남긴다.
     points = build_trajectory(series_by_key, exclude_month=_current_month_kst())  # 순수·결정적(엔진 재현)
+    # 범위별 표본 간격으로 다운샘플(1년=분기·2년=반기·3년=연) — 월별 과밀·불규칙 라벨을 균일 밀도로.
+    step, interval = trajectory_step(months)
+    points = downsample_trajectory(points, step)
     available = bool(points)
     result = {
         "months": months,
-        "interval": "monthly",
+        "interval": interval,
+        "step_months": step,
         "points": points,
         "available": available,
         "partial_failure": partial_failure,

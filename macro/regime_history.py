@@ -66,3 +66,37 @@ def build_trajectory(
             }
         )
     return trajectory
+
+
+# ── 표본 간격(다운샘플) ──────────────────────────────────────────────────────
+# 월별 원본은 창(개월)이 길수록 점이 과밀·불규칙해진다(라벨이 국면 전환마다 찍혀 기준이 모호). 창 길이에
+# 비례해 **표본 간격을 넓혀** 점 밀도를 고르게 한다: 1년(≤12개월)=분기(3) · 2년(≤24개월)=반기(6) · 3년+ = 연(12).
+# 라우트가 months 로 간격을 정하고 downsample_trajectory 로 표본화한다(판정은 그대로 엔진 재현·표시 밀도만 조정).
+_TRAJECTORY_SAMPLING = ((12, 3, "quarterly"), (24, 6, "semiannual"))  # (상한개월, step개월, interval코드)
+_TRAJECTORY_SAMPLING_DEFAULT = (12, "annual")  # 그 이상(~3년+) = 연 1회
+
+
+def trajectory_step(months: int) -> tuple[int, str]:
+    """범위(개월) → (표본 간격[개월], interval 코드). 창이 길수록 넓힌다(분기→반기→연)."""
+    for upper, step, code in _TRAJECTORY_SAMPLING:
+        if months <= upper:
+            return step, code
+    return _TRAJECTORY_SAMPLING_DEFAULT
+
+
+def downsample_trajectory(points: list[dict], step: int) -> list[dict]:
+    """월별 궤적(시간 오름차순)을 step 개월 간격으로 표본화 — **가장 최근(마지막) 점을 앵커로** 잡고
+    거기서 step 만큼 뒤로 물러나며 고른다(등간격·최근 앵커). 최근을 앵커로 두어 라이브 마커/브릿지와의
+    연결(확정 최근월)이 보존되고, 정상 12/24/36개월 데이터는 각각 정확히 4/4/3 점이 된다.
+
+    가드: step<=1 이거나 원본이 **2점 이하면 표본화하지 않고 그대로**(월별 유지 — 이미 성김).
+    창이 step 보다 짧아 표본이 1점으로 과박되면 **가장 과거 점을 보강**해 최소 2점(선이 그려지게).
+    반환도 시간 오름차순."""
+    pts = points or []
+    if step <= 1 or len(pts) <= 2:
+        return list(pts)
+    idx = list(range(len(pts) - 1, -1, -step))  # 최근부터 step 간격 뒤로
+    idx.reverse()
+    if len(idx) < 2:  # 과박(창<step) 방지 — 가장 과거 점 보강해 최소 2점
+        idx = [0, len(pts) - 1]
+    return [pts[i] for i in idx]
