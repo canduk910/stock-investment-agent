@@ -96,22 +96,26 @@ describe('RegimeTrajectory', () => {
     expect(container.querySelector('circle.rtraj__dot--current')).toBeNull()
   })
 
-  it('재방문 좌표의 월 라벨은 한 라벨로 병합(", " 조인)', async () => {
+  it('같은 칸 재방문 표본은 병합 없이 개별 라벨·오프셋으로 분리', async () => {
     fetchRegimeTrajectory.mockResolvedValue({
-      months: 24, interval: 'monthly', available: true, partial_failure: [],
+      months: 24, interval: 'semiannual', available: true, partial_failure: [],
       points: [
         { date: '2024-01-01', cycle_score: 2, sentiment_score: 2, regime: '확장' },
         { date: '2024-02-01', cycle_score: -2, sentiment_score: -2, regime: '수축' },
-        { date: '2024-03-01', cycle_score: 2, sentiment_score: 2, regime: '확장' }, // 확장 재방문
+        { date: '2024-03-01', cycle_score: 2, sentiment_score: 2, regime: '확장' }, // 확장 재방문(같은 칸)
       ],
     })
-    // live 주입 → 모든 정차점이 그룹 라벨 대상(레거시 현재 제외 없음).
     const live = { cs: 0, ss: 0, regime: '확장', cash: 60, confidence: 'high', cycleSign: '중립', sentimentSign: '중립' }
     const { container } = render(<RegimeTrajectory live={live} />)
     await waitFor(() => expect(container.querySelector('svg.rtraj__svg')).toBeTruthy())
-    const labels = [...container.querySelectorAll('text.rtraj__stoplabel')].map((t) => t.textContent)
-    expect(labels).toContain('24.01, 24.03') // 확장 재방문 두 월이 한 라벨로
-    expect(labels).toContain('24.02') // 수축은 단일
+    const labelEls = [...container.querySelectorAll('text.rtraj__stoplabel')]
+    const labels = labelEls.map((t) => t.textContent)
+    // 각 표본이 개별 라벨(병합 없음).
+    expect(labels).toEqual(expect.arrayContaining(['24.01', '24.02', '24.03']))
+    // 같은 칸(확장) 두 표본은 대각 오프셋으로 x 가 달라진다(개별 점).
+    const x01 = labelEls.find((t) => t.textContent === '24.01').getAttribute('x')
+    const x03 = labelEls.find((t) => t.textContent === '24.03').getAttribute('x')
+    expect(x01).not.toBe(x03)
   })
 
   it('년도별 밝기 그라데이션 — 과거 연도 라벨 옅게(--y0)·최근 연도 짙게(--y3) 클래스', async () => {

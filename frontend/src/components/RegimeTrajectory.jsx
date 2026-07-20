@@ -2,19 +2,19 @@ import { useState } from 'react'
 import { fetchRegimeTrajectory } from '../api.js'
 import { useFetch } from '../lib/useFetch.js'
 import {
-  buildRegimePath,
+  buildSampledTrajectory,
   regimeMarkerPos,
-  stopLabelGroups,
   labelYearShades,
 } from '../lib/regimeTrajectory.js'
 
-// 시장 국면 사분면(통합) — 같은 경기×심리 매트릭스 하나에 **과거 이동 경로**(회색·단순 경로)와
-// **라이브 현재 판정**(주황 마커+활성 셀 음영)을 함께 담는다. 정적 판정 사분면을 흡수(중복 제거).
+// 시장 국면 사분면(통합) — 같은 경기×심리 매트릭스 하나에 **표본별 개별 이동 점**(회색)과 **라이브 현재
+// 판정**(주황 마커+활성 셀 음영)을 함께 담는다. 정적 판정 사분면을 흡수(중복 제거). 표본은 백엔드가
+// 범위별로 골라(분기/반기/연) 소수라, 각 표본을 개별 점으로 표시(같은 국면 반복은 작은 오프셋으로 분리).
 // 판정(cs/ss/regime)은 백엔드 엔진이 결정(과거=history 재현, 현재=live 실시간). 여기선 표시만.
 // 색: 과거=회색(흐림)·현재=주황(--c-emph) — 가격 방향색·경보색 금지. 예측 아님·면책 고정.
 //
 // props.live(옵셔널) = {cs, ss, regime, cash, confidence, cycleSign, sentimentSign} — RegimeGauge 의
-//   라이브 판정. 없으면(하위호환) 경로만 그리고 마지막 정차점을 현재로 강조(기존 동작).
+//   라이브 판정. 없으면(하위호환) 표본 점만 그리고 마지막 표본을 현재로 강조(기존 동작).
 
 const RANGES = [
   { months: 12, label: '1년' },
@@ -52,26 +52,27 @@ export default function RegimeTrajectory({ live = null }) {
   const { data, loading, error, reload } = useFetch(() => fetchRegimeTrajectory(months), [months])
 
   const raw = data?.points ?? []
-  const { stops, pathD } = buildRegimePath(raw)
-  const lastStop = stops.length > 0 ? stops[stops.length - 1] : null
   const fearGreedMissing = (data?.partial_failure ?? []).includes('fear_greed')
 
   const hasLive = !!live
   const livePos = hasLive ? regimeMarkerPos(live.cs, live.ss) : null
   const activeCell = hasLive ? ACTIVE_CELL[live.regime] : null
-  // 라이브가 있으면 마지막 정차점은 '현재'가 아니라 확정 최근월(회색) — 강조는 라이브 마커가 담당.
-  const legacyCurrent = !hasLive ? lastStop : null
-  const pathAvailable = stops.length > 0
-  // 사분면은 라이브가 있으면(현재 위치) 항상 그린다. 라이브 없으면 경로가 있어야 그린다(기존).
+  // 표본별 개별 노드 궤적 — 같은 칸 반복은 오프셋, 가장 최근 표본이 라이브 칸이면 라이브가 대표(defer).
+  const { visible, pathD, deferLast } = buildSampledTrajectory(raw, livePos)
+  // 라이브 없으면 마지막 표본을 '현재'로 강조(하위호환) — 있으면 라이브 마커가 현재.
+  const legacyCurrent = !hasLive && visible.length > 0 ? visible[visible.length - 1] : null
+  const lastVisible = visible.length > 0 ? visible[visible.length - 1] : null
+  const pathAvailable = visible.length > 0
+  // 사분면은 라이브가 있으면(현재 위치) 항상 그린다. 라이브 없으면 표시 노드가 있어야(기존).
   const showQuadrant = hasLive || (data?.available && pathAvailable)
-  // 라이브 마커와 경로 종착점(확정월)이 다른 좌표면 파선 브릿지로 '확정월→이번달' 연결.
-  const showBridge = hasLive && lastStop && (lastStop.x !== livePos.x || lastStop.y !== livePos.y)
-  // 정차점 월 라벨 소스 — 라이브 있으면 **라이브 마커 좌표(현재 셀)의 정차점은 제외**(그 자리는
-  //   '현재·{국면}' 콜아웃이 담당 → 안정 국면에서 회색 월 라벨이 콜아웃과 겹치는 문제 해소). 라이브
-  //   없으면 레거시 현재(마지막 정차점)를 특수 라벨이 담당하므로 제외.
-  const labelSource = hasLive
-    ? stops.filter((s) => s.x !== livePos.x || s.y !== livePos.y)
-    : stops.filter((s) => s !== legacyCurrent)
+  // 최근 표본이 라이브와 다른 칸(defer 아님)이면 그 점→라이브 파선 브릿지로 '확정월→이번달' 연결.
+  const showBridge =
+    hasLive &&
+    !deferLast &&
+    lastVisible &&
+    (Math.abs(lastVisible.x - livePos.x) > 0.01 || Math.abs(lastVisible.y - livePos.y) > 0.01)
+  // 라벨 대상: 표시 노드 전부(각 표본 개별 라벨). 레거시 현재(라이브 없음)는 별도 강조 라벨이라 제외.
+  const labelNodes = legacyCurrent ? visible.filter((nd) => nd !== legacyCurrent) : visible
 
   return (
     <section className="rtraj" aria-label="시장 국면 사분면(경기×심리)">
@@ -154,42 +155,39 @@ export default function RegimeTrajectory({ live = null }) {
             <text className="rtraj__axis rtraj__axis--l" x="2" y="51">공포</text>
             <text className="rtraj__axis rtraj__axis--r" x="98" y="51">탐욕</text>
 
-            {/* 과거 이동 경로 — 정차점 잇는 폴리라인 하나 + 끝점 화살표 하나(과밀 제거) */}
+            {/* 이동 경로 — 표시 노드 잇는 폴리라인 하나 + 끝점 화살표 하나(defer 면 라이브로 종결) */}
             {pathD && (
               <path className="rtraj__trail" d={pathD} fill="none" markerEnd="url(#rtraj-arrow)" />
             )}
 
-            {/* 정차점 — 균일 크기. 라이브 있으면 전부 회색(현재는 라이브 마커), 없으면 마지막=현재 주황. */}
-            {stops.map((s, i) => (
+            {/* 표본 점 — 각 표본 개별(균일 크기). 라이브 있으면 전부 회색(현재는 라이브 마커), 없으면 마지막=현재 주황. */}
+            {visible.map((nd, i) => (
               <circle
-                key={`stop-${i}`}
-                className={`rtraj__dot ${s === legacyCurrent ? 'rtraj__dot--current' : ''}`}
-                cx={s.x}
-                cy={s.y}
+                key={`dot-${i}`}
+                className={`rtraj__dot ${nd === legacyCurrent ? 'rtraj__dot--current' : ''}`}
+                cx={nd.x}
+                cy={nd.y}
                 r={STOP_R}
-                opacity={s.opacity}
+                opacity={nd.opacity}
               />
             ))}
 
-            {/* 정차점 월 라벨(시작월) — **같은 좌표(재방문 셀)는 한 라벨로 모아** ", " 로 잇는다(겹침 방지).
-                위/아래 절반 바깥 배치. 레거시 현재점(라이브 없음)은 별도 강조 라벨이라 그룹에서 제외.
-                **년도별 밝기 그라데이션**: labelYearShades 가 준 shadeLevel(0=과거 옅게→3=최근 짙게)을
-                `--y{n}` 클래스로 매핑(색은 styles.css 토큰). opacity 페이드 대신 색 짙기로 시간 방향을 읽는다. */}
-            {labelYearShades(stopLabelGroups(labelSource)).map(
-              (g, i) => (
-                <text
-                  key={`lbl-${i}`}
-                  className={`rtraj__stoplabel rtraj__stoplabel--y${g.shadeLevel}`}
-                  x={g.x}
-                  y={g.y < 50 ? g.y - 3.6 : g.y + 5.4}
-                  textAnchor={g.x > 70 ? 'end' : g.x < 30 ? 'start' : 'middle'}
-                >
-                  {g.startDates.map(ym).join(', ')}
-                </text>
-              ),
-            )}
+            {/* 표본 월 라벨 — 각 표본 개별(병합 안 함). 위/아래 절반 바깥 배치. 레거시 현재점(라이브 없음)은
+                별도 강조 라벨이라 제외. **년도별 밝기 그라데이션**: labelYearShades 가 준 shadeLevel
+                (0=과거 옅게→3=최근 짙게)을 `--y{n}` 클래스로 매핑(색은 styles.css 토큰). */}
+            {labelYearShades(labelNodes).map((nd, i) => (
+              <text
+                key={`lbl-${i}`}
+                className={`rtraj__stoplabel rtraj__stoplabel--y${nd.shadeLevel}`}
+                x={nd.x}
+                y={nd.y < 50 ? nd.y - 3.6 : nd.y + 5.4}
+                textAnchor={nd.x > 70 ? 'end' : nd.x < 30 ? 'start' : 'middle'}
+              >
+                {ym(nd.date)}
+              </text>
+            ))}
 
-            {/* (라이브 없음) 마지막 정차점 강조 라벨(월·국면) */}
+            {/* (라이브 없음) 마지막 표본 강조 라벨(월·국면) */}
             {legacyCurrent && (
               <text
                 className="rtraj__label"
@@ -199,16 +197,16 @@ export default function RegimeTrajectory({ live = null }) {
                   legacyCurrent.x > 70 ? 'end' : legacyCurrent.x < 30 ? 'start' : 'middle'
                 }
               >
-                {ym(legacyCurrent.endDate)} · {legacyCurrent.regime}
+                {ym(legacyCurrent.date)} · {legacyCurrent.regime}
               </text>
             )}
 
-            {/* 확정월 → 라이브 현재 브릿지(좌표 다를 때만) */}
+            {/* 최근 표본 → 라이브 현재 브릿지(좌표 다를 때만) */}
             {showBridge && (
               <line
                 className="rtraj__bridge"
-                x1={lastStop.x}
-                y1={lastStop.y}
+                x1={lastVisible.x}
+                y1={lastVisible.y}
                 x2={livePos.x}
                 y2={livePos.y}
               />

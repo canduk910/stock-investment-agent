@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   regimeMarkerPos,
-  buildRegimePath,
-  stopLabelGroups,
+  buildSampledTrajectory,
   labelYearShades,
   LABEL_SHADE_LEVELS,
 } from './regimeTrajectory.js'
@@ -22,87 +21,76 @@ describe('regimeMarkerPos (RegimeGauge 마커와 동일 공식 SSOT)', () => {
   })
 })
 
-describe('buildRegimePath (단순 경로 — 인접 동일 셀 접기)', () => {
+describe('buildSampledTrajectory (표본별 개별 노드 — 같은 칸 반복 오프셋)', () => {
   const P = (date, cs, ss, regime) => ({ date, cycle_score: cs, sentiment_score: ss, regime })
 
-  it('인접 동일 셀은 한 정차점으로 접고 dwell 누적', () => {
-    const { stops } = buildRegimePath([
-      P('2024-01-01', 2, 2, '확장'),
-      P('2024-02-01', 2, 2, '확장'), // 같은 셀 → 접힘
-      P('2024-03-01', -2, -2, '수축'),
-    ])
-    expect(stops).toHaveLength(2) // 3개월 → 2 정차점
-    expect(stops[0]).toMatchObject({
-      cs: 2, ss: 2, dwell: 2, startDate: '2024-01-01', endDate: '2024-02-01', isFirst: true,
-    })
-    expect(stops[1]).toMatchObject({ cs: -2, ss: -2, dwell: 1, isLast: true })
-  })
-
-  it('서로 다른 셀은 각각 정차점, 재방문도 새 정차점', () => {
-    const { stops } = buildRegimePath([
-      P('2024-01-01', 2, 2, '확장'),
-      P('2024-02-01', -2, -2, '수축'),
-      P('2024-03-01', 2, 2, '확장'), // 재방문 → 새 정차점
-    ])
-    expect(stops).toHaveLength(3)
-    expect(stops.map((s) => s.cs)).toEqual([2, -2, 2])
-  })
-
-  it('pathD 는 M 시작·정차점마다 L, 과거→현재 opacity 증가', () => {
-    const { stops, pathD } = buildRegimePath([
+  it('서로 다른 칸 표본은 각각 노드(병합 안 함)·경로 M+L…·과거→최근 opacity 증가', () => {
+    const { nodes, visible, pathD } = buildSampledTrajectory([
       P('2024-01-01', 2, 2, '확장'),
       P('2024-02-01', 0, 0, '확장'),
       P('2024-03-01', -2, -2, '수축'),
     ])
+    expect(nodes).toHaveLength(3)
+    expect(visible).toHaveLength(3) // 병합 없이 각 표본 개별
     expect(pathD.startsWith('M')).toBe(true)
-    expect((pathD.match(/L/g) || []).length).toBe(2) // 3 정차점 → M + L + L
-    expect(stops[0].opacity).toBeLessThan(stops[2].opacity)
-    expect(stops[2].opacity).toBeCloseTo(1, 5)
+    expect((pathD.match(/L/g) || []).length).toBe(2) // 3 노드 → M+L+L
+    expect(nodes[0].opacity).toBeLessThan(nodes[2].opacity)
+    expect(nodes[2].opacity).toBeCloseTo(1, 5)
+    expect(nodes[2].isLast).toBe(true)
   })
 
-  it('좌표는 셀 중심(오프셋 없음) — 같은 셀 재방문은 동일 좌표(깔끔)', () => {
-    const { stops } = buildRegimePath([
+  it('같은 칸 반복(같은 cs,ss) 표본은 병합 없이 대각 오프셋으로 분리', () => {
+    const { nodes } = buildSampledTrajectory([
+      P('2024-01-01', 2, 2, '확장'),
+      P('2024-04-01', 2, 2, '확장'), // 같은 칸 재방문
+    ])
+    expect(nodes).toHaveLength(2)
+    expect(nodes[0].baseX).toBe(nodes[1].baseX) // 기본 좌표는 같지만
+    expect(nodes[0].baseY).toBe(nodes[1].baseY)
+    expect(nodes[0].x).toBe(nodes[0].baseX) // 첫 점은 기준(오프셋 0)
+    expect(nodes[1].x).not.toBe(nodes[0].x) // 둘째는 오프셋 → 표시 좌표 달라짐(개별 점)
+  })
+
+  it('가장 최근 표본이 라이브 칸이면 defer(노드 생략)·경로는 라이브로 종결', () => {
+    const live = regimeMarkerPos(2, 0)
+    const { nodes, visible, pathD, deferLast } = buildSampledTrajectory(
+      [P('2024-01-01', -2, -2, '수축'), P('2024-06-01', 2, 0, '확장')],
+      live,
+    )
+    expect(deferLast).toBe(true)
+    expect(nodes[1].deferToLive).toBe(true)
+    expect(visible).toHaveLength(1) // 최근 표본은 라이브 마커가 대표
+    expect(pathD.trim().endsWith(`${live.x.toFixed(2)} ${live.y.toFixed(2)}`)).toBe(true)
+  })
+
+  it('과거 표본이 라이브 칸이면 오프셋으로 라이브 마커와 안 겹침(라벨 억제 버그 방지)', () => {
+    const live = regimeMarkerPos(2, 0)
+    const { nodes, visible } = buildSampledTrajectory(
+      [
+        P('2024-01-01', 2, 0, '확장'), // 과거인데 라이브 칸
+        P('2024-06-01', -2, -2, '수축'), // 최근(라이브 칸 아님)
+      ],
+      live,
+    )
+    expect(nodes[1].deferToLive).toBe(false) // 최근이 라이브 칸 아님 → defer 없음
+    expect(visible).toHaveLength(2)
+    expect(nodes[0].x !== live.x || nodes[0].y !== live.y).toBe(true) // 라이브와 다른 표시 좌표
+  })
+
+  it('라이브 없으면 defer 없음·모든 표본 노드·마지막 isLast', () => {
+    const { visible, deferLast, nodes } = buildSampledTrajectory([
       P('2024-01-01', 2, 2, '확장'),
       P('2024-02-01', -2, -2, '수축'),
-      P('2024-03-01', 2, 2, '확장'),
     ])
-    expect(stops[0].x).toBe(stops[2].x)
-    expect(stops[0].y).toBe(stops[2].y)
+    expect(deferLast).toBe(false)
+    expect(visible).toHaveLength(2)
+    expect(nodes[1].isLast).toBe(true)
   })
 
   it('빈 입력은 안전', () => {
-    expect(buildRegimePath([])).toEqual({ stops: [], pathD: '' })
-    expect(buildRegimePath(null)).toEqual({ stops: [], pathD: '' })
-  })
-
-  it('단일 정차점은 opacity 1·pathD 는 M 만(선 없음)', () => {
-    const { stops, pathD } = buildRegimePath([P('2024-01-01', 1, 1, '확장')])
-    expect(stops).toHaveLength(1)
-    expect(stops[0].opacity).toBe(1)
-    expect(pathD.startsWith('M') && !pathD.includes('L')).toBe(true)
-  })
-})
-
-describe('stopLabelGroups (재방문 좌표 라벨 병합 — 겹침 방지)', () => {
-  const P = (date, cs, ss, regime) => ({ date, cycle_score: cs, sentiment_score: ss, regime })
-
-  it('같은 좌표(재방문) 정차점의 시작월을 한 그룹으로 모은다', () => {
-    const { stops } = buildRegimePath([
-      P('2024-01-01', 2, 2, '확장'),
-      P('2024-02-01', -2, -2, '수축'),
-      P('2024-03-01', 2, 2, '확장'), // 확장 재방문 → 확장 좌표에 2개
-    ])
-    const groups = stopLabelGroups(stops)
-    expect(groups).toHaveLength(2) // 확장 좌표 1 + 수축 좌표 1
-    const exp = groups.find((g) => g.x === stops[0].x && g.y === stops[0].y)
-    expect(exp.startDates).toEqual(['2024-01-01', '2024-03-01']) // 두 방문 병합(시간순)
-    const con = groups.find((g) => g !== exp)
-    expect(con.startDates).toEqual(['2024-02-01'])
-  })
-
-  it('빈 입력은 안전', () => {
-    expect(stopLabelGroups([])).toEqual([])
-    expect(stopLabelGroups(null)).toEqual([])
+    const empty = { nodes: [], visible: [], pathD: '', deferLast: false }
+    expect(buildSampledTrajectory([])).toEqual(empty)
+    expect(buildSampledTrajectory(null)).toEqual(empty)
   })
 })
 

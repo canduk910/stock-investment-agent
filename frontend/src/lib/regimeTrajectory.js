@@ -1,4 +1,4 @@
-// 국면 이동 궤적 순수 로직 — 경기×심리 매트릭스 좌표 변환 + **단순 경로**(인접 동일 셀 접기).
+// 국면 이동 궤적 순수 로직 — 경기×심리 매트릭스 좌표 변환 + **표본별 개별 노드 궤적**(같은 칸 반복 오프셋).
 // 판정(cycle_score/sentiment_score/regime)은 백엔드 엔진이 결정한다. 여기선 **표시 좌표만** 계산
 // (색 규칙은 컴포넌트가 theme.css 토큰으로 — 방향색 금지·주황=현재/강조).
 
@@ -14,64 +14,72 @@ export function regimeMarkerPos(cycleScore, sentimentScore) {
   }
 }
 
-// rawPoints(백엔드 계약, 시간 오름차순) → **단순 경로**. 인접한 동일 셀(같은 cs,ss) 월들을 하나의
-// '정차점'으로 접어(dwell=머문 개월수) 점 수를 크게 줄인다 — 복잡한 셀 내 오프셋·다중 화살표를 없애고
-// 정차점 중심을 잇는 깔끔한 폴리라인 하나만 만든다(방향은 끝점 화살표 하나로). 각 정차점에 x,y·regime·
-// dwell·startDate/endDate·isFirst/isLast·opacity(과거 흐림→현재 진함) 부여 + SVG pathD.
-// 빈 입력은 {stops:[], pathD:''}.
-export function buildRegimePath(rawPoints) {
-  const pts = Array.isArray(rawPoints) ? rawPoints : []
-  const stops = []
-  for (const p of pts) {
-    const prev = stops[stops.length - 1]
-    if (prev && prev.cs === p.cycle_score && prev.ss === p.sentiment_score) {
-      prev.endDate = p.date // 같은 셀 지속 → 정차 연장
-      prev.dwell += 1
-    } else {
-      const { x, y } = regimeMarkerPos(p.cycle_score, p.sentiment_score)
-      stops.push({
-        x,
-        y,
-        cs: p.cycle_score,
-        ss: p.sentiment_score,
-        regime: p.regime,
-        startDate: p.date,
-        endDate: p.date,
-        dwell: 1,
-      })
-    }
-  }
+// rawPoints(백엔드 계약, 시간 오름차순·이미 범위별로 표본화됨) → **표본별 개별 노드 궤적**.
+// 표본이 3~4개뿐이라 병합하지 않고 각 표본을 개별 점으로 둔다(분기/반기/연 개수를 그대로 보이게 —
+// 사용자 결정). 같은 국면(같은 cs,ss=같은 좌표)이 반복되면 매트릭스상 같은 자리라 겹치므로 작은 **대각
+// 오프셋**으로 떨어뜨려 개별 표시(표본 소수라 예전 36개월 나선처럼 복잡하지 않음).
+//
+// livePos({x,y}|null): 라이브 마커 좌표. **가장 최근 표본이 라이브와 같은 칸이면** 그 표본은 라이브
+// 마커가 대표하므로 노드로 안 그리고(deferToLive) 경로만 라이브 좌표로 잇는다(현재 기간=라이브).
+// 라이브 칸에 놓이는 과거 표본은 오프셋(중앙 슬롯=라이브 몫)으로 라이브 마커와 안 겹치게 한다.
+//
+// 반환: {nodes, visible(=deferToLive 아닌 노드), pathD(표시 노드 경로 + deferLast 면 라이브로 종결),
+//   deferLast}. 각 노드: {x,y,baseX,baseY,cs,ss,regime,date,startDates:[date],isLast,opacity,deferToLive}.
+// 빈 입력은 {nodes:[], visible:[], pathD:'', deferLast:false}.
+const _OFFSET = { x: 3.0, y: -3.2 } // 같은 칸 반복 표본 대각 오프셋(매트릭스 100 기준 소폭)
+const _clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 
-  const n = stops.length
-  stops.forEach((s, i) => {
-    s.isFirst = i === 0
-    s.isLast = i === n - 1
-    s.opacity = n <= 1 ? 1 : 0.45 + 0.55 * (i / (n - 1)) // 과거→현재 진하게
+export function buildSampledTrajectory(rawPoints, livePos = null) {
+  const pts = Array.isArray(rawPoints) ? rawPoints : []
+  const n = pts.length
+  const atLive = (x, y) =>
+    livePos != null && Math.abs(x - livePos.x) < 0.01 && Math.abs(y - livePos.y) < 0.01
+
+  const nodes = pts.map((p, i) => {
+    const { x, y } = regimeMarkerPos(p.cycle_score, p.sentiment_score)
+    return {
+      x,
+      y,
+      baseX: x,
+      baseY: y,
+      cs: p.cycle_score,
+      ss: p.sentiment_score,
+      regime: p.regime,
+      date: p.date,
+      startDates: [p.date],
+      isLast: i === n - 1,
+      opacity: n <= 1 ? 1 : 0.45 + 0.55 * (i / (n - 1)), // 과거 흐림 → 최근 진함
+      deferToLive: false,
+    }
   })
 
-  const pathD = stops
-    .map((s, i) => `${i === 0 ? 'M' : 'L'}${s.x.toFixed(2)} ${s.y.toFixed(2)}`)
-    .join(' ')
-  return { stops, pathD }
-}
+  // 가장 최근 표본이 라이브와 같은 칸 → 라이브 마커가 그 기간 대표(노드 생략, 경로만 라이브로 종결).
+  const deferLast = n > 0 && atLive(nodes[n - 1].baseX, nodes[n - 1].baseY)
+  if (deferLast) nodes[n - 1].deferToLive = true
 
-// 재방문 셀(같은 좌표)의 정차점 라벨이 겹치는 문제 — 좌표별로 시작월(startDate)들을 **한 자리에 모은다**.
-// 반환: [{x, y, opacity(그 좌표 중 최댓값=가장 최근), startDates:[시간순]}]. 컴포넌트가 ym 포맷 + ", " 조인해
-// 한 라벨로 표시(예: "24.01, 24.05"). 좌표는 float 이라 소수 2자리로 키잉(regimeMarkerPos 값은 안정적).
-export function stopLabelGroups(stops) {
-  const arr = Array.isArray(stops) ? stops : []
-  const byCoord = new Map()
-  for (const s of arr) {
-    const key = `${s.x.toFixed(2)},${s.y.toFixed(2)}`
-    const g = byCoord.get(key)
-    if (g) {
-      g.startDates.push(s.startDate)
-      if (s.opacity > g.opacity) g.opacity = s.opacity
-    } else {
-      byCoord.set(key, { x: s.x, y: s.y, opacity: s.opacity, startDates: [s.startDate] })
+  // 같은 기본 좌표(같은 국면 반복) 노드를 작은 대각 오프셋으로 분리. 라이브 칸이면 중앙(슬롯0)은 라이브
+  //   마커 몫이라 실노드는 1칸부터 바깥(겹침 방지). 칸별 등장 순서로 슬롯 배정(결정적·오프셋 화면 안 클램프).
+  const seen = new Map()
+  for (const nd of nodes) {
+    if (nd.deferToLive) continue
+    const key = `${nd.baseX.toFixed(2)},${nd.baseY.toFixed(2)}`
+    const seenCount = seen.get(key) ?? 0
+    seen.set(key, seenCount + 1)
+    const slot = atLive(nd.baseX, nd.baseY) ? seenCount + 1 : seenCount // 라이브 칸은 중앙 비움
+    if (slot > 0) {
+      nd.x = _clamp(nd.baseX + slot * _OFFSET.x, 8, 92)
+      nd.y = _clamp(nd.baseY + slot * _OFFSET.y, 8, 92)
     }
   }
-  return [...byCoord.values()]
+
+  const visible = nodes.filter((nd) => !nd.deferToLive)
+  const coords = visible.map((nd) => [nd.x, nd.y])
+  if (deferLast && livePos) coords.push([livePos.x, livePos.y])
+  const pathD = coords
+    .map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(2)} ${y.toFixed(2)}`)
+    .join(' ')
+
+  return { nodes, visible, pathD, deferLast }
 }
 
 // 라벨 **년도별 그라데이션 레벨** — 시간 방향을 색 짙기로 읽게 한다(과거년도 옅게 → 최근년도 짙게).
