@@ -7,7 +7,7 @@ CombinedAnalystSummary(chat/analyst_combined_schema.py) 패턴 재사용. 차이
 """
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from chat.report_schema import NonEmptyStr  # 비어있지 않은 문자열(리스트 원소용)
 
@@ -21,3 +21,14 @@ class CombinedMarketOutlookSummary(BaseModel):
     종합요약: list[NonEmptyStr] = Field(min_length=1, max_length=10)
     # 면책 필수 — "여러 증권사 시황 리포트 내용·자문 아님" 고지 실효성.
     면책고지: str = Field(min_length=1)
+
+    @field_validator("시장전망분포", mode="before")
+    @classmethod
+    def _coerce_distribution(cls, v):
+        """LLM 이 분포를 문자열 대신 dict/list 로 낼 때가 있다(시장전망이 긴 문단이면 버킷 집계를
+        객체로 출력). 컴팩트 문자열(예 "중립 3 · 신중 2")로 강제해 검증 실패를 막는다(방어)."""
+        if isinstance(v, dict):
+            return " · ".join(f"{k} {v[k]}" for k in v) or "전망 명시 없음"
+        if isinstance(v, (list, tuple)):
+            return " · ".join(str(x) for x in v) or "전망 명시 없음"
+        return v

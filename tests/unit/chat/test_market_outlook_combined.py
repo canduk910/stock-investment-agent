@@ -69,6 +69,18 @@ def test_schema_requires_시장전망분포():
         CombinedMarketOutlookSummary(**{**_VALID, "시장전망분포": ""})
 
 
+def test_schema_coerces_dict_시장전망분포():
+    # LLM 이 분포를 문자열 대신 dict 로 낼 때(긴 시장전망 문단→버킷 집계) → 컴팩트 문자열로 강제.
+    s = CombinedMarketOutlookSummary(**{**_VALID, "시장전망분포": {"중립": 3, "신중": 2}})
+    assert isinstance(s.시장전망분포, str)
+    assert "중립 3" in s.시장전망분포 and "신중 2" in s.시장전망분포
+
+
+def test_schema_coerces_list_시장전망분포():
+    s = CombinedMarketOutlookSummary(**{**_VALID, "시장전망분포": ["중립 3", "신중 2"]})
+    assert isinstance(s.시장전망분포, str) and "중립 3" in s.시장전망분포
+
+
 def test_schema_rejects_empty_종합요약():
     with pytest.raises(ValidationError):
         CombinedMarketOutlookSummary(**{**_VALID, "종합요약": []})
