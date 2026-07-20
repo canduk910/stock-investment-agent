@@ -102,6 +102,11 @@ class ViewContextRequest(BaseModel):
     args: dict = {}
 
 
+class MarketOutlookContextRequest(BaseModel):
+    session_id: str
+    report_id: str | None = None  # None → 컨텍스트 해제(시황은 시장 전체라 ticker 없음)
+
+
 @router.post("/api/chat")
 def post_chat(
     body: ChatRequest,
@@ -149,6 +154,36 @@ def post_report_context(body: ReportContextRequest) -> dict:
     if entry is None:
         raise HTTPException(status_code=404, detail="report not found")
     session.set_report_context(format_report_context(entry))
+    return {
+        "ok": True,
+        "set": True,
+        "broker": (entry.get("summary") or {}).get("증권사") or entry.get("broker", ""),
+    }
+
+
+@router.post("/api/chat/market-outlook-context")
+def post_market_outlook_context(body: MarketOutlookContextRequest) -> dict:
+    """저장된 **시황(매크로) 리포트** 요약을 세션 상담 컨텍스트로 핀(또는 해제).
+
+    애널리스트 report-context 와 동일 메커니즘(같은 세션 핀 슬롯) — 시황은 **시장 전체**라 ticker 가
+    없고 report_id 만 받는다. report_id 없으면 해제. **요약 본문은 프론트가 안 보낸다** — 서버가
+    store 에서 조회한 entry 로 컨텍스트를 만든다(환각·조작 차단). 없는 리포트면 404.
+    """
+    from fastapi import HTTPException
+
+    from chat.market_outlook import format_market_outlook_context
+    from chat.market_outlook_store import default_store as outlook_store
+
+    session = get_session(body.session_id)
+
+    if not body.report_id:
+        session.clear_report_context()  # 상담 종료(해제)
+        return {"ok": True, "set": False}
+
+    entry = outlook_store().get(body.report_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="market outlook not found")
+    session.set_report_context(format_market_outlook_context(entry))
     return {
         "ok": True,
         "set": True,

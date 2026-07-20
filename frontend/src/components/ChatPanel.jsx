@@ -31,6 +31,7 @@ export default function ChatPanel({
   onNewConversation,
   onSelectConversation,
   onRenameConversation,
+  onDeleteConversation,
   onTurnComplete,
 }) {
   // 세션 id 는 App 이 소유(= 현재 대화 id). prop 미전달 시(구 테스트) 자체 생성 폴백.
@@ -52,6 +53,7 @@ export default function ChatPanel({
   const listRef = useRef(null)
   const [editingTitle, setEditingTitle] = useState(false) // 대화 이름 인라인 편집
   const [draftTitle, setDraftTitle] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(false) // 대화 삭제 2단계 확인
 
   const activeConv = conversations.find((c) => c.id === conversationId) || null
 
@@ -64,6 +66,12 @@ export default function ChatPanel({
     if (t && conversationId != null) onRenameConversation?.(conversationId, t)
     setEditingTitle(false)
   }
+  function confirmDeleteConv() {
+    if (conversationId != null) onDeleteConversation?.(conversationId)
+    setConfirmDelete(false)
+  }
+  // 대화 전환 시 열려 있던 삭제 확인은 닫는다(다른 대화에 오작동 방지).
+  useEffect(() => setConfirmDelete(false), [conversationId])
 
   // 대화 전환/최초 로드 — 그 대화의 저장된 메시지를 불러와 말풍선으로 복원(DB role→ChatPanel role).
   useEffect(() => {
@@ -280,6 +288,44 @@ export default function ChatPanel({
                   >
                     ✎
                   </button>
+                ) : null}
+                {/* 대화 삭제 — 2단계 확인(브라우저 dialog 금지 관습). 확인 시 서버 삭제·목록 정리. */}
+                {onDeleteConversation && conversationId != null ? (
+                  confirmDelete ? (
+                    <span className="chat__convdelete-confirm">
+                      <button
+                        type="button"
+                        className="chat__convdelete-yes"
+                        onClick={confirmDeleteConv}
+                        disabled={loading}
+                        aria-label="대화 삭제 확인"
+                        title="이 대화를 삭제합니다"
+                      >
+                        삭제?
+                      </button>
+                      <button
+                        type="button"
+                        className="chat__convdelete-no"
+                        onClick={() => setConfirmDelete(false)}
+                        disabled={loading}
+                        aria-label="삭제 취소"
+                        title="취소"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="chat__convdelete"
+                      onClick={() => setConfirmDelete(true)}
+                      disabled={loading}
+                      aria-label="대화 삭제"
+                      title="대화 삭제"
+                    >
+                      🗑
+                    </button>
+                  )
                 ) : null}
                 <button
                   type="button"

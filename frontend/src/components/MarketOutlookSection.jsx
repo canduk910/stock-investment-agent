@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { fetchMarketOutlook, fetchNaverMarketOutlook, streamFetchMarketOutlook } from '../api.js'
+import {
+  fetchMarketOutlook,
+  fetchNaverMarketOutlook,
+  streamFetchMarketOutlook,
+  setMarketOutlookContext,
+  fetchMarketOutlookSummary,
+} from '../api.js'
 import {
   groupReportsByDate,
   threeLineSummary,
@@ -70,8 +76,9 @@ function OutlookCard({ report, onOpen }) {
 // 상세 오버레이 — 딤 배경 + 중앙 카드. 이 프로젝트는 범용 Modal.jsx 를 폐기했으나, 시황 상세
 // '클릭 팝업'(사용자 결정)에 한해 접근성 오버레이를 도입한다(범용 모달 부활 아님, 이 뷰 전용).
 // Esc·배경 클릭·✕ 로 닫힘. React DOM 오버레이(브라우저 alert/confirm 아님 — 이벤트 블로킹 없음).
-function MarketOutlookDetailOverlay({ report, onClose }) {
+function MarketOutlookDetailOverlay({ report, onClose, sessionId, onConsult }) {
   const closeRef = useRef(null)
+  const [consulting, setConsulting] = useState(false)
 
   useEffect(() => {
     closeRef.current?.focus() // 열릴 때 닫기 버튼에 포커스(접근성)
@@ -88,6 +95,22 @@ function MarketOutlookDetailOverlay({ report, onClose }) {
   }, [onClose])
 
   const s = report.summary ?? {}
+
+  // 이 시황으로 상담하기 — 서버가 store 에서 요약 조회해 세션 컨텍스트 핀(요약 본문 신뢰전송 없음).
+  //   성공 시 좌측 챗 상담 배너(onConsult) + 오버레이 닫아 대화로 유도. 애널리스트와 동일 메커니즘.
+  async function consult() {
+    if (!sessionId || consulting) return
+    setConsulting(true)
+    try {
+      const res = await setMarketOutlookContext(sessionId, report.report_id)
+      onConsult?.(res.broker || s.증권사 || report.broker || '')
+      onClose()
+    } catch {
+      /* 실패는 graceful — 오버레이 유지 */
+    } finally {
+      setConsulting(false)
+    }
+  }
   return (
     <div className="mo-overlay" onClick={onClose}>
       <div
@@ -128,8 +151,19 @@ function MarketOutlookDetailOverlay({ report, onClose }) {
 
         {s.면책고지 ? <p className="analyst__fine">{s.면책고지}</p> : null}
 
-        {report.pdf_url ? (
-          <div className="analyst__actions">
+        <div className="analyst__actions">
+          {onConsult ? (
+            <button
+              type="button"
+              className="analyst__consult"
+              onClick={consult}
+              disabled={consulting || !sessionId}
+              title={sessionId ? '이 시황 리포트로 이어서 상담' : '대화 준비 후 이용 가능'}
+            >
+              {consulting ? '컨텍스트 설정 중…' : '이 시황으로 상담하기'}
+            </button>
+          ) : null}
+          {report.pdf_url ? (
             <a
               className="analyst__pdf"
               href={report.pdf_url}
@@ -138,14 +172,88 @@ function MarketOutlookDetailOverlay({ report, onClose }) {
             >
               원문 PDF ↗
             </a>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
     </div>
   )
 }
 
-export default function MarketOutlookSection() {
+// 금일의 요약 — 최근 5개 시황 리포트를 종합·중복제거해 10줄 핵심메시지로(온디맨드). 애널리스트
+// 종합요약(CombinedSummary) 패턴. 시각 강조 카드(주황 강조 소프트·📌). 종합=여러 리포트 인용·면책.
+function DailySummary() {
+  const [state, setState] = useState('idle') // idle | loading | done | error
+  const [data, setData] = useState(null)
+  const [errMsg, setErrMsg] = useState(null)
+
+  async function generate() {
+    setState('loading')
+    setErrMsg(null)
+    try {
+      const res = await fetchMarketOutlookSummary()
+      if (res.validation_failed || !res.summary) {
+        setState('error')
+        setErrMsg(res.message || '금일의 요약을 생성하지 못했습니다.')
+      } else {
+        setData(res)
+        setState('done')
+      }
+    } catch (e) {
+      setState('error')
+      setErrMsg(`금일의 요약 생성 실패(${e.message}).`)
+    }
+  }
+
+  const s = data?.summary ?? {}
+  return (
+    <div className="daily-summary">
+      <div className="daily-summary__head">
+        <span className="daily-summary__title">
+          <span className="daily-summary__badge" aria-hidden="true">
+            📌
+          </span>
+          금일의 요약
+          <span className="daily-summary__sub">최근 시황 종합 · 최대 10줄</span>
+        </span>
+        <button
+          type="button"
+          className="daily-summary__gen"
+          onClick={generate}
+          disabled={state === 'loading'}
+        >
+          {state === 'loading' ? '생성 중…' : state === 'done' ? '↻ 다시 생성' : '금일의 요약 생성'}
+        </button>
+      </div>
+      {state === 'error' ? (
+        <p className="analyst__err" role="alert">
+          {errMsg}
+        </p>
+      ) : null}
+      {state === 'done' && data ? (
+        <div className="daily-summary__body">
+          <div className="daily-summary__chips">
+            {s.시장전망분포 ? (
+              <span className="chip daily-summary__chip" title="리포트 시장전망 분포(출처 귀속)">
+                시장전망 · {s.시장전망분포}
+              </span>
+            ) : null}
+            <span className="chip daily-summary__chip">시황 {data.report_count}개 종합</span>
+          </div>
+          {Array.isArray(s.종합요약) && s.종합요약.length > 0 ? (
+            <ol className="daily-summary__lines">
+              {s.종합요약.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ol>
+          ) : null}
+          {s.면책고지 ? <p className="analyst__fine">{s.면책고지}</p> : null}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+export default function MarketOutlookSection({ sessionId, onConsult } = {}) {
   const [reports, setReports] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -255,6 +363,9 @@ export default function MarketOutlookSection() {
         </button>
       </div>
 
+      {/* 금일의 요약 — 증권사 시황리포트 요약 바로 아래(저장 시황 있을 때만). 시각 강조 카드. */}
+      {reports && reports.length > 0 ? <DailySummary /> : null}
+
       {autoNote ? (
         <p className="analyst__fetchmsg" role="status">
           {autoNote}
@@ -302,7 +413,14 @@ export default function MarketOutlookSection() {
         </div>
       )}
 
-      {selected ? <MarketOutlookDetailOverlay report={selected} onClose={closeDetail} /> : null}
+      {selected ? (
+        <MarketOutlookDetailOverlay
+          report={selected}
+          onClose={closeDetail}
+          sessionId={sessionId}
+          onConsult={onConsult}
+        />
+      ) : null}
     </section>
   )
 }

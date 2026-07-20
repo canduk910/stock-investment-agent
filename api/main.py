@@ -133,6 +133,10 @@ from api.macro_outlook import router as macro_outlook_router  # noqa: E402  # �
 
 app.include_router(macro_outlook_router)
 
+from api.stats import router as stats_router  # noqa: E402  # 가입자·방문 통계(헤드라인)
+
+app.include_router(stats_router)
+
 
 @app.get("/api/macro/indicators")
 def macro_indicators() -> dict:

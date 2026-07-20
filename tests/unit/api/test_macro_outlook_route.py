@@ -73,3 +73,30 @@ def test_list_returns_reports(monkeypatch):
     monkeypatch.setattr(mo, "default_store", lambda: _Store())
     r = TestClient(_app()).get("/api/macro/market-outlook")
     assert r.status_code == 200 and len(r.json()["reports"]) == 1
+
+
+def test_combined_summary_route_returns_summary(monkeypatch):
+    # POST /summary → market_outlook_combined.summarize_recent_outlooks 결과를 반환(graceful).
+    monkeypatch.setattr(
+        mo.market_outlook_combined,
+        "summarize_recent_outlooks",
+        lambda: {
+            "validation_failed": False,
+            "report_count": 5,
+            "summary": {"시장전망분포": "중립 3·신중 2", "종합요약": ["a", "b"], "면책고지": "자문 아님"},
+        },
+    )
+    r = TestClient(_app()).post("/api/macro/market-outlook/summary")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["report_count"] == 5 and body["summary"]["시장전망분포"] == "중립 3·신중 2"
+
+
+def test_combined_summary_route_graceful_on_error(monkeypatch):
+    def _boom():
+        raise RuntimeError("llm down")
+
+    monkeypatch.setattr(mo.market_outlook_combined, "summarize_recent_outlooks", _boom)
+    r = TestClient(_app()).post("/api/macro/market-outlook/summary")
+    assert r.status_code == 200  # graceful_counts 폴백
+    assert r.json()["validation_failed"] is True

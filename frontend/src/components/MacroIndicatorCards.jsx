@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import MacroIndicatorHistoryOverlay from './MacroIndicatorHistoryOverlay.jsx'
 
-// 국면 판정 근거 4지표 카드 — 값 + 구간(양호/중립/악화·탐욕/중립/공포) + 축. 카드 클릭 → 최근 1년 히스토리.
+// 국면 판정 근거 4지표 카드 — 값 + 구간(양호/중립/악화·탐욕/중립/공포) + 축. 카드 클릭 → 최근 5년 히스토리.
 //   데이터는 백엔드 breakdown(fetchMacroRegime.indicator_breakdown)에서 온다(프론트 임계 복제 없음).
 //   색: 구간이 '중립' 아니면 주황 강조 소프트(=신호에 주목), 중립/결측은 회색. 방향(양호/공포)은 텍스트로.
 //   가격 방향색(--c-up/--c-down)·경보 빨강(--c-danger)은 쓰지 않는다(주황=강조 규칙).
@@ -28,7 +28,7 @@ function IndicatorCard({ item, onOpen }) {
       type="button"
       className="macro-card"
       onClick={() => onOpen(item)}
-      aria-label={`${item.label} 최근 1년 히스토리 보기`}
+      aria-label={`${item.label} 최근 5년 히스토리 보기`}
     >
       <span className="macro-card__name">{item.label}</span>
       <span className="macro-card__value">{formatValue(item.value, item.unit)}</span>
@@ -62,7 +62,7 @@ export default function MacroIndicatorCards({ breakdown }) {
   return (
     <div className="macro-cards">
       <div className="macro-cards__label">
-        판정 근거 지표 <span className="macro-cards__hint">클릭 → 최근 1년 추이</span>
+        판정 근거 지표 <span className="macro-cards__hint">클릭 → 최근 5년 추이</span>
       </div>
       {AXIS_ORDER.map((axis) => {
         const list = byAxis[axis]

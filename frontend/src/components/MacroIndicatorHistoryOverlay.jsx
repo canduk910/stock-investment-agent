@@ -2,10 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { fetchMacroIndicatorHistory } from '../api.js'
 import MacroLineChart from './MacroLineChart.jsx'
 
-// 판정근거 지표 카드 클릭 → 최근 1년 월단위 히스토리 오버레이.
+// 판정근거 지표 카드 클릭 → 최근 5년 월단위 히스토리 오버레이.
 // MarketOutlookDetailOverlay 패턴 재사용(딤 배경·Esc/✕/배경 클릭 닫힘·role=dialog·닫기 포커스·
 // 배경 스크롤 잠금 — 이 프로젝트의 모달 폐기 관습의 의도적 예외, 시황 상세와 동일). 범용 Modal 부활 아님.
 // 열릴 때 서버에서 히스토리 조회(프론트 신뢰전송 없음). 미제공(fear_greed 등)은 graceful 안내.
+// 백엔드 clamp 1..60 이라 60=5년이 상한. MacroLineChart 가 x축 라벨을 최대 6개로 솎아 점 수 무관.
+const HISTORY_MONTHS = 60 // 백엔드 clamp 상한(=5년, 월단위)
+const HISTORY_LABEL = `최근 ${Math.round(HISTORY_MONTHS / 12)}년 · 월단위` // 값-텍스트 SSOT(하드코딩 결합 제거)
+
 export default function MacroIndicatorHistoryOverlay({ indicator, onClose }) {
   const closeRef = useRef(null)
   const [state, setState] = useState('loading') // loading | ready | error
@@ -28,7 +32,7 @@ export default function MacroIndicatorHistoryOverlay({ indicator, onClose }) {
   useEffect(() => {
     let cancelled = false
     setState('loading')
-    fetchMacroIndicatorHistory(indicator.key, 12)
+    fetchMacroIndicatorHistory(indicator.key, HISTORY_MONTHS)
       .then((h) => {
         if (!cancelled) {
           setHist(h)
@@ -52,13 +56,13 @@ export default function MacroIndicatorHistoryOverlay({ indicator, onClose }) {
         className="mo-overlay__card mo-overlay__card--wide"
         role="dialog"
         aria-modal="true"
-        aria-label={`${indicator.label} 최근 1년 히스토리`}
+        aria-label={`${indicator.label} ${HISTORY_LABEL.split(' · ')[0]} 히스토리`}
         onClick={(e) => e.stopPropagation()}
       >
         <header className="mo-overlay__head">
           <div className="mo-overlay__meta">
             <span className="mo-card__broker">{indicator.label}</span>
-            <span className="analyst__date">최근 1년 · 월단위</span>
+            <span className="analyst__date">{HISTORY_LABEL}</span>
           </div>
           <button
             ref={closeRef}

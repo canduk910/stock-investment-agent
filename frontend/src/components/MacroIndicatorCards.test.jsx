@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import MacroIndicatorCards from './MacroIndicatorCards.jsx'
 
-// 판정근거 4지표 카드(값+구간+축) + 카드 클릭 → 최근 1년 히스토리 오버레이. api 경계만 mock.
+// 판정근거 4지표 카드(값+구간+축) + 카드 클릭 → 최근 5년 히스토리 오버레이. api 경계만 mock.
 vi.mock('../api.js', () => ({ fetchMacroIndicatorHistory: vi.fn() }))
 import { fetchMacroIndicatorHistory } from '../api.js'
 
@@ -47,8 +47,8 @@ describe('MacroIndicatorCards', () => {
       ],
     })
     render(<MacroIndicatorCards breakdown={BREAKDOWN} />)
-    fireEvent.click(screen.getByRole('button', { name: 'VIX 변동성 최근 1년 히스토리 보기' }))
-    await waitFor(() => expect(fetchMacroIndicatorHistory).toHaveBeenCalledWith('vix', 12))
+    fireEvent.click(screen.getByRole('button', { name: 'VIX 변동성 최근 5년 히스토리 보기' }))
+    await waitFor(() => expect(fetchMacroIndicatorHistory).toHaveBeenCalledWith('vix', 60))
     // 오버레이(dialog) + 라인차트 렌더.
     const dialog = await screen.findByRole('dialog')
     await waitFor(() => expect(dialog.querySelector('path.macro-chart__line')).toBeTruthy())
@@ -61,7 +61,7 @@ describe('MacroIndicatorCards', () => {
       note: '이 지표는 히스토리를 제공하지 못했습니다(현재값만 참고하세요).',
     })
     render(<MacroIndicatorCards breakdown={BREAKDOWN} />)
-    fireEvent.click(screen.getByRole('button', { name: '공포탐욕지수 최근 1년 히스토리 보기' }))
+    fireEvent.click(screen.getByRole('button', { name: '공포탐욕지수 최근 5년 히스토리 보기' }))
     await screen.findByRole('dialog')
     await waitFor(() => expect(screen.getByText(/현재값만 참고/)).toBeInTheDocument())
   })
@@ -73,7 +73,7 @@ describe('MacroIndicatorCards', () => {
       points: [{ date: '2025-11-01', value: 22 }, { date: '2025-12-01', value: 30 }],
     })
     render(<MacroIndicatorCards breakdown={BREAKDOWN} />)
-    fireEvent.click(screen.getByRole('button', { name: 'VIX 변동성 최근 1년 히스토리 보기' }))
+    fireEvent.click(screen.getByRole('button', { name: 'VIX 변동성 최근 5년 히스토리 보기' }))
     await screen.findByRole('dialog')
     fireEvent.keyDown(document, { key: 'Escape' })
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())

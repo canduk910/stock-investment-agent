@@ -33,6 +33,31 @@ def _build_summary_prompt(text: str, meta: dict) -> str:
 JSON 객체 하나만 출력하라."""
 
 
+def format_market_outlook_context(entry: dict) -> str:
+    """저장된 시황 리포트 entry(메타+summary) → 챗 세션 핀 컨텍스트용 사람가독 텍스트.
+
+    애널리스트의 `format_report_context` 대응 — 다만 시황은 **시장 전체**라 종목·목표주가가 없고
+    '시장전망'이 있다. 프론트가 요약 본문을 신뢰전송하지 않는다(서버가 store 에서 조회한 entry 로 만듦
+    → 환각·조작 차단). summary 없으면 메타만으로 최소 블록.
+    """
+    s = entry.get("summary") or {}
+    broker = s.get("증권사") or entry.get("broker", "")
+    lines = [f"- 증권사: {broker}", f"- 제목: {s.get('제목') or entry.get('title', '')}"]
+    if entry.get("date"):
+        lines.append(f"- 작성일: {entry['date']}")
+    if s.get("시장전망"):
+        lines.append(f"- 시장전망(리포트가 밝힌 시장 방향): {s['시장전망']}")
+    if s.get("요약"):
+        lines.append(f"- 요약: {s['요약']}")
+    for k in ("핵심요지", "리스크요인"):
+        vals = s.get(k) or []
+        if vals:
+            lines.append(f"- {k}: " + " / ".join(str(v) for v in vals))
+    if s.get("면책고지"):
+        lines.append(f"- 면책: {s['면책고지']}")
+    return "\n".join(lines)
+
+
 def summarize_market_outlook(text: str, meta: dict, *, client=None) -> dict:
     """시황 리포트 원문 → {summary|None, validation_failed}. 항상 dict(크래시 없음).
 

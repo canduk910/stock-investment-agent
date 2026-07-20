@@ -45,6 +45,20 @@ export async function fetchRegimeTrajectory(months = 36) {
   return res.json()
 }
 
+// 사이트 통계 — 방문 1건 기록(앱 로드 시 1회) + 가입자·방문 집계 조회. 공개·집계만(PII 없음).
+// 실패는 호출부(App)가 graceful 처리(칩만 생략).
+export async function recordVisit() {
+  const res = await fetch('/api/visit', { method: 'POST' })
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
+export async function fetchSiteStats() {
+  const res = await fetch('/api/stats')
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
 // 종목 종합리포트 번들(W08). GET /api/detail/{ticker}/bundle 을 1회 호출한다(N+1 금지).
 // 응답 계약(계획 "번들 계약"): {ticker, basic|null, valuation|null, financials|null, chart|null,
 //   summary|null, forward_valuation|null, indicator_config:{ma_period,rsi_period}, partial_failure:[]}.
@@ -299,6 +313,13 @@ export async function fetchMarketOutlook() {
   return res.json()
 }
 
+// POST /api/macro/market-outlook/summary → 최근 5개 시황 종합 '금일의 요약'(10줄). 온디맨드·항상 200.
+export async function fetchMarketOutlookSummary() {
+  const res = await fetch('/api/macro/market-outlook/summary', { method: 'POST' })
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
 // POST /api/macro/market-outlook/fetch?limit=N → {fetched, new, skipped, failed}. 네이버 최신 시황
 // 수집·요약(서버, idempotent). 항상 200. 완료 후 fetchMarketOutlook 재조회.
 export async function fetchNaverMarketOutlook(limit = 15) {
@@ -387,6 +408,17 @@ export async function setReportContext(sessionId, ticker, reportId) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ session_id: sessionId, ticker: ticker ?? null, report_id: reportId ?? null }),
+  })
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
+// 시황(매크로) 리포트로 상담 — 애널리스트와 동일 세션 핀 슬롯. 시황은 시장 전체라 ticker 없음.
+export async function setMarketOutlookContext(sessionId, reportId) {
+  const res = await fetch('/api/chat/market-outlook-context', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId, report_id: reportId ?? null }),
   })
   if (!res.ok) throw new Error(`API ${res.status}`)
   return res.json()

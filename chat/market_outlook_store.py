@@ -25,6 +25,10 @@ class MarketOutlookStore:
     def list_reports(self) -> list[dict]:
         return self._repo.list_reports(MARKET_SCOPE)
 
+    def get(self, report_id) -> dict | None:
+        """report_id 단건 조회(챗 상담 컨텍스트용). 없으면 None. ticker 없음(시장 전체)."""
+        return self._repo.get(MARKET_SCOPE, report_id)
+
 
 _default: MarketOutlookStore | None = None
 

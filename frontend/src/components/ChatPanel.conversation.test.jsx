@@ -86,4 +86,30 @@ describe('ChatPanel 대화기록', () => {
     await waitFor(() => expect(screen.getByLabelText('대화 선택')).toBeInTheDocument())
     expect(onRename).not.toHaveBeenCalled()
   })
+
+  it('🗑 → 2단계 확인(삭제?) → onDeleteConversation(id) 호출', async () => {
+    const onDelete = vi.fn()
+    render(<ChatPanel {...baseProps} onDeleteConversation={onDelete} />)
+    await waitFor(() => screen.getByLabelText('대화 삭제'))
+    fireEvent.click(screen.getByLabelText('대화 삭제'))
+    expect(onDelete).not.toHaveBeenCalled() // 1클릭은 확인 노출만
+    fireEvent.click(screen.getByLabelText('대화 삭제 확인'))
+    expect(onDelete).toHaveBeenCalledWith(1)
+  })
+
+  it('삭제 확인 취소(✕) → onDeleteConversation 미호출·버튼 복귀', async () => {
+    const onDelete = vi.fn()
+    render(<ChatPanel {...baseProps} onDeleteConversation={onDelete} />)
+    await waitFor(() => screen.getByLabelText('대화 삭제'))
+    fireEvent.click(screen.getByLabelText('대화 삭제'))
+    fireEvent.click(screen.getByLabelText('삭제 취소'))
+    await waitFor(() => expect(screen.getByLabelText('대화 삭제')).toBeInTheDocument())
+    expect(onDelete).not.toHaveBeenCalled()
+  })
+
+  it('onDeleteConversation 미전달이면 삭제 버튼 없음(옵셔널·하위호환)', async () => {
+    render(<ChatPanel {...baseProps} />)
+    await waitFor(() => screen.getByLabelText('대화 이름 수정'))
+    expect(screen.queryByLabelText('대화 삭제')).toBeNull()
+  })
 })

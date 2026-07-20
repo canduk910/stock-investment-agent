@@ -9,8 +9,16 @@ vi.mock('../api.js', () => ({
   fetchMarketOutlook: vi.fn(),
   fetchNaverMarketOutlook: vi.fn(),
   streamFetchMarketOutlook: vi.fn(),
+  setMarketOutlookContext: vi.fn(),
+  fetchMarketOutlookSummary: vi.fn(),
 }))
-import { fetchMarketOutlook, fetchNaverMarketOutlook, streamFetchMarketOutlook } from '../api.js'
+import {
+  fetchMarketOutlook,
+  fetchNaverMarketOutlook,
+  streamFetchMarketOutlook,
+  setMarketOutlookContext,
+  fetchMarketOutlookSummary,
+} from '../api.js'
 import { todayStampKST } from '../lib/marketOutlook.js' // 실제 헬퍼(모킹 안 함)
 
 // jsdom 환경에 localStorage 전역이 없어(auth.test.js 선례) 인메모리로 스텁 — 자동수집 가드 검증용.
@@ -60,6 +68,18 @@ beforeEach(() => {
   fetchNaverMarketOutlook.mockReset()
   streamFetchMarketOutlook.mockReset()
   streamFetchMarketOutlook.mockResolvedValue(undefined) // 자동수집이 우발적으로 fire해도 안전
+  setMarketOutlookContext.mockReset()
+  setMarketOutlookContext.mockResolvedValue({ ok: true, set: true, broker: 'KB증권' })
+  fetchMarketOutlookSummary.mockReset()
+  fetchMarketOutlookSummary.mockResolvedValue({
+    validation_failed: false,
+    report_count: 5,
+    summary: {
+      시장전망분포: '중립 3·신중 2',
+      종합요약: ['외국인 수급 개선', '실적 시즌 기대', '환율 변동성 유의'],
+      면책고지: '이 종합은 여러 증권사 시황 리포트 내용이며 자문이 아니다.',
+    },
+  })
   // 기존 테스트는 자동 최신화를 억제(가드=오늘) — 자동수집 테스트만 가드를 해제/조작한다.
   localStorage.clear()
   localStorage.setItem('mo_autofetch_date', todayStampKST())
@@ -79,6 +99,54 @@ describe('MarketOutlookSection 렌더(항목4: 일별·3줄·오버레이)', () 
     expect(screen.queryByText(/수급 개선 기대/)).toBeNull()
     // 섹션 면책 상시.
     expect(screen.getAllByText(/자문/).length).toBeGreaterThan(0)
+  })
+
+  it('상세 오버레이 "이 시황으로 상담하기" → setMarketOutlookContext(sessionId, report_id) + onConsult + 닫힘', async () => {
+    fetchMarketOutlook.mockResolvedValue({ reports: [REPORT] })
+    const onConsult = vi.fn()
+    render(<MarketOutlookSection sessionId="99" onConsult={onConsult} />)
+    await waitFor(() => expect(screen.getByText('KB증권')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('7/10 모닝코멘트'))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByText('이 시황으로 상담하기'))
+    await waitFor(() => expect(setMarketOutlookContext).toHaveBeenCalledWith('99', '36722'))
+    await waitFor(() => expect(onConsult).toHaveBeenCalledWith('KB증권'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull()) // 상담 시작 후 오버레이 닫힘
+  })
+
+  it('sessionId 없으면 상담 버튼 비활성 / onConsult 미전달이면 버튼 없음(옵셔널)', async () => {
+    fetchMarketOutlook.mockResolvedValue({ reports: [REPORT] })
+    const { rerender } = render(<MarketOutlookSection onConsult={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('KB증권')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('7/10 모닝코멘트'))
+    let dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('이 시황으로 상담하기')).toBeDisabled() // sessionId 없음
+    fireEvent.click(within(dialog).getByLabelText('닫기'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    // onConsult 미전달 → 버튼 자체 없음
+    rerender(<MarketOutlookSection />)
+    fireEvent.click(screen.getByText('7/10 모닝코멘트'))
+    dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByText('이 시황으로 상담하기')).toBeNull()
+  })
+
+  it('금일의 요약 — 저장 시황 있으면 카드 노출, 생성 클릭 → 10줄 종합·시장전망분포·면책', async () => {
+    fetchMarketOutlook.mockResolvedValue({ reports: [REPORT] })
+    render(<MarketOutlookSection />)
+    await waitFor(() => expect(screen.getByText('금일의 요약')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('금일의 요약 생성'))
+    await waitFor(() => expect(fetchMarketOutlookSummary).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getByText('외국인 수급 개선')).toBeInTheDocument())
+    expect(screen.getByText('환율 변동성 유의')).toBeInTheDocument()
+    expect(screen.getByText(/시장전망 · 중립 3·신중 2/)).toBeInTheDocument()
+    expect(screen.getByText(/시황 5개 종합/)).toBeInTheDocument()
+  })
+
+  it('저장된 시황이 없으면(빈 목록) 금일의 요약 카드 미노출', async () => {
+    fetchMarketOutlook.mockResolvedValue({ reports: [] })
+    render(<MarketOutlookSection />)
+    await waitFor(() => expect(fetchMarketOutlook).toHaveBeenCalled())
+    expect(screen.queryByText('금일의 요약')).toBeNull()
   })
 
   it('세줄요약 없는 구 레코드 → 핵심요지 최대 3개로 폴백', async () => {

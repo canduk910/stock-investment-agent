@@ -48,6 +48,10 @@ vi.mock('./api.js', () => ({
   setReportContext: vi.fn(),
   fetchConversations: vi.fn(),
   createConversation: vi.fn(),
+  renameConversation: vi.fn(),
+  deleteConversation: vi.fn(),
+  recordVisit: vi.fn(),
+  fetchSiteStats: vi.fn(),
 }))
 import {
   fetchWatchlist,
@@ -55,6 +59,8 @@ import {
   setViewContext,
   fetchConversations,
   createConversation,
+  recordVisit,
+  fetchSiteStats,
 } from './api.js'
 
 // 인증 게이트 — App 이 마운트 시 fetchMe 로 로그인 상태를 확인한다. 기본은 로그인됨(메인 앱 렌더).
@@ -103,6 +109,10 @@ beforeEach(() => {
   fetchConversations.mockResolvedValue({ conversations: [{ id: 1, title: '대화' }] })
   createConversation.mockReset()
   createConversation.mockResolvedValue({ id: 2, title: '새 대화' })
+  recordVisit.mockReset()
+  recordVisit.mockResolvedValue({ total_visits: 1234, today_visits: 12 })
+  fetchSiteStats.mockReset()
+  fetchSiteStats.mockResolvedValue({ member_count: 42, total_visits: 1234, today_visits: 12 })
 })
 afterEach(() => {
   vi.runOnlyPendingTimers()
@@ -239,6 +249,16 @@ describe('톱바 리브랜딩 — 디케이 브랜드 + 상태 칩(자체 조회
     // 국면명(확장)·현금비중(20%)이 톱바 칩에 반영된다.
     expect(screen.getByText(/확장/)).toBeInTheDocument()
     expect(screen.getByText(/20\s*%/)).toBeInTheDocument()
+  })
+
+  it('헤드라인에 가입자수·방문수(누적·오늘) 표시', async () => {
+    render(<App />)
+    await act(async () => {})
+    await act(async () => {})
+    expect(screen.getByText('가입자')).toBeInTheDocument()
+    expect(screen.getByText('42')).toBeInTheDocument() // member_count
+    expect(screen.getByText('방문')).toBeInTheDocument()
+    expect(screen.getByText(/오늘 12/)).toBeInTheDocument() // today_visits
   })
 
   it('vix_panic:true → VIX 패닉 위험 칩 노출', async () => {

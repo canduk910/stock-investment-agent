@@ -10,7 +10,7 @@ from fastapi import APIRouter
 
 from api._helpers import graceful_counts
 from api._sse import sse_response
-from chat import market_outlook_service
+from chat import market_outlook_combined, market_outlook_service
 from chat.market_outlook_store import default_store
 
 router = APIRouter()
@@ -37,3 +37,16 @@ def fetch_market_outlook_stream(limit: int = 15):
 def market_outlook_summaries() -> dict:
     """저장된 시황 요약 리스트(최신순). 없으면 reports=[]."""
     return {"reports": default_store().list_reports()}
+
+
+@router.post("/api/macro/market-outlook/summary")
+def market_outlook_combined_summary() -> dict:
+    """최근 **5개** 시황 리포트를 종합해 **10줄 '금일의 요약'** 생성(온디맨드).
+
+    저장된 per-report 요약만으로 종합·중복제거(PDF 재다운로드 없음, 0 네이버). 리포트 0개·검증
+    실패는 graceful(항상 200 + validation_failed). 종합은 '여러 시황 리포트 인용'(시장 판정 아님)·면책.
+    """
+    return graceful_counts(
+        market_outlook_combined.summarize_recent_outlooks,
+        {"summary": None, "validation_failed": True, "report_count": 0},
+    )

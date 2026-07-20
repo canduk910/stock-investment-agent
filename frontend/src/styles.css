@@ -1306,6 +1306,80 @@ body {
   background: var(--c-surface-2);
   border-radius: 12px;
 }
+/* 금일의 요약 — 시각 강조 카드(주황 강조 소프트·좌측 강조선). 강조=주황(--c-emph), 가격/경보색 아님. */
+.daily-summary {
+  margin: 12px 0;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--c-emph-border);
+  border-left: 4px solid var(--c-emph);
+  background: var(--c-emph-soft);
+  border-radius: 12px;
+}
+.daily-summary__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.daily-summary__title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--c-emph-strong);
+}
+.daily-summary__badge {
+  font-size: 15px;
+}
+.daily-summary__sub {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+}
+.daily-summary__gen {
+  flex: none;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-white);
+  background: var(--c-emph);
+  border: 1px solid var(--c-emph-strong);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.daily-summary__gen:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.daily-summary__body {
+  margin-top: 12px;
+  animation: rise-in 0.28s ease both;
+}
+.daily-summary__chips {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.daily-summary__chip {
+  background: var(--c-white);
+  border: 1px solid var(--c-emph-border);
+  color: var(--c-emph-strong);
+}
+.daily-summary__lines {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.daily-summary__lines li {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--c-text);
+}
 .analyst-combined__head {
   display: flex;
   align-items: center;
@@ -1544,6 +1618,41 @@ body {
 /* ── 대화 이름 수정(항목2) ── */
 .chat__convrename {
   flex: none;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--c-text-secondary);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+/* 대화 삭제 — 아이콘 버튼 + 2단계 확인(뉴트럴, 경보색 미사용 — 관습). */
+.chat__convdelete {
+  flex: none;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--c-text-secondary);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.chat__convdelete-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.chat__convdelete-yes {
+  padding: 6px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-emph-strong);
+  background: var(--c-emph-soft);
+  border: 1px solid var(--c-emph-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.chat__convdelete-no {
   padding: 6px 8px;
   font-size: 12px;
   color: var(--c-text-secondary);
@@ -2744,6 +2853,47 @@ body {
   font-weight: 700;
   border-radius: var(--radius-pill);
   white-space: nowrap;
+}
+/* 헤드라인 통계 — 가입자수·방문수 필(중립 표면 카드). '오늘'만 주황 강조(값=남색). */
+.app__stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 14px;
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-pill);
+}
+.app__stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.app__stat-label {
+  font-size: 11px;
+  color: var(--c-text-muted);
+}
+.app__stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--c-navy);
+  font-variant-numeric: tabular-nums;
+}
+.app__stat-unit {
+  font-size: 11px;
+  color: var(--c-text-muted);
+}
+.app__stat-today {
+  margin-left: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c-emph);
+  font-variant-numeric: tabular-nums;
+}
+.app__stat-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--c-border-strong);
 }
 /* 현재 국면 = 강조 주황 소프트(핵심 값). */
 .app__chip--regime {

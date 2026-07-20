@@ -11,10 +11,16 @@ import {
   fetchConversations,
   createConversation,
   renameConversation,
+  deleteConversation,
+  recordVisit,
+  fetchSiteStats,
 } from './api.js'
 import { fetchMe, logout } from './auth.js'
 import { detectTargetAlerts } from './lib/watchlistLogic.js'
 import yonseiCi from './assets/yonsei-ci.png' // 연세대 공식 CI(과제 소속 표기)
+
+// 방문 1회 기록 가드(모듈 스코프) — StrictMode 이중 마운트에도 방문은 앱 로드당 1건만(프로덕션은 1회).
+let _visitRecorded = false
 
 // UX 개편 — 좌측 상시 채팅 + 우측 맥락형 동적 패널(모달 폐기). 2컬럼 그리드(.app__main).
 //   우측 패널은 두 경로로 구동: (a) 챗봇 tool_call(ChatPanel.onShowPanel→setRightPanelSpec),
@@ -115,6 +121,25 @@ export default function App() {
       /* graceful — 실패해도 기존 제목 유지 */
     }
   }, [])
+
+  // 대화 삭제 — 서버 삭제(유저 스코프·소유권) 성공 후 목록에서 제거. 현재 대화를 지우면 남은 첫 대화로
+  //   전환(없으면 새 대화 생성 → 최소 1개 보장). 실패는 목록 유지(graceful).
+  const handleDeleteConversation = useCallback(
+    async (id) => {
+      try {
+        await deleteConversation(id)
+      } catch {
+        return // 삭제 실패 → 로컬 목록 유지(무단 제거 방지)
+      }
+      const remaining = conversations.filter((x) => x.id !== id)
+      setConversations(remaining)
+      if (id === conversationId) {
+        if (remaining.length > 0) setConversationId(remaining[0].id)
+        else newConversation() // 마지막 대화 삭제 → 새 대화(최소 1개 보장)
+      }
+    },
+    [conversations, conversationId, newConversation],
+  )
 
   // 챗 턴 완료 후: ① 대화목록 재조회(첫 질문 자동 명명·재정렬 반영) ② 내 질문 잔량 갱신(톱바 칩).
   //   fetchMe 는 quota(used_today/daily_limit/remaining)까지 반환 → 소비 후 잔량이 즉시 최신화된다.
@@ -257,6 +282,33 @@ export default function App() {
     }
   }, [])
 
+  // 톱바 헤드라인 통계 — 가입자수 + 방문수(누적+오늘). 마운트 시 방문 1건 기록(가드) 후 집계 조회.
+  //   집계만 표시(PII 없음), 실패는 조용히 무시(칩만 생략·앱 정상).
+  const [siteStats, setSiteStats] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    async function loadStats() {
+      if (!_visitRecorded) {
+        _visitRecorded = true
+        try {
+          await recordVisit() // 이 방문을 카운트한 뒤 조회 → 표시 수치에 즉시 반영
+        } catch {
+          /* 방문 기록 실패는 무시(부가 기능) */
+        }
+      }
+      try {
+        const s = await fetchSiteStats()
+        if (!cancelled) setSiteStats(s)
+      } catch {
+        /* 통계 조회 실패 — 헤드라인 칩만 생략, 앱은 정상 렌더 */
+      }
+    }
+    loadStats()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   // 인증 게이트(모든 훅 뒤) — 확인 전엔 아무것도, 비로그인은 LoginScreen(전체 게이트).
   if (!authChecked) return null
   if (!user) return <LoginScreen onAuthed={setUser} />
@@ -281,6 +333,23 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {/* 헤드라인 통계 — 가입자수 + 방문수(누적·오늘). 집계만(PII 없음), '오늘'은 주황 강조. */}
+        {siteStats && (
+          <div className="app__stats" aria-label="사이트 통계">
+            <span className="app__stat">
+              <span className="app__stat-label">가입자</span>
+              <span className="app__stat-value">{Number(siteStats.member_count).toLocaleString()}</span>
+              <span className="app__stat-unit">명</span>
+            </span>
+            <span className="app__stat-divider" aria-hidden="true" />
+            <span className="app__stat">
+              <span className="app__stat-label">방문</span>
+              <span className="app__stat-value">{Number(siteStats.total_visits).toLocaleString()}</span>
+              <span className="app__stat-today">오늘 {Number(siteStats.today_visits).toLocaleString()}</span>
+            </span>
+          </div>
+        )}
 
         <div className="app__status">
           <span className="app__user" title={user.email}>
@@ -370,6 +439,7 @@ export default function App() {
             onNewConversation={newConversation}
             onSelectConversation={selectConversation}
             onRenameConversation={handleRenameConversation}
+            onDeleteConversation={handleDeleteConversation}
             onTurnComplete={refreshConversations}
           />
         </div>

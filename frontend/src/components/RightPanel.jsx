@@ -68,7 +68,7 @@ function RightPanelBody({ spec, onClose, sessionId, onConsult, onSelect, current
       return (
         <>
           <RegimeGauge />
-          <MarketOutlookSection />
+          <MarketOutlookSection sessionId={sessionId} onConsult={onConsult} />
         </>
       )
     case 'watchlist':
