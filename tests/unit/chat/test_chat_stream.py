@@ -65,7 +65,7 @@ def _no_guardrail(monkeypatch):
 def _stub_view_context(monkeypatch):
     # P2 스냅샷 되먹임 기본값 = 없음(실 build_view_context→FRED/KIS·requests_cache 전역설치로
     # fred/vix 테스트 오염 방지). 스냅샷 검증 테스트는 개별 재설정한다.
-    monkeypatch.setattr(chatmod, "build_view_context", lambda kind, args: None)
+    monkeypatch.setattr(chatmod, "build_view_context", lambda kind, args, **kw: None)
 
 
 @pytest.fixture(autouse=True)
@@ -217,7 +217,13 @@ def test_tool_calls_stream_emits_popups_then_narration():
 
 def test_view_context_tool_stream_feeds_summary_and_keeps_popup(monkeypatch):
     # P2 스트리밍: show_balance 는 popups 유지 + tool 결과에 스냅샷 요약(call_{i} 페어링 정상).
-    monkeypatch.setattr(chatmod, "build_view_context", lambda kind, args: "기준시각: T\n순자산 1,900만원")
+    seen = {}
+
+    def _spy(kind, args, *, user=None, db=None):
+        seen.update(kind=kind, user=user, db=db)
+        return "기준시각: T\n순자산 1,900만원"
+
+    monkeypatch.setattr(chatmod, "build_view_context", _spy)
     call1 = [
         _tool_chunk([_tool_delta(0, tc_id="c0", name="show_balance", args="")]),
         _tool_chunk([_tool_delta(0, args="{}")], finish_reason="tool_calls"),
@@ -225,7 +231,7 @@ def test_view_context_tool_stream_feeds_summary_and_keeps_popup(monkeypatch):
     call2 = [_content_chunk("순자산 1,900만원입니다.", finish_reason="stop")]
     client = _FakeStreamClient([call1, call2])
 
-    events = _collect(chat_stream("내 잔고 어때", _JUDGE, Session(), client=client))
+    events = _collect(chat_stream("내 잔고 어때", _JUDGE, Session(), client=client, user="U", db="D"))
 
     # 팝업은 유지(프론트 패널 표시).
     assert events[-1]["popups"] == [{"name": "show_balance", "args": {}}]
@@ -234,6 +240,8 @@ def test_view_context_tool_stream_feeds_summary_and_keeps_popup(monkeypatch):
     tool_msgs = [m for m in msgs if isinstance(m, dict) and m.get("role") == "tool"]
     assert tool_msgs and tool_msgs[0]["tool_call_id"] == "call_0"
     assert "순자산 1,900만원" in (tool_msgs[0].get("content") or "")
+    # ★ P2 뷰 스냅샷이 로그인 user/db 를 관통 → 패널과 동일 DB KIS 자격증명 사용(프로덕션 env 제거 대응).
+    assert seen == {"kind": "balance", "user": "U", "db": "D"}
 
 
 def test_stream_ml_risk_reclassify_allows_proceeds(monkeypatch):

@@ -58,6 +58,23 @@ def test_merge_intent_wins_over_conflicting_llm_panel():
     assert out[0]["name"] == "show_watchlist"
 
 
+def test_merge_does_not_clobber_manage_watchlist_confirm():
+    # manage_watchlist = 사용자가 [확인]해야 반영되는 편집 write 카드. 인텐트 네비 패널(show_watchlist)이
+    # 이를 popups[0] 에서 밀어내면 확인 카드가 안 보여 등록/편집 불가(회귀). LLM 이 이 액션 카드를 냈으면
+    # 그게 popups[0] 여야 한다 — watchlist_mgmt 인텐트여도 네비 패널을 주입하지 않는다.
+    llm = [{"name": "manage_watchlist", "args": {"action": "add", "ticker": "000660", "stock_name": "SK하이닉스"}}]
+    out = merge_intent_panel("watchlist_mgmt", llm)
+    assert out[0]["name"] == "manage_watchlist"
+    assert out == llm  # 인텐트 패널 미주입(액션 카드 보존)
+
+
+def test_merge_action_panel_wins_over_any_intent_nav():
+    # portfolio_advice(→show_balance) 등 다른 네비 인텐트에서도 확인 카드가 우선한다(목표가 편집 등).
+    llm = [{"name": "manage_watchlist", "args": {"action": "set_target", "ticker": "005930", "target_price": 90000}}]
+    assert merge_intent_panel("portfolio_advice", llm)[0]["name"] == "manage_watchlist"
+    assert merge_intent_panel("macro_view", llm)[0]["name"] == "manage_watchlist"
+
+
 def test_merge_no_mapping_passthrough():
     llm = [{"name": "show_stock_report", "args": {"ticker": "005930"}}]
     assert merge_intent_panel("stock_analysis", llm) == llm  # ticker 필요 → LLM 유지

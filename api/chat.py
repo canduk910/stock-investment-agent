@@ -123,7 +123,7 @@ def post_chat(
     session = get_session(body.session_id)
     _hydrate_session(session, user, db, body.session_id)
     judgement, _indicators_used, _partial_failure = live_judgement()
-    result = chat(body.message, judgement, session)
+    result = chat(body.message, judgement, session, user=user, db=db)
     consume(user, db)  # 성공 턴 1회 소비 기록(일별 리셋 반영·누적·커밋)
     _persist_turn(user, db, body.session_id, body.message, result.get("text", ""))
     return result
@@ -256,7 +256,7 @@ def _sse(body: ChatRequest, user: User, db: Session):
         yield frame({"type": "stage", "stage": "regime"})
 
     assistant_text = ""  # 토큰 누적 → 스트림 종료 후 대화기록 저장(write-through).
-    for ev in chat_stream(body.message, judgement, session):
+    for ev in chat_stream(body.message, judgement, session, user=user, db=db):
         # chat_stream 이 선두에 내는 analyze 는 라우트가 이미 냈으므로 중복 제거.
         if ev.get("type") == "stage" and ev.get("stage") == "analyze":
             continue

@@ -141,19 +141,23 @@ def _build_system_prompt(
     return prompt
 
 
-def _display_tool_result(name: str, args: dict) -> str:
+def _display_tool_result(name: str, args: dict, *, user=None, db=None) -> str:
     """표시 툴 되먹임 문자열 — 기본 `{"ok":True}`.
 
     뷰 컨텍스트 툴(show_balance/watchlist/stock_report)이면 서버가 조회한 현재 화면 스냅샷 요약을
     함께 실어(P2) 같은 턴에 LLM 이 즉답하게 한다. 표시 팝업은 별개로 유지된다(프론트가 패널 표시).
     build_view_context 는 절대 예외를 안 내지만(None만) 방어적으로 감싼다. ensure_ascii=False 로
     한글 스냅샷을 그대로 실어 LLM 이 인용하기 쉽게 한다.
+
+    **user/db 를 관통해야 패널/P1 과 동일하게 DB(__shared__/유저) KIS 자격증명으로 조회한다.**
+    미전달 시 build_view_context 는 env fallback 만 쓰는데, 프로덕션은 KIS 앱키를 env(Secret Manager)
+    에서 제거하고 암호화 DB 에만 seed 하므로 db 없이는 잔고/시세가 '일시 조회 불가'로 실패한다.
     """
     payload = {"ok": True}
     mapped = view_context_kind_args(name, args)
     if mapped is not None:
         try:
-            summary = build_view_context(mapped[0], mapped[1])
+            summary = build_view_context(mapped[0], mapped[1], user=user, db=db)
         except Exception:
             summary = None
         if summary:
@@ -182,8 +186,11 @@ def _create_with_retry(client, **kwargs):
         return client.chat.completions.create(**merged)
 
 
-def chat(user_query: str, judgement: dict, session: Session, *, client=None) -> dict:
-    """사용자 질의 → {"text","popups"}. 위험 요청은 2층 차단(결정적 키워드 + ML→LLM 재분류)."""
+def chat(user_query: str, judgement: dict, session: Session, *, client=None, user=None, db=None) -> dict:
+    """사용자 질의 → {"text","popups"}. 위험 요청은 2층 차단(결정적 키워드 + ML→LLM 재분류).
+
+    user/db 는 P2 뷰 스냅샷(잔고·시세)이 DB KIS 자격증명을 쓰도록 관통한다(패널과 동일 경로).
+    """
     # 1a. 결정적 키워드(4유형) → LLM 미호출 하드블록(안전 하한선, 재분류 없이).
     if guardrail_label(user_query):
         session.append(user_query, _GUARDRAIL_MESSAGE)
@@ -233,7 +240,7 @@ def chat(user_query: str, judgement: dict, session: Session, *, client=None) -> 
                 else:
                     # 표시 툴: "무엇을 띄울지"만 팝업으로 리프팅. 뷰 컨텍스트 툴이면 현재 화면 스냅샷도 되먹임(P2).
                     popups.append({"name": name, "args": args})
-                    content = _display_tool_result(name, args)
+                    content = _display_tool_result(name, args, user=user, db=db)
                 messages.append(
                     {
                         "role": "tool",
@@ -293,7 +300,7 @@ def _accumulate_tool_calls(deltas_per_chunk) -> list[dict]:
     return popups
 
 
-def chat_stream(user_query: str, judgement: dict, session: Session, *, client=None):
+def chat_stream(user_query: str, judgement: dict, session: Session, *, client=None, user=None, db=None):
     """사용자 질의 → 이벤트 dict 를 yield 하는 동기 제너레이터(스트리밍 경로).
 
     기존 chat() 과 나란히 존재하는 SSE용 경로. 같은 안전 원칙을 지킨다:
@@ -385,7 +392,7 @@ def chat_stream(user_query: str, judgement: dict, session: Session, *, client=No
                 if c["name"] in CONTENT_TOOLS:
                     content = run_content_tool(c["name"], c["args"])  # 실제 텍스트 되먹임
                 else:
-                    content = _display_tool_result(c["name"], c["args"])  # 확인 신호(+뷰 스냅샷 P2)
+                    content = _display_tool_result(c["name"], c["args"], user=user, db=db)  # 확인 신호(+뷰 스냅샷 P2)
                 messages.append(
                     {
                         "role": "tool",

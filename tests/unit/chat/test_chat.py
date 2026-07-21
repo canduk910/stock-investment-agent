@@ -54,7 +54,7 @@ def _stub_view_context(monkeypatch):
     # 표시 툴 P2 스냅샷 되먹임의 기본값 = 없음(=> tool 결과 {"ok":True}만). 이렇게 해야 표시 툴을
     # 부르는 기존 테스트가 실제 build_view_context(→build_judgement→FRED/KIS, requests_cache 전역
     # 설치로 fred/vix 테스트 오염)를 타지 않는다. 스냅샷 검증 테스트는 개별적으로 재설정한다.
-    monkeypatch.setattr(chatmod, "build_view_context", lambda kind, args: None)
+    monkeypatch.setattr(chatmod, "build_view_context", lambda kind, args, **kw: None)
 
 
 @pytest.fixture(autouse=True)
@@ -77,6 +77,41 @@ def test_tool_calls_response_splits_text_and_popups():
     assert out["popups"][0]["args"]["ticker"] == "005930"
     assert "삼성전자" in out["text"]
     assert len(client.calls) == 2  # tool_calls → 되먹임 후 최종 답변
+
+
+def test_display_tool_result_passes_user_db(monkeypatch):
+    """P2 스냅샷 조립이 user/db 를 build_view_context 로 관통한다(DB KIS 자격증명 사용)."""
+    seen = {}
+    monkeypatch.setattr(
+        chatmod,
+        "build_view_context",
+        lambda kind, args, *, user=None, db=None: (seen.update(kind=kind, user=user, db=db), "[내 잔고] 순자산 100원")[1],
+    )
+    out = chatmod._display_tool_result("show_balance", {}, user="U", db="D")
+    assert seen == {"kind": "balance", "user": "U", "db": "D"}
+    assert "순자산" in out
+
+
+def test_chat_threads_user_db_to_view_context(monkeypatch):
+    """챗 P2 뷰 스냅샷이 로그인 user/db 를 build_view_context 로 관통 → 패널과 동일한 DB KIS 자격증명 사용.
+    (프로덕션은 KIS env 를 제거하고 DB(__shared__/유저)에만 seed 하므로, db 미전달 시 env fallback 실패
+    = '잔고 일시 조회 불가' 버그. db 를 넘겨야 DB 공유/유저 키로 조회된다.)"""
+    seen = {}
+
+    def _spy(kind, args, *, user=None, db=None):
+        seen.update(kind=kind, user=user, db=db)
+        return "[내 잔고] 순자산 100원"
+
+    monkeypatch.setattr(chatmod, "build_view_context", _spy)
+    client = _FakeClient(
+        [
+            _resp(tool_calls=[_tool_call("show_balance", {})], finish_reason="tool_calls"),
+            _resp(content="잔고는 순자산 100원입니다."),
+        ]
+    )
+    out = chat("내 잔고 보여줘", _JUDGE, Session(), client=client, user="U", db="D")
+    assert out["popups"][0]["name"] == "show_balance"
+    assert seen == {"kind": "balance", "user": "U", "db": "D"}
 
 
 def test_no_tool_calls_returns_empty_popups():
@@ -233,7 +268,7 @@ def test_session_appends_after_guardrail_block(monkeypatch):
 def test_view_context_tool_feeds_summary_and_keeps_popup(monkeypatch):
     # P2: show_balance 는 여전히 popups(프론트 패널)로 가되, tool 결과에 서버 스냅샷 요약이 실려
     # 같은 턴에 LLM 이 즉답할 수 있다.
-    monkeypatch.setattr(chatmod, "build_view_context", lambda kind, args: "기준시각: T\n순자산 1,900만원")
+    monkeypatch.setattr(chatmod, "build_view_context", lambda kind, args, **kw: "기준시각: T\n순자산 1,900만원")
     client = _FakeClient(
         [
             _resp(tool_calls=[_tool_call("show_balance", {})], finish_reason="tool_calls"),
@@ -254,7 +289,7 @@ def test_view_context_tool_forwards_ticker(monkeypatch):
     seen = {}
     monkeypatch.setattr(
         chatmod, "build_view_context",
-        lambda kind, args: seen.setdefault("ka", (kind, args)) and None or "기준시각: T\n종목",
+        lambda kind, args, **kw: seen.setdefault("ka", (kind, args)) and None or "기준시각: T\n종목",
     )
     client = _FakeClient(
         [
@@ -270,7 +305,7 @@ def test_view_context_tool_forwards_ticker(monkeypatch):
 
 def test_non_view_display_tool_no_summary(monkeypatch):
     # 뷰 컨텍스트 툴이 아닌 표시 툴(show_macro_dashboard)은 {"ok":True}만(summary 없음).
-    monkeypatch.setattr(chatmod, "build_view_context", lambda kind, args: "SHOULD NOT APPEAR")
+    monkeypatch.setattr(chatmod, "build_view_context", lambda kind, args, **kw: "SHOULD NOT APPEAR")
     client = _FakeClient(
         [
             _resp(tool_calls=[_tool_call("show_macro_dashboard", {"highlight": "regime"})],
