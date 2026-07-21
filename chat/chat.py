@@ -19,6 +19,7 @@ import json
 
 from chat.build_prompt import build_prompt
 from chat.intent import classify, guardrail_label
+from chat.intent_panel import merge_intent_panel
 from chat.session import Session
 from chat.tools import (
     CHAT_MODEL,
@@ -174,8 +175,11 @@ def chat(user_query: str, judgement: dict, session: Session, *, client=None) -> 
     if client is None:
         client = _make_client()
 
+    # 인텐트 1회 분류(risk 체크 + 네비게이션 패널 라우팅 공용). 라벨은 아래 두 용도로만 쓴다.
+    intent = classify(user_query)
+
     # 1b. ML 이 risk 로 보면 LLM 2차 재분류 — 오탐이면 통과(구제), 위험 확정이면 차단.
-    if classify(user_query) == "risk_guardrail" and _reclassify_risk(client, user_query):
+    if intent == "risk_guardrail" and _reclassify_risk(client, user_query):
         session.append(user_query, _GUARDRAIL_MESSAGE)
         return {"text": _GUARDRAIL_MESSAGE, "popups": []}
 
@@ -225,6 +229,9 @@ def chat(user_query: str, judgement: dict, session: Session, *, client=None) -> 
         text = _FALLBACK_MESSAGE
         popups = []
 
+    # 인텐트가 정하는 네비게이션 패널(macro/watchlist/balance)을 popups 앞에 주입(폴백에도 적용).
+    #   프론트가 popups[0]로 우측 패널을 전환 → 인텐트가 패널을 권위적으로 결정(원 설계). LLM 중복은 dedup.
+    popups = merge_intent_panel(intent, popups)
     session.append(user_query, text)
     return {"text": text, "popups": popups}
 
@@ -293,8 +300,11 @@ def chat_stream(user_query: str, judgement: dict, session: Session, *, client=No
     if client is None:
         client = _make_client()
 
+    # 인텐트 1회 분류(risk 체크 + 네비게이션 패널 라우팅 공용).
+    intent = classify(user_query)
+
     # 1b. ML 이 risk 로 보면 LLM 2차 재분류 — 오탐이면 통과(구제), 위험 확정이면 차단.
-    if classify(user_query) == "risk_guardrail" and _reclassify_risk(client, user_query):
+    if intent == "risk_guardrail" and _reclassify_risk(client, user_query):
         session.append(user_query, _GUARDRAIL_MESSAGE)
         yield {"type": "token", "text": _GUARDRAIL_MESSAGE}
         yield {"type": "done", "popups": []}
@@ -330,12 +340,20 @@ def chat_stream(user_query: str, judgement: dict, session: Session, *, client=No
                 full_text += content
                 yield {"type": "token", "text": content}
 
+        all_calls: list[dict] = []
         if saw_tool_calls:
             all_calls = _accumulate_tool_calls(tool_deltas)
             # 콘텐츠 툴(summarize_youtube 등)은 팝업이 아니라 요약 소스 → 표시 popups 에서 제외.
             #   done 이벤트도 이 표시 팝업을 싣도록 외부 popups 에 배정한다.
             popups = [c for c in all_calls if c["name"] not in CONTENT_TOOLS]
-            yield {"type": "popups", "popups": popups}
+
+        # 인텐트 네비게이션 패널(macro/watchlist/balance)을 popups 앞에 주입 — LLM 도구 호출이 없어도
+        #   패널이 전환되게. 프론트가 popups[0]로 우측 패널을 바꾼다(인텐트 권위적, LLM 중복 dedup).
+        popups = merge_intent_panel(intent, popups)
+        if popups:
+            yield {"type": "popups", "popups": popups}  # 패널 선행 전환(설명 토큰보다 먼저)
+
+        if saw_tool_calls:
             # assistant(tool_calls)는 전부 되먹여야 tool 메시지와 짝이 맞는다(call_{i} 일치).
             messages.append(_assistant_tool_calls_message(all_calls))
             for i, c in enumerate(all_calls):

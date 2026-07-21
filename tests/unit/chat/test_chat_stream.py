@@ -104,6 +104,18 @@ def test_accumulate_tool_calls_bad_json_yields_empty_args():
     assert popups == [{"name": "show_watchlist", "args": {}}]
 
 
+# --- 인텐트 → 우측 패널 결정적 라우팅(스트림) ---
+def test_intent_panel_emitted_in_stream_without_tool_calls(monkeypatch):
+    # 인텐트=macro_view + LLM 도구 미호출(텍스트만) → popups 이벤트/done 에 시장국면 패널.
+    monkeypatch.setattr(chatmod, "classify", lambda t: "macro_view")
+    client = _FakeStreamClient([[_content_chunk("지금은 확장 국면입니다.")]])
+    events = _collect(chat_stream("시장 국면 어때?", _JUDGE, Session(), client=client))
+    popup_events = [e for e in events if e["type"] == "popups"]
+    assert popup_events and popup_events[0]["popups"][0]["name"] == "show_macro_dashboard"
+    done = [e for e in events if e["type"] == "done"][0]
+    assert done["popups"][0]["name"] == "show_macro_dashboard"
+
+
 # --- guardrail: LLM 미호출 결정적 차단 ---
 def test_guardrail_blocks_without_calling_llm(monkeypatch):
     monkeypatch.setattr(chatmod, "classify", lambda t: "risk_guardrail")

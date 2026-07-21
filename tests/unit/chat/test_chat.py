@@ -124,6 +124,52 @@ def test_first_create_passes_tools_and_model():
     assert _JUDGE["regime"] in kwargs["messages"][0]["content"]
 
 
+# ── 인텐트 → 우측 패널 결정적 라우팅(원 설계 반영) ──
+def test_intent_macro_view_prepends_dashboard_panel(monkeypatch):
+    # 인텐트=macro_view + LLM 도구 미호출 → 인텐트가 시장국면 패널을 결정(popups[0]).
+    monkeypatch.setattr(chatmod, "classify", lambda t: "macro_view")
+    client = _FakeClient([_resp(content="지금은 확장 국면입니다.")])
+    out = chat("시장 국면 어때?", _JUDGE, Session(), client=client)
+    assert out["popups"][0]["name"] == "show_macro_dashboard"
+    assert out["popups"][0]["args"] == {}
+
+
+def test_intent_watchlist_dedups_llm_duplicate(monkeypatch):
+    # 인텐트=watchlist_mgmt + LLM 도 show_watchlist 호출 → 중복 제거(패널 1개).
+    monkeypatch.setattr(chatmod, "classify", lambda t: "watchlist_mgmt")
+    client = _FakeClient(
+        [
+            _resp(tool_calls=[_tool_call("show_watchlist", {})], finish_reason="tool_calls"),
+            _resp(content="관심종목입니다."),
+        ]
+    )
+    out = chat("관심종목 보여줘", _JUDGE, Session(), client=client)
+    assert [p["name"] for p in out["popups"]] == ["show_watchlist"]
+
+
+def test_intent_panel_applied_even_on_llm_failure(monkeypatch):
+    # LLM 전체 실패(폴백)여도 인텐트 네비게이션 패널은 전환된다.
+    monkeypatch.setattr(chatmod, "classify", lambda t: "portfolio_advice")
+    out = chat("내 잔고 어때?", _JUDGE, Session(), client=_FakeClient([]))  # create → IndexError → 폴백
+    assert out["popups"][0]["name"] == "show_balance"
+
+
+def test_intent_stock_analysis_leaves_llm_panel(monkeypatch):
+    # ticker 필요한 종목리포트는 LLM 담당 — 인텐트 패널 주입 없음.
+    monkeypatch.setattr(chatmod, "classify", lambda t: "stock_analysis")
+    client = _FakeClient(
+        [
+            _resp(
+                tool_calls=[_tool_call("show_stock_report", {"ticker": "005930"})],
+                finish_reason="tool_calls",
+            ),
+            _resp(content="삼성전자 리포트."),
+        ]
+    )
+    out = chat("삼성전자 어때", _JUDGE, Session(), client=client)
+    assert out["popups"][0]["name"] == "show_stock_report"  # 인텐트 미개입
+
+
 def test_risk_guardrail_blocks_without_calling_llm(monkeypatch):
     monkeypatch.setattr(chatmod, "classify", lambda t: "risk_guardrail")
     client = _FakeClient([])  # 비면 LLM 호출 시 IndexError → 미호출 보장
