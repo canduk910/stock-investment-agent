@@ -4,8 +4,7 @@ import { searchStocks } from '../api.js'
 import PopupStockReport from './PopupStockReport.jsx'
 import PopupWatchlist from './PopupWatchlist.jsx'
 import ManageWatchlistConfirm from './ManageWatchlistConfirm.jsx'
-import RegimeGauge from './RegimeGauge.jsx'
-import MarketOutlookSection from './MarketOutlookSection.jsx'
+import MacroDashboard from './MacroDashboard.jsx'
 import BalancePanel from './BalancePanel.jsx'
 import KisSettingsPanel from './KisSettingsPanel.jsx'
 import AdminPanel from './AdminPanel.jsx'
@@ -64,13 +63,10 @@ function RightPanelBody({ spec, onClose, sessionId, onConsult, onSelect, current
         />
       )
     case 'macro_dashboard':
-      // 시장 국면 게이지 + 증권사 시황 리포트 요약(자체조회). 시황은 판정이 아니라 리포트 인용.
-      return (
-        <>
-          <RegimeGauge />
-          <MarketOutlookSection sessionId={sessionId} onConsult={onConsult} />
-        </>
-      )
+      // 시장국면 대시보드 컨테이너 — [금일의 요약(최상단·자동)] → [국면 판정] → [증권사 시황 카드].
+      // 시황 lifecycle(수집·요약) 단일 소유·자동 오케스트레이션. 시황은 판정이 아니라 리포트 인용.
+      return <MacroDashboard sessionId={sessionId} onConsult={onConsult} />
+
     case 'watchlist':
       return <PopupWatchlist args={spec.args} onOpenStock={openStock} />
     case 'manage_watchlist':

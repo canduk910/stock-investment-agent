@@ -139,6 +139,50 @@ def test_store_list_sorted_desc(tmp_path):
     assert [r["date"] for r in s.list_reports()] == ["26.07.10", "26.07.08"]
 
 
+# ── build_recent_outlook_context (챗 프롬프트 주입용·추가 LLM 0) ──
+class _StubStore:
+    def __init__(self, reports):
+        self._reports = reports
+
+    def list_reports(self):
+        return list(self._reports)
+
+
+def _outlook_entry(broker, stance):
+    return {
+        "report_id": broker, "broker": broker, "title": f"{broker} 시황", "date": "26.07.20",
+        "summary": {"증권사": broker, "제목": f"{broker} 시황", "시장전망": stance, "요약": "박스권.",
+                    "핵심요지": ["금리"], "리스크요인": ["환율"], "면책고지": "자문 아님."},
+    }
+
+
+def test_build_recent_outlook_context_formats_recent_n():
+    store = _StubStore([_outlook_entry(b, "중립") for b in ("KB", "삼성", "미래", "NH")])
+    ctx = mo.build_recent_outlook_context(limit=3, store=store)
+    assert ctx and "KB" in ctx and "삼성" in ctx and "미래" in ctx
+    assert "NH" not in ctx  # limit=3 → 최근 3개만
+    assert "시장전망" in ctx  # format_market_outlook_context 포맷 사용
+
+
+def test_build_recent_outlook_context_caps_chars():
+    ctx = mo.build_recent_outlook_context(
+        limit=3, max_chars=200, store=_StubStore([_outlook_entry("KB", "중" * 5000)])
+    )
+    assert ctx is not None and len(ctx) <= 200
+
+
+def test_build_recent_outlook_context_empty_is_none():
+    assert mo.build_recent_outlook_context(store=_StubStore([])) is None
+
+
+def test_build_recent_outlook_context_graceful_on_store_error():
+    class _BoomStore:
+        def list_reports(self):
+            raise RuntimeError("db down")
+
+    assert mo.build_recent_outlook_context(store=_BoomStore()) is None
+
+
 # ── 서비스 ──
 def test_service_fetch_and_summarize(monkeypatch, tmp_path):
     metas = [{"nid": "36722", "broker": "KB증권", "title": "t", "date": "26.07.10",

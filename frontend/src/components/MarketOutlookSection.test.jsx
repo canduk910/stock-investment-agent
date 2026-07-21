@@ -2,39 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import MarketOutlookSection from './MarketOutlookSection.jsx'
 
-// 시황 요약 섹션 렌더 스모크(jsdom) — 경계(api.js)만 mock. 요약은 '시황 리포트 인용'·면책 상시.
-// 항목4: 일별 구분 + 컴팩트 3줄요약 카드 + 클릭 시 상세 오버레이(딤 배경·Esc/✕ 닫힘).
+// 시황 요약 섹션 = **controlled 카드 뷰**(reports·수집상태를 상위 MacroDashboard 가 주입). 자체 fetch·
+// 자동 최신화·금일의 요약은 컨테이너로 이관 → 여기선 표시·오버레이·상담만 검증. 요약은 리포트 인용·면책.
+// api.js 는 상담(setMarketOutlookContext)만 호출한다.
 
 vi.mock('../api.js', () => ({
-  fetchMarketOutlook: vi.fn(),
-  fetchNaverMarketOutlook: vi.fn(),
-  streamFetchMarketOutlook: vi.fn(),
   setMarketOutlookContext: vi.fn(),
-  fetchMarketOutlookSummary: vi.fn(),
 }))
-import {
-  fetchMarketOutlook,
-  fetchNaverMarketOutlook,
-  streamFetchMarketOutlook,
-  setMarketOutlookContext,
-  fetchMarketOutlookSummary,
-} from '../api.js'
-import { todayStampKST } from '../lib/marketOutlook.js' // 실제 헬퍼(모킹 안 함)
-
-// jsdom 환경에 localStorage 전역이 없어(auth.test.js 선례) 인메모리로 스텁 — 자동수집 가드 검증용.
-const _ls = {}
-vi.stubGlobal('localStorage', {
-  getItem: (k) => (k in _ls ? _ls[k] : null),
-  setItem: (k, v) => {
-    _ls[k] = String(v)
-  },
-  removeItem: (k) => {
-    delete _ls[k]
-  },
-  clear: () => {
-    for (const k of Object.keys(_ls)) delete _ls[k]
-  },
-})
+import { setMarketOutlookContext } from '../api.js'
 
 const REPORT = {
   report_id: '36722',
@@ -64,32 +39,14 @@ const REPORT_OLD = {
 }
 
 beforeEach(() => {
-  fetchMarketOutlook.mockReset()
-  fetchNaverMarketOutlook.mockReset()
-  streamFetchMarketOutlook.mockReset()
-  streamFetchMarketOutlook.mockResolvedValue(undefined) // 자동수집이 우발적으로 fire해도 안전
   setMarketOutlookContext.mockReset()
   setMarketOutlookContext.mockResolvedValue({ ok: true, set: true, broker: 'KB증권' })
-  fetchMarketOutlookSummary.mockReset()
-  fetchMarketOutlookSummary.mockResolvedValue({
-    validation_failed: false,
-    report_count: 5,
-    summary: {
-      시장전망분포: '중립 3·신중 2',
-      종합요약: ['외국인 수급 개선', '실적 시즌 기대', '환율 변동성 유의'],
-      면책고지: '이 종합은 여러 증권사 시황 리포트 내용이며 자문이 아니다.',
-    },
-  })
-  // 기존 테스트는 자동 최신화를 억제(가드=오늘) — 자동수집 테스트만 가드를 해제/조작한다.
-  localStorage.clear()
-  localStorage.setItem('mo_autofetch_date', todayStampKST())
 })
 
-describe('MarketOutlookSection 렌더(항목4: 일별·3줄·오버레이)', () => {
+describe('MarketOutlookSection(controlled) 렌더(항목4: 일별·3줄·오버레이)', () => {
   it('컴팩트 카드 = 증권사·시장전망·제목·3줄요약(세줄요약 우선), 상세는 클릭 전 숨김', async () => {
-    fetchMarketOutlook.mockResolvedValue({ reports: [REPORT] })
-    render(<MarketOutlookSection />)
-    await waitFor(() => expect(screen.getByText('KB증권')).toBeInTheDocument())
+    render(<MarketOutlookSection reports={[REPORT]} />)
+    expect(screen.getByText('KB증권')).toBeInTheDocument()
     expect(screen.getByText(/시장전망 · 중립/)).toBeInTheDocument()
     // 3줄요약(세줄요약) 표시.
     expect(screen.getByText('외국인 순매수 전환')).toBeInTheDocument()
@@ -102,10 +59,8 @@ describe('MarketOutlookSection 렌더(항목4: 일별·3줄·오버레이)', () 
   })
 
   it('상세 오버레이 "이 시황으로 상담하기" → setMarketOutlookContext(sessionId, report_id) + onConsult + 닫힘', async () => {
-    fetchMarketOutlook.mockResolvedValue({ reports: [REPORT] })
     const onConsult = vi.fn()
-    render(<MarketOutlookSection sessionId="99" onConsult={onConsult} />)
-    await waitFor(() => expect(screen.getByText('KB증권')).toBeInTheDocument())
+    render(<MarketOutlookSection reports={[REPORT]} sessionId="99" onConsult={onConsult} />)
     fireEvent.click(screen.getByText('7/10 모닝코멘트'))
     const dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByText('이 시황으로 상담하기'))
@@ -115,62 +70,36 @@ describe('MarketOutlookSection 렌더(항목4: 일별·3줄·오버레이)', () 
   })
 
   it('sessionId 없으면 상담 버튼 비활성 / onConsult 미전달이면 버튼 없음(옵셔널)', async () => {
-    fetchMarketOutlook.mockResolvedValue({ reports: [REPORT] })
-    const { rerender } = render(<MarketOutlookSection onConsult={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('KB증권')).toBeInTheDocument())
+    const { rerender } = render(<MarketOutlookSection reports={[REPORT]} onConsult={vi.fn()} />)
     fireEvent.click(screen.getByText('7/10 모닝코멘트'))
     let dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('이 시황으로 상담하기')).toBeDisabled() // sessionId 없음
     fireEvent.click(within(dialog).getByLabelText('닫기'))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     // onConsult 미전달 → 버튼 자체 없음
-    rerender(<MarketOutlookSection />)
+    rerender(<MarketOutlookSection reports={[REPORT]} />)
     fireEvent.click(screen.getByText('7/10 모닝코멘트'))
     dialog = await screen.findByRole('dialog')
     expect(within(dialog).queryByText('이 시황으로 상담하기')).toBeNull()
   })
 
-  it('금일의 요약 — 저장 시황 있으면 카드 노출, 생성 클릭 → 10줄 종합·시장전망분포·면책', async () => {
-    fetchMarketOutlook.mockResolvedValue({ reports: [REPORT] })
-    render(<MarketOutlookSection />)
-    await waitFor(() => expect(screen.getByText('금일의 요약')).toBeInTheDocument())
-    fireEvent.click(screen.getByText('금일의 요약 생성'))
-    await waitFor(() => expect(fetchMarketOutlookSummary).toHaveBeenCalled())
-    await waitFor(() => expect(screen.getByText('외국인 수급 개선')).toBeInTheDocument())
-    expect(screen.getByText('환율 변동성 유의')).toBeInTheDocument()
-    expect(screen.getByText(/시장전망 · 중립 3·신중 2/)).toBeInTheDocument()
-    expect(screen.getByText(/시황 5개 종합/)).toBeInTheDocument()
-  })
-
-  it('저장된 시황이 없으면(빈 목록) 금일의 요약 카드 미노출', async () => {
-    fetchMarketOutlook.mockResolvedValue({ reports: [] })
-    render(<MarketOutlookSection />)
-    await waitFor(() => expect(fetchMarketOutlook).toHaveBeenCalled())
-    expect(screen.queryByText('금일의 요약')).toBeNull()
-  })
-
   it('세줄요약 없는 구 레코드 → 핵심요지 최대 3개로 폴백', async () => {
-    fetchMarketOutlook.mockResolvedValue({ reports: [REPORT_OLD] })
-    render(<MarketOutlookSection />)
-    await waitFor(() => expect(screen.getByText('삼성증권')).toBeInTheDocument())
+    render(<MarketOutlookSection reports={[REPORT_OLD]} />)
+    expect(screen.getByText('삼성증권')).toBeInTheDocument()
     expect(screen.getByText('금리 부담')).toBeInTheDocument()
     expect(screen.getByText('실적 하향')).toBeInTheDocument()
     expect(screen.queryByText('4번째')).toBeNull() // 3개 상한
   })
 
   it('작성일별 그룹 헤더로 구분', async () => {
-    fetchMarketOutlook.mockResolvedValue({ reports: [REPORT, REPORT_OLD] })
-    render(<MarketOutlookSection />)
-    await waitFor(() => expect(screen.getByText('KB증권')).toBeInTheDocument())
+    render(<MarketOutlookSection reports={[REPORT, REPORT_OLD]} />)
+    expect(screen.getByText('KB증권')).toBeInTheDocument()
     expect(screen.getByText('26.07.10')).toBeInTheDocument()
     expect(screen.getByText('26.07.08')).toBeInTheDocument()
   })
 
   it('카드 클릭 → 상세 오버레이(요약·핵심요지·리스크·면책·PDF), ✕·Esc 닫힘', async () => {
-    fetchMarketOutlook.mockResolvedValue({ reports: [REPORT] })
-    render(<MarketOutlookSection />)
-    await waitFor(() => expect(screen.getByText('KB증권')).toBeInTheDocument())
-
+    render(<MarketOutlookSection reports={[REPORT]} />)
     fireEvent.click(screen.getByText('7/10 모닝코멘트'))
     const dialog = await screen.findByRole('dialog')
     const box = within(dialog)
@@ -192,60 +121,40 @@ describe('MarketOutlookSection 렌더(항목4: 일별·3줄·오버레이)', () 
   })
 
   it('빈 상태 안내', async () => {
-    fetchMarketOutlook.mockResolvedValue({ reports: [] })
-    render(<MarketOutlookSection />)
-    await waitFor(() =>
-      expect(screen.getByText(/아직 저장된 시황 리포트가 없어요/)).toBeInTheDocument(),
-    )
+    render(<MarketOutlookSection reports={[]} />)
+    expect(screen.getByText(/아직 저장된 시황 리포트가 없어요/)).toBeInTheDocument()
   })
 
-  it('"네이버 최신 시황 가져오기" → SSE 진행 스트림 후 완료·재조회', async () => {
-    fetchMarketOutlook
-      .mockResolvedValueOnce({ reports: [] })
-      .mockResolvedValueOnce({ reports: [REPORT] })
-    streamFetchMarketOutlook.mockImplementation(async ({ onEvent }) => {
-      onEvent({ type: 'stage', stage: 'list' })
-      onEvent({ type: 'found', reports: [{ id: '36722', broker: 'KB증권', title: '모닝코멘트' }] })
-      onEvent({ type: 'progress', id: '36722', result: 'new', done: 1, total: 1 })
-      onEvent({ type: 'done', fetched: 1, new: 1, skipped: 0, failed: 0 })
-    })
-    render(<MarketOutlookSection />)
-    await waitFor(() => screen.getByText(/네이버 최신 시황 가져오기/))
+  it('"네이버 최신 시황 가져오기" 클릭 → onFetch 콜백 호출(수집은 컨테이너 소유)', async () => {
+    const onFetch = vi.fn()
+    render(<MarketOutlookSection reports={[]} onFetch={onFetch} />)
     fireEvent.click(screen.getByText(/네이버 최신 시황 가져오기/))
-    await waitFor(() => expect(streamFetchMarketOutlook).toHaveBeenCalled())
-    await waitFor(() => expect(screen.getByText(/새 요약 1건/)).toBeInTheDocument())
-    await waitFor(() => expect(screen.getByText('KB증권')).toBeInTheDocument())
-  })
-})
-
-describe('시황 자동 최신화 — 패널 로드 시 stale이면 자동 수집', () => {
-  it('저장 최신 시황이 오래된 날짜 → 마운트 시 자동 수집 + 안내', async () => {
-    localStorage.clear() // 가드 해제 → 자동수집 허용
-    fetchMarketOutlook.mockResolvedValue({ reports: [{ ...REPORT_OLD, date: '20.01.01' }] })
-    streamFetchMarketOutlook.mockImplementation(async ({ onEvent }) => {
-      onEvent({ type: 'done', fetched: 0, new: 0, skipped: 0, failed: 0 })
-    })
-    render(<MarketOutlookSection />)
-    // 클릭 없이(마운트만으로) 자동 수집 트리거.
-    await waitFor(() => expect(streamFetchMarketOutlook).toHaveBeenCalled())
-    // 가드가 오늘로 세팅됨(중복 방지).
-    expect(localStorage.getItem('mo_autofetch_date')).toBe(todayStampKST())
+    expect(onFetch).toHaveBeenCalled()
   })
 
-  it('저장 최신 시황이 오늘 → 자동 수집 안 함', async () => {
-    localStorage.clear()
-    const today = todayStampKST()
-    fetchMarketOutlook.mockResolvedValue({ reports: [{ ...REPORT, date: today }] })
-    render(<MarketOutlookSection />)
-    await waitFor(() => expect(screen.getByText('KB증권')).toBeInTheDocument())
-    expect(streamFetchMarketOutlook).not.toHaveBeenCalled() // 오늘자라 자동수집 불필요
+  it('loading prop → 조회 중 안내, error prop → 재시도(onReload)', async () => {
+    const onReload = vi.fn()
+    const { rerender } = render(<MarketOutlookSection reports={null} loading={true} />)
+    expect(screen.getByText(/시황 요약 조회 중/)).toBeInTheDocument()
+    rerender(<MarketOutlookSection reports={null} loading={false} error="네트워크 오류" onReload={onReload} />)
+    expect(screen.getByText(/시황 조회 실패: 네트워크 오류/)).toBeInTheDocument()
+    fireEvent.click(screen.getByText(/재시도/))
+    expect(onReload).toHaveBeenCalled()
   })
 
-  it('오늘 이미 자동수집함(가드) → stale이어도 자동 수집 안 함', async () => {
-    localStorage.setItem('mo_autofetch_date', todayStampKST()) // 가드 = 오늘
-    fetchMarketOutlook.mockResolvedValue({ reports: [{ ...REPORT_OLD, date: '20.01.01' }] })
-    render(<MarketOutlookSection />)
-    await waitFor(() => expect(screen.getByText('삼성증권')).toBeInTheDocument())
-    expect(streamFetchMarketOutlook).not.toHaveBeenCalled() // 가드로 중복 수집 방지
+  it('fetching prop → 진행바, fetchMsg·autoNote prop → 안내 표시', async () => {
+    render(
+      <MarketOutlookSection
+        reports={[REPORT]}
+        fetching={true}
+        progress={{ stage: 'list', reports: [], done: 0, total: 0 }}
+        fetchMsg="새 요약 1건 · 확인 1건"
+        autoNote="오늘 최신 시황을 자동으로 확인하는 중…"
+      />,
+    )
+    expect(screen.getByText(/오늘 최신 시황을 자동으로 확인하는 중/)).toBeInTheDocument()
+    expect(screen.getByText(/새 요약 1건/)).toBeInTheDocument()
+    // 가져오기 버튼은 fetching 중 비활성.
+    expect(screen.getByText('가져오는 중…')).toBeDisabled()
   })
 })

@@ -20,6 +20,7 @@ import json
 from chat.build_prompt import build_prompt
 from chat.intent import classify, guardrail_label
 from chat.intent_panel import merge_intent_panel
+from chat.market_outlook import build_recent_outlook_context
 from chat.session import Session
 from chat.tools import (
     CHAT_MODEL,
@@ -111,12 +112,28 @@ _VIEW_CONTEXT_HEADER = (
 )
 
 
-def _build_system_prompt(judgement: dict, session: Session) -> str:
-    """필수 블록(build_prompt) + 세션 핀 컨텍스트(리포트·현재화면, 있으면). 단일 출처(양 경로 공유).
+# 최신 시황(매크로) 요약 주입 블록 — 시장 질문(intent=macro_view)에 국면 판정과 함께 근거로 싣는다.
+# per-turn(핀 아님·매 호출 최신 조회)·출처 귀속·판정 금지·면책 유지. report_context 와 별개 슬롯.
+_OUTLOOK_CONTEXT_HEADER = (
+    "\n\n[최신 증권사 시황(매크로) 리포트 요약 — 위 국면 판정과 함께 참고]\n"
+    "아래는 최근 증권사 시황 리포트들의 요약이다. 시장 전반 질문에 이 내용을 근거로 답하되: "
+    "(1) 반드시 '여러 시황 리포트에 따르면'처럼 **출처를 귀속**해 인용하고, (2) 위 국면 판정(코드가 "
+    "결정한 결과)과 이 시황을 **함께** 설명하며, (3) 네 자신의 매수/매도·시장 방향 단정 판정은 하지 "
+    "말고(시황은 리포트의 인용일 뿐), (4) 리포트 작성일(최신성)과 면책을 유지하라.\n"
+)
 
-    두 핀 블록은 독립·선택적이며 base → report → view 순으로 덧붙인다.
+
+def _build_system_prompt(
+    judgement: dict, session: Session, outlook_context: str | None = None
+) -> str:
+    """필수 블록(build_prompt) + (시장질문 시) 최신 시황 + 세션 핀 컨텍스트(리포트·현재화면). 단일 출처.
+
+    블록은 독립·선택적이며 base → outlook → report → view 순으로 덧붙인다. `outlook_context`는
+    per-turn(핀 아님) — 호출부(chat/chat_stream)가 intent=macro_view 일 때만 조회해 넘긴다.
     """
     prompt = build_prompt(judgement)
+    if outlook_context:
+        prompt += _OUTLOOK_CONTEXT_HEADER + outlook_context
     if getattr(session, "report_context", None):
         prompt += _REPORT_CONTEXT_HEADER + session.report_context
     if getattr(session, "view_context", None):
@@ -183,7 +200,11 @@ def chat(user_query: str, judgement: dict, session: Session, *, client=None) -> 
         session.append(user_query, _GUARDRAIL_MESSAGE)
         return {"text": _GUARDRAIL_MESSAGE, "popups": []}
 
-    messages = [{"role": "system", "content": _build_system_prompt(judgement, session)}]
+    # 시장 질문이면 최신 시황 요약을 국면 판정과 함께 컨텍스트로 주입(per-turn·추가 LLM 0·graceful).
+    outlook_context = build_recent_outlook_context() if intent == "macro_view" else None
+    messages = [
+        {"role": "system", "content": _build_system_prompt(judgement, session, outlook_context)}
+    ]
     messages += session.history()
     messages.append({"role": "user", "content": user_query})
 
@@ -310,7 +331,11 @@ def chat_stream(user_query: str, judgement: dict, session: Session, *, client=No
         yield {"type": "done", "popups": []}
         return
 
-    messages = [{"role": "system", "content": _build_system_prompt(judgement, session)}]
+    # 시장 질문이면 최신 시황 요약을 국면 판정과 함께 컨텍스트로 주입(per-turn·추가 LLM 0·graceful).
+    outlook_context = build_recent_outlook_context() if intent == "macro_view" else None
+    messages = [
+        {"role": "system", "content": _build_system_prompt(judgement, session, outlook_context)}
+    ]
     messages += session.history()
     messages.append({"role": "user", "content": user_query})
 

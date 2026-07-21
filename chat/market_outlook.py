@@ -58,6 +58,30 @@ def format_market_outlook_context(entry: dict) -> str:
     return "\n".join(lines)
 
 
+def build_recent_outlook_context(limit: int = 3, max_chars: int = 1500, *, store=None) -> str | None:
+    """최근 저장 시황 요약 N개 → 챗 프롬프트 주입용 컨텍스트 텍스트. 없으면 None(graceful).
+
+    시장 전반 질문(macro_view)에 **국면 판정과 함께 근거**로 실린다. 저장된 per-report 요약만
+    조합하므로 **PDF 재다운로드·LLM 추가호출 0**(벡터검색 불요 — 시황은 시장 전체·최근 소수 고정).
+    각 리포트는 `format_market_outlook_context` 로 포맷하고 `max_chars` 로 프롬프트 예산을 제한한다.
+    """
+    try:
+        if store is None:
+            from chat.market_outlook_store import default_store
+
+            store = default_store()
+        reports = (store.list_reports() or [])[:limit]
+    except Exception:
+        return None  # 조회 실패는 컨텍스트 없이 진행(graceful)
+    if not reports:
+        return None
+    blocks = [
+        f"[시황 리포트 {i}]\n{format_market_outlook_context(entry)}"
+        for i, entry in enumerate(reports, 1)
+    ]
+    return "\n\n".join(blocks)[:max_chars]
+
+
 def summarize_market_outlook(text: str, meta: dict, *, client=None) -> dict:
     """시황 리포트 원문 → {summary|None, validation_failed}. 항상 dict(크래시 없음).
 

@@ -15,9 +15,6 @@ vi.mock('./PopupStockReport.jsx', () => ({
     </div>
   ),
 }))
-vi.mock('./RegimeGauge.jsx', () => ({
-  default: () => <div data-testid="regime-gauge">regime-gauge</div>,
-}))
 vi.mock('./PopupWatchlist.jsx', () => ({
   default: ({ args, onOpenStock }) => (
     <div data-testid="watchlist">
@@ -42,9 +39,9 @@ vi.mock('./BalancePanel.jsx', () => ({
     </div>
   ),
 }))
-// macro_dashboard·settings 본문은 자체 api 조회형 — 이 테스트는 라우팅만 보므로 스텁으로 대체.
-vi.mock('./MarketOutlookSection.jsx', () => ({
-  default: () => <div data-testid="outlook">outlook</div>,
+// macro_dashboard·settings 본문은 자체 api 조회형(시황 lifecycle 소유) — 라우팅만 보므로 스텁으로 대체.
+vi.mock('./MacroDashboard.jsx', () => ({
+  default: () => <div data-testid="macro-dashboard">macro-dashboard</div>,
 }))
 vi.mock('./KisSettingsPanel.jsx', () => ({
   default: () => <div data-testid="kis-settings">kis-settings</div>,
@@ -69,9 +66,9 @@ describe('RightPanel 본문 라우팅(spec.kind → 인라인 컴포넌트)', ()
     expect(screen.getByTestId('watchlist')).toHaveTextContent('watchlist:change')
   })
 
-  it('macro_dashboard → RegimeGauge', () => {
+  it('macro_dashboard → MacroDashboard(시황 컨테이너)', () => {
     render(<RightPanel spec={spec({ kind: 'macro_dashboard' })} onSelect={() => {}} onClose={() => {}} />)
-    expect(screen.getByTestId('regime-gauge')).toBeInTheDocument()
+    expect(screen.getByTestId('macro-dashboard')).toBeInTheDocument()
   })
 
   it('stock_report(valid) → PopupStockReport(ticker/stockName 전달)', () => {

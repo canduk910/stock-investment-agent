@@ -57,6 +57,12 @@ def _stub_view_context(monkeypatch):
     monkeypatch.setattr(chatmod, "build_view_context", lambda kind, args: None)
 
 
+@pytest.fixture(autouse=True)
+def _stub_outlook(monkeypatch):
+    # 최신 시황 컨텍스트 조회 기본값 = 없음(DB 미접촉). macro_view 주입 테스트만 재설정.
+    monkeypatch.setattr(chatmod, "build_recent_outlook_context", lambda **k: None)
+
+
 def test_tool_calls_response_splits_text_and_popups():
     client = _FakeClient(
         [
@@ -122,6 +128,31 @@ def test_first_create_passes_tools_and_model():
     # 시스템 프롬프트가 매 호출 최신 judgement 로 주입됐는지(첫 메시지=system).
     assert kwargs["messages"][0]["role"] == "system"
     assert _JUDGE["regime"] in kwargs["messages"][0]["content"]
+
+
+# ── 최신 시황 컨텍스트(시장 질문 시 국면 판정과 함께 주입) ──
+def test_macro_view_injects_outlook_context(monkeypatch):
+    monkeypatch.setattr(chatmod, "classify", lambda t: "macro_view")
+    monkeypatch.setattr(
+        chatmod, "build_recent_outlook_context", lambda **k: "[시황 리포트 1]\n- 증권사: KB증권"
+    )
+    client = _FakeClient([_resp(content="지금은 확장 국면이며 시황상 중립입니다.")])
+    chat("지금 시장 어때?", _JUDGE, Session(), client=client)
+    system_prompt = client.calls[0]["messages"][0]["content"]
+    assert "최신 증권사 시황" in system_prompt  # outlook 블록 헤더
+    assert "KB증권" in system_prompt  # 시황 내용 주입됨
+
+
+def test_non_market_intent_skips_outlook_context(monkeypatch):
+    monkeypatch.setattr(chatmod, "classify", lambda t: "stock_analysis")
+
+    def _boom(**k):  # 게이팅 검증 — 비-시장 인텐트면 호출조차 안 돼야 한다
+        raise AssertionError("outlook context must not be built for non-market intent")
+
+    monkeypatch.setattr(chatmod, "build_recent_outlook_context", _boom)
+    client = _FakeClient([_resp(content="삼성전자 설명.")])
+    chat("삼성전자 어때", _JUDGE, Session(), client=client)  # _boom 안 나면 게이팅 정상
+    assert "최신 증권사 시황" not in client.calls[0]["messages"][0]["content"]
 
 
 # ── 인텐트 → 우측 패널 결정적 라우팅(원 설계 반영) ──

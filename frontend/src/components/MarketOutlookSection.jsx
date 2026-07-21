@@ -1,28 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  fetchMarketOutlook,
-  fetchNaverMarketOutlook,
-  streamFetchMarketOutlook,
-  setMarketOutlookContext,
-  fetchMarketOutlookSummary,
-} from '../api.js'
-import {
-  groupReportsByDate,
-  threeLineSummary,
-  isOutlookStale,
-  todayStampKST,
-} from '../lib/marketOutlook.js'
-import FetchProgress, { applyProgressEvent } from './FetchProgress.jsx'
+import { setMarketOutlookContext } from '../api.js'
+import { groupReportsByDate, threeLineSummary } from '../lib/marketOutlook.js'
+import FetchProgress from './FetchProgress.jsx'
 
-// 자동 최신화 중복 방지 가드 — 날짜별 최대 1회 자동수집(패널 반복 오픈·주말 무자료 시 폭주 방지).
-const AUTO_FETCH_KEY = 'mo_autofetch_date'
-
-// 시장 국면 페이지(RegimeGauge 아래) — 증권사 '시황(market outlook) 리포트' 요약.
-// 실데이터는 프론트가 fetchMarketOutlook 로 직접 조회한다(환각 차단). 각 요약은 **해당 증권사 시황
-// 리포트의 내용 인용**이지 에이전트의 시장 판정이 아니다(시장 국면 판정은 코드/매크로 엔진). 출처 귀속·면책.
-// 색은 theme.css 토큰만. 시장전망 칩은 중립 톤(가격방향색 아님).
+// 증권사 '시황(market outlook) 리포트' 요약 카드 뷰 — **controlled**(reports·수집상태를 상위 MacroDashboard
+// 가 소유·주입). 각 요약은 **해당 증권사 시황 리포트의 내용 인용**이지 에이전트의 시장 판정이 아니다
+// (시장 국면 판정은 코드/매크로 엔진). 출처 귀속·면책. 색은 theme.css 토큰만(시장전망 칩=중립 톤).
 //
 // UX(항목4): 작성일별 구분 → 컴팩트 카드(증권사·시장전망·제목·3줄요약) → 클릭 시 상세 오버레이.
+// (자체 fetch·자동 최신화·금일의 요약은 MacroDashboard 컨테이너로 이관.)
 
 const DISCLAIMER =
   '아래 요약은 각 증권사 시황 리포트의 내용이며, 본 서비스의 시장 판정·매매 권유가 아닙니다. ' +
@@ -179,91 +165,21 @@ function MarketOutlookDetailOverlay({ report, onClose, sessionId, onConsult }) {
   )
 }
 
-// 금일의 요약 — 최근 5개 시황 리포트를 종합·중복제거해 10줄 핵심메시지로(온디맨드). 애널리스트
-// 종합요약(CombinedSummary) 패턴. 시각 강조 카드(주황 강조 소프트·📌). 종합=여러 리포트 인용·면책.
-function DailySummary() {
-  const [state, setState] = useState('idle') // idle | loading | done | error
-  const [data, setData] = useState(null)
-  const [errMsg, setErrMsg] = useState(null)
-
-  async function generate() {
-    setState('loading')
-    setErrMsg(null)
-    try {
-      const res = await fetchMarketOutlookSummary()
-      if (res.validation_failed || !res.summary) {
-        setState('error')
-        setErrMsg(res.message || '금일의 요약을 생성하지 못했습니다.')
-      } else {
-        setData(res)
-        setState('done')
-      }
-    } catch (e) {
-      setState('error')
-      setErrMsg(`금일의 요약 생성 실패(${e.message}).`)
-    }
-  }
-
-  const s = data?.summary ?? {}
-  return (
-    <div className="daily-summary">
-      <div className="daily-summary__head">
-        <span className="daily-summary__title">
-          <span className="daily-summary__badge" aria-hidden="true">
-            📌
-          </span>
-          금일의 요약
-          <span className="daily-summary__sub">최근 시황 종합 · 최대 10줄</span>
-        </span>
-        <button
-          type="button"
-          className="daily-summary__gen"
-          onClick={generate}
-          disabled={state === 'loading'}
-        >
-          {state === 'loading' ? '생성 중…' : state === 'done' ? '↻ 다시 생성' : '금일의 요약 생성'}
-        </button>
-      </div>
-      {state === 'error' ? (
-        <p className="analyst__err" role="alert">
-          {errMsg}
-        </p>
-      ) : null}
-      {state === 'done' && data ? (
-        <div className="daily-summary__body">
-          <div className="daily-summary__chips">
-            {s.시장전망분포 ? (
-              <span className="chip daily-summary__chip" title="리포트 시장전망 분포(출처 귀속)">
-                시장전망 · {s.시장전망분포}
-              </span>
-            ) : null}
-            <span className="chip daily-summary__chip">시황 {data.report_count}개 종합</span>
-          </div>
-          {Array.isArray(s.종합요약) && s.종합요약.length > 0 ? (
-            <ol className="daily-summary__lines">
-              {s.종합요약.map((line, i) => (
-                <li key={i}>{line}</li>
-              ))}
-            </ol>
-          ) : null}
-          {s.면책고지 ? <p className="analyst__fine">{s.면책고지}</p> : null}
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
-export default function MarketOutlookSection({ sessionId, onConsult } = {}) {
-  const [reports, setReports] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [fetching, setFetching] = useState(false)
-  const [fetchMsg, setFetchMsg] = useState(null)
-  const [progress, setProgress] = useState(null) // SSE 진행 체크리스트
+export default function MarketOutlookSection({
+  reports,
+  loading = false,
+  error = null,
+  fetching = false,
+  progress = null,
+  fetchMsg = null,
+  autoNote = null,
+  onFetch,
+  onReload,
+  sessionId,
+  onConsult,
+} = {}) {
   const [selected, setSelected] = useState(null) // 상세 오버레이 대상 report(null=닫힘)
-  const [autoNote, setAutoNote] = useState(null) // 자동 최신화 안내(수동과 구분)
   const triggerRef = useRef(null) // 오버레이 닫을 때 포커스 복원 대상
-  const autoTriedRef = useRef(false) // 마운트당 자동수집 판정 1회(StrictMode 이중마운트 방지)
 
   function openDetail(report) {
     triggerRef.current = document.activeElement // 트리거(카드) 기억
@@ -275,96 +191,16 @@ export default function MarketOutlookSection({ sessionId, onConsult } = {}) {
     triggerRef.current?.focus?.() // 포커스 복원(접근성)
   }
 
-  async function load() {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await fetchMarketOutlook()
-      const list = data.reports ?? []
-      setReports(list)
-      return list
-    } catch (e) {
-      setError(e.message)
-      setReports(null)
-      return []
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // 저장된 최신 시황이 오늘(KST)이 아니면 자동으로 최신 수집(기존 SSE). 날짜별 1회 가드로 폭주 방지.
-  function maybeAutoFetch(list) {
-    const today = todayStampKST()
-    if (!isOutlookStale(list, today)) return // 이미 오늘자 최신 → 자동수집 불필요
-    try {
-      if (localStorage.getItem(AUTO_FETCH_KEY) === today) return // 오늘 이미 자동수집 시도함
-      localStorage.setItem(AUTO_FETCH_KEY, today)
-    } catch {
-      /* localStorage 불가 환경 — 그래도 마운트당 1회는 진행(autoTriedRef) */
-    }
-    setAutoNote('오늘 최신 시황을 자동으로 확인하는 중…')
-    fetchNaver()
-  }
-
-  useEffect(() => {
-    ;(async () => {
-      const list = await load()
-      if (!autoTriedRef.current) {
-        autoTriedRef.current = true
-        maybeAutoFetch(list)
-      }
-    })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // 네이버 최신 시황 수집을 **SSE 진행 스트림**으로 — 목록·각 리포트 처리를 실시간 표시. 끊김은 폴백.
-  async function fetchNaver() {
-    setFetching(true)
-    setFetchMsg(null)
-    setProgress({ stage: 'list', reports: [], done: 0, total: 0 })
-    let finished = false
-    await streamFetchMarketOutlook({
-      limit: 15,
-      onEvent: (ev) => {
-        if (ev.type === 'done') {
-          finished = true
-          setFetchMsg(`새 요약 ${ev.new}건 · 확인 ${ev.fetched}건` + (ev.failed ? ` · 실패 ${ev.failed}건` : ''))
-        } else if (ev.type === 'error') {
-          finished = true
-          setFetchMsg(`수집 실패(${ev.message}).`)
-        } else {
-          setProgress((p) => applyProgressEvent(p, ev))
-        }
-      },
-      onError: async () => {
-        if (finished) return
-        try {
-          const res = await fetchNaverMarketOutlook(15)
-          setFetchMsg(`새 요약 ${res.new}건 · 확인 ${res.fetched}건` + (res.failed ? ` · 실패 ${res.failed}건` : ''))
-        } catch (e) {
-          setFetchMsg(`수집 실패(${e.message}).`)
-        }
-      },
-    })
-    setProgress(null)
-    await load()
-    setFetching(false)
-    setAutoNote(null) // 자동 최신화 안내 해제(완료 메시지 fetchMsg 로 대체)
-  }
-
   const groups = groupReportsByDate(reports ?? [])
 
   return (
     <section className="analyst" aria-label="시황 리포트 요약">
       <div className="analyst__head">
         <h3 className="report__section-label">증권사 시황 리포트 요약</h3>
-        <button type="button" className="refresh analyst__fetch" onClick={fetchNaver} disabled={fetching}>
+        <button type="button" className="refresh analyst__fetch" onClick={onFetch} disabled={fetching}>
           {fetching ? '가져오는 중…' : '네이버 최신 시황 가져오기'}
         </button>
       </div>
-
-      {/* 금일의 요약 — 증권사 시황리포트 요약 바로 아래(저장 시황 있을 때만). 시각 강조 카드. */}
-      {reports && reports.length > 0 ? <DailySummary /> : null}
 
       {autoNote ? (
         <p className="analyst__fetchmsg" role="status">
@@ -385,7 +221,7 @@ export default function MarketOutlookSection({ sessionId, onConsult } = {}) {
       ) : error ? (
         <div className="popup__state">
           <span>시황 조회 실패: {error}</span>
-          <button type="button" className="refresh" onClick={load}>
+          <button type="button" className="refresh" onClick={onReload}>
             ↻ 재시도
           </button>
         </div>

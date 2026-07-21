@@ -68,6 +68,12 @@ def _stub_view_context(monkeypatch):
     monkeypatch.setattr(chatmod, "build_view_context", lambda kind, args: None)
 
 
+@pytest.fixture(autouse=True)
+def _stub_outlook(monkeypatch):
+    # 최신 시황 컨텍스트 조회 기본값 = 없음(DB 미접촉).
+    monkeypatch.setattr(chatmod, "build_recent_outlook_context", lambda **k: None)
+
+
 def _collect(gen):
     return list(gen)
 
@@ -102,6 +108,18 @@ def test_accumulate_tool_calls_bad_json_yields_empty_args():
     deltas_per_chunk = [[_tool_delta(0, tc_id="c0", name="show_watchlist", args="{not json")]]
     popups = _accumulate_tool_calls(deltas_per_chunk)
     assert popups == [{"name": "show_watchlist", "args": {}}]
+
+
+# --- 최신 시황 컨텍스트(스트림) ---
+def test_macro_view_injects_outlook_context_in_stream(monkeypatch):
+    monkeypatch.setattr(chatmod, "classify", lambda t: "macro_view")
+    monkeypatch.setattr(
+        chatmod, "build_recent_outlook_context", lambda **k: "[시황 리포트 1]\n- 증권사: KB증권"
+    )
+    client = _FakeStreamClient([[_content_chunk("확장 국면·시황 중립입니다.")]])
+    _collect(chat_stream("지금 시장 어때?", _JUDGE, Session(), client=client))
+    system_prompt = client.calls[0]["messages"][0]["content"]
+    assert "최신 증권사 시황" in system_prompt and "KB증권" in system_prompt
 
 
 # --- 인텐트 → 우측 패널 결정적 라우팅(스트림) ---
