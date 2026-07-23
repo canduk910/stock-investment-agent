@@ -168,3 +168,135 @@ def test_report_queries_classify_as_analyst_report():
     assert all(p != "risk_guardrail" for p in preds), f"리포트 질의 위험 오분류: {preds}"
     # 다수가 analyst_report 로 분류(ML이라 전수 단정은 피하되 대다수는 맞아야 강화 효과 입증).
     assert sum(p == "analyst_report" for p in preds) >= 4, f"리포트 인텐트 미인식: {preds}"
+
+
+# ── (f) Layer A: 종목명 gazetteer → macro_view→stock_analysis override ────────
+# 비유명 종목("롯데렌탈 어때?")이 ML=macro_view 로 오분류돼 시장 국면 패널이 뜨던 문제를,
+# 질문에 실제 개별 종목명이 있으면 stock_analysis 로 결정적 재분류해 해소한다.
+
+
+class _FakeModel:
+    """predict([text]) 가 고정 라벨을 내는 스텁(ML 예측 대체)."""
+
+    def __init__(self, label: str):
+        self._label = label
+
+    def predict(self, X):  # noqa: N803 (sklearn 인터페이스)
+        return [self._label]
+
+
+def test_macro_view_with_stock_name_reclassified_to_stock_analysis(monkeypatch):
+    monkeypatch.setattr(intent, "_load_model", lambda: _FakeModel("macro_view"))
+    monkeypatch.setattr(intent, "query_names_a_stock", lambda t: "롯데렌탈")
+    assert classify("롯데렌탈 어때?") == "stock_analysis"
+
+
+def test_macro_view_without_stock_name_stays_macro(monkeypatch):
+    monkeypatch.setattr(intent, "_load_model", lambda: _FakeModel("macro_view"))
+    monkeypatch.setattr(intent, "query_names_a_stock", lambda t: None)
+    assert classify("지금 시장 국면 어때?") == "macro_view"
+
+
+def test_override_only_applies_to_macro_view(monkeypatch):
+    # 종목명이 있어도 예측이 macro_view 가 아니면 라벨을 바꾸지 않는다(예측 보존).
+    monkeypatch.setattr(intent, "query_names_a_stock", lambda t: "삼성전자")
+    for label in ("stock_analysis", "analyst_report", "portfolio_advice", "watchlist_mgmt", "general_qa"):
+        monkeypatch.setattr(intent, "_load_model", lambda label=label: _FakeModel(label))
+        assert classify("삼성전자 어때?") == label
+
+
+def test_gazetteer_not_consulted_for_non_macro_predictions(monkeypatch):
+    # 단락 평가: macro_view 가 아니면 gazetteer 를 호출조차 하지 않는다(불필요 연산 0).
+    called = {"n": 0}
+
+    def _spy(t):
+        called["n"] += 1
+        return "삼성전자"
+
+    monkeypatch.setattr(intent, "query_names_a_stock", _spy)
+    monkeypatch.setattr(intent, "_load_model", lambda: _FakeModel("stock_analysis"))
+    classify("삼성전자 어때?")
+    assert called["n"] == 0
+
+
+def test_guardrail_takes_precedence_over_gazetteer(monkeypatch):
+    # 위험 키워드는 gazetteer/override 보다 먼저 차단 → gazetteer 미호출(선차단 불변).
+    called = {"n": 0}
+
+    def _spy(t):
+        called["n"] += 1
+        return "롯데렌탈"
+
+    monkeypatch.setattr(intent, "query_names_a_stock", _spy)
+    monkeypatch.setattr(intent, "_load_model", lambda: _FakeModel("macro_view"))
+    assert classify("롯데렌탈 빚내서 몰빵할까") == "risk_guardrail"
+    assert called["n"] == 0
+
+
+def test_gazetteer_exception_is_graceful(monkeypatch):
+    # gazetteer 가 예상치 못하게 예외를 내도 classify 는 죽지 않고 ML 예측(macro_view)을 유지.
+    monkeypatch.setattr(intent, "_load_model", lambda: _FakeModel("macro_view"))
+
+    def _boom(t):
+        raise RuntimeError("gazetteer down")
+
+    monkeypatch.setattr(intent, "query_names_a_stock", _boom)
+    assert classify("롯데렌탈 어때?") == "macro_view"
+
+
+# ── (g) Layer A: KRX 비유명주는 종목분석으로 결정적 라우팅 ──────────────────────
+# 보고된 버그(비유명 KRX주가 시장 국면 패널로 새던 문제)는 gazetteer override 가 결정적으로
+# 해소한다 — ML 이 macro 로 예측해도 질문의 KRX 종목명(len>=3)이 stock_analysis 로 재분류.
+# classify() 통합 경로(가드레일+ML+gazetteer)로 검증한다(사용자 실제 동작·커밋 모델 staleness 에 강건).
+_KRX_STOCK_QUERIES = [
+    "롯데렌탈 어때?",
+    "에스피지 어떠냐",
+    "클래시스 어때?",
+    "에스비비테크 어떤가?",
+    "리노공업 지금 괜찮아?",
+    "파크시스템스 어때?",
+]
+
+
+def test_krx_stock_queries_route_to_stock_analysis():
+    misrouted = [q for q in _KRX_STOCK_QUERIES if classify(q) != "stock_analysis"]
+    assert not misrouted, f"KRX 비유명주가 종목분석으로 라우팅되지 않음: {misrouted}"
+
+
+# ── (h) Layer B 균형: 매크로·포트폴리오는 stock_analysis 로 새지 않는다 ─────────────
+# 적대적 검증(Finding 1·2)이 잡은 회귀 방지: Layer B 의 "{종목명} 어때?" 보강이 짧은 조회형을
+# stock 으로 끌어당겨 매크로(지수/시장 + FX/원자재/금리/인플레) · 포트폴리오 질문이 stock 으로
+# 새면 각각 시장국면·잔고 패널의 결정적 라우팅을 잃는다. 데이터셋 즉석 학습(tfidf+lbfgs 결정적)으로
+# 데이터 품질을 잠근다(커밋 모델 동기화와 무관 — 데이터가 균형인지 검증).
+_MACRO_QUERIES = [
+    # 지수/시장
+    "지금 국면 어때?", "코스피 지금 어때?", "요즘 장 어때?", "증시 분위기 어때?",
+    # FX/원자재/금리/인플레
+    "환율 요즘 어떤가", "달러 강세 지금 어떤가", "유가 지금 어때", "국제유가 어때",
+    "인플레이션 지금 어떤가", "물가 요즘 어때", "금리 지금 어떤가", "원자재 시장 어떤가",
+    # 통화명·외래어 침체·해외지수(적대적 재검증 Finding 후속 — 이 니치가 재학습 회귀로 새지 않게 잠금)
+    "엔화 어때", "위안화 어때", "리세션 우려 어때", "스태그플레이션 어때", "나스닥 어때", "S&P500 어때",
+]
+_PORTFOLIO_QUERIES = [
+    "내 자산 배분 괜찮아?", "보유 비중 괜찮아?", "내 포트 비중 어때", "자산배분 지금 어떤가",
+]
+
+
+@pytest.mark.skipif(not _DATASET.exists(), reason="production dataset 부재")
+def test_macro_queries_do_not_leak_to_stock_analysis():
+    texts, labels = _load_tsv(_DATASET)
+    pipe = build_pipeline()
+    pipe.fit(texts, labels)
+    preds = pipe.predict(_MACRO_QUERIES)
+    leaked = [(q, p) for q, p in zip(_MACRO_QUERIES, preds) if p == "stock_analysis"]
+    assert not leaked, f"매크로 질의가 stock_analysis 로 누수(시장국면 패널 라우팅 상실): {leaked}"
+
+
+@pytest.mark.skipif(not _DATASET.exists(), reason="production dataset 부재")
+def test_portfolio_queries_do_not_leak_to_stock_analysis():
+    texts, labels = _load_tsv(_DATASET)
+    pipe = build_pipeline()
+    pipe.fit(texts, labels)
+    preds = pipe.predict(_PORTFOLIO_QUERIES)
+    leaked = [(q, p) for q, p in zip(_PORTFOLIO_QUERIES, preds) if p == "stock_analysis"]
+    assert not leaked, f"포트폴리오 질의가 stock_analysis 로 누수(잔고 패널 라우팅 상실): {leaked}"
