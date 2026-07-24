@@ -2752,7 +2752,7 @@ body {
    ══════════════════════════════════════════════════════════════════════════ */
 
 .app {
-  max-width: 1360px;
+  max-width: none; /* 화면 전체폭 사용(사용자 결정) — 좌/우 배분은 분할선 드래그로. */
   margin: 0 auto;
   padding: 0 24px 32px; /* 상단 여백은 sticky 헤더가 자체 padding 으로 확보 */
 }
@@ -3181,14 +3181,69 @@ body {
 /* 2컬럼 그리드 — 좌 채팅(고정폭 근사) / 우 동적 패널(가변). 반응형: ~1024px 이하 세로 스택. */
 .app__main {
   display: grid;
-  grid-template-columns: minmax(360px, 460px) 1fr;
-  gap: 20px;
+  /* 좌: 드래그로 조절되는 채팅폭(--chat-w, App 이 인라인 주입) · 중앙: 분할선 14px(=DIVIDER_W) · 우: 나머지 */
+  grid-template-columns: var(--chat-w, 420px) 14px minmax(0, 1fr);
+  gap: 0; /* 분할선이 좌/우 간격을 담당(구 gap 20px 대체) */
   margin-top: 18px;
   align-items: start;
 }
 .app__left,
 .app__right {
   min-width: 0; /* grid 자식 오버플로 방지(긴 텍스트·표) */
+}
+/* 좌/우 분할선 — 드래그(마우스·터치)·방향키로 채팅/콘텐츠 폭 조절. 좌측 sticky 와 동일하게 화면에 고정.
+   색은 토큰만: 평상시 회색 라인/그립, 상호작용(hover·focus·드래그) 시 주황 강조(=인터랙티브 어포던스). */
+.app__divider {
+  position: sticky;
+  top: 88px;
+  height: 80vh;
+  align-self: start;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  touch-action: none; /* 터치 드래그 중 페이지 스크롤 방지 */
+  user-select: none;
+}
+.app__divider::before {
+  content: '';
+  position: absolute;
+  width: 2px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--c-border);
+  transition: background 0.15s ease, width 0.15s ease;
+}
+.app__divider-grip {
+  position: relative;
+  width: 4px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--c-border-strong);
+  transition: background 0.15s ease, height 0.15s ease;
+}
+.app__divider:hover::before,
+.app__divider:focus-visible::before,
+body.is-col-resizing .app__divider::before {
+  background: var(--c-emph);
+  width: 3px;
+}
+.app__divider:hover .app__divider-grip,
+.app__divider:focus-visible .app__divider-grip,
+body.is-col-resizing .app__divider-grip {
+  background: var(--c-emph);
+  height: 56px;
+}
+.app__divider:focus-visible {
+  outline: 2px solid var(--c-emph);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+/* 드래그 중 전역 커서 고정 + 텍스트 선택 방지(패널 내용 하이라이트 방지). */
+body.is-col-resizing,
+body.is-col-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 /* 좌우 컬럼 — 하단 콘텐츠 높이 80vh(뷰포트의 ~80%), 각자 내부 스크롤. 채팅은 고정 헤더 아래에 sticky. */
 .app__left {
@@ -3198,7 +3253,10 @@ body {
 }
 @media (max-width: 1024px) {
   .app__main {
-    grid-template-columns: 1fr; /* 세로 스택 */
+    grid-template-columns: 1fr; /* 세로 스택 — 분할선 무효(--chat-w 미사용) */
+  }
+  .app__divider {
+    display: none; /* 세로 스택에선 크기 조절 없음 */
   }
   .app__left {
     position: static;

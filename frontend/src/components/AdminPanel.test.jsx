@@ -45,8 +45,12 @@ describe('AdminPanel', () => {
     await waitFor(() => expect(screen.getByText('member@a.com')).toBeInTheDocument())
     const input = screen.getByLabelText('member@a.com 하루 질문 한도')
     fireEvent.change(input, { target: { value: '5' } })
-    const saveBtns = screen.getAllByRole('button', { name: '저장' })
-    fireEvent.click(saveBtns[1]) // member 행
+    // '저장'은 값이 실제로 바뀐 뒤에만 활성화된다(disabled={!limitChanged}). change 의 상태 반영이
+    // 재렌더로 flush 될 때까지 기다렸다가(활성화 확인) 매번 새로 쿼리해 클릭한다 — CI 타이밍 견고화
+    // (disabled 버튼 클릭은 onClick 미발화 → updateAdminUser 0회 호출 플래키의 근본 해소).
+    const memberSaveBtn = () => screen.getAllByRole('button', { name: '저장' })[1] // member 행
+    await waitFor(() => expect(memberSaveBtn()).toBeEnabled())
+    fireEvent.click(memberSaveBtn())
     await waitFor(() => expect(updateAdminUser).toHaveBeenCalledWith(2, { daily_limit: 5 }))
   })
 

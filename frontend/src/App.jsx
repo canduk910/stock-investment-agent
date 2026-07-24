@@ -17,6 +17,12 @@ import {
 } from './api.js'
 import { fetchMe, logout } from './auth.js'
 import { detectTargetAlerts } from './lib/watchlistLogic.js'
+import {
+  clampChatWidth,
+  loadChatWidth,
+  saveChatWidth,
+  CHAT_DEFAULT,
+} from './lib/panelLayout.js'
 import yonseiCi from './assets/yonsei-ci.png' // 연세대 공식 CI(과제 소속 표기)
 
 // 방문 1회 기록 가드(모듈 스코프) — StrictMode 이중 마운트에도 방문은 앱 로드당 1건만(프로덕션은 1회).
@@ -170,6 +176,74 @@ export default function App() {
 
   // 우측 동적 패널 spec — 챗봇(onShowPanel)·퀵버튼(onSelect)이 리프팅. 닫으면 null(빈 상태).
   const [rightPanelSpec, setRightPanelSpec] = useState(LANDING_SPEC)
+
+  // ── 좌(채팅)/우(콘텐츠) 분할선 크기 조절 ────────────────────────────────────
+  //   화면 전체폭 사용 + 분할선 드래그로 좌/우 비율 자유 배분(사용자 결정). 우측 최소폭은 항상 보장.
+  //   판정/계산은 lib/panelLayout(순수), 여기선 DOM 배선만. 폭은 localStorage 영속.
+  const mainRef = useRef(null) // .app__main (그리드 컨테이너) — 드래그 좌표 기준
+  const [chatWidth, setChatWidth] = useState(() => loadChatWidth())
+  const draggingRef = useRef(false)
+
+  // 폭 변경 시 영속(드래그 중 잦은 write 도 localStorage 는 저렴).
+  useEffect(() => {
+    saveChatWidth(chatWidth)
+  }, [chatWidth])
+
+  // 창 크기 변경 시 우측 최소폭 보장을 위해 재클램프(좁아지면 채팅폭 자동 축소).
+  useEffect(() => {
+    const onResize = () => {
+      const w = mainRef.current?.clientWidth
+      if (w) setChatWidth((cw) => clampChatWidth(cw, w))
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  // 분할선 드래그 시작(마우스/터치 공용) — document 레벨 move/up 리스너로 끝까지 추적.
+  const startDividerDrag = useCallback((event) => {
+    event.preventDefault()
+    draggingRef.current = true
+    document.body.classList.add('is-col-resizing')
+    const move = (ev) => {
+      if (!draggingRef.current) return
+      const rect = mainRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX
+      setChatWidth(clampChatWidth(clientX - rect.left, rect.width))
+    }
+    const end = () => {
+      draggingRef.current = false
+      document.body.classList.remove('is-col-resizing')
+      document.removeEventListener('mousemove', move)
+      document.removeEventListener('mouseup', end)
+      document.removeEventListener('touchmove', move)
+      document.removeEventListener('touchend', end)
+    }
+    document.addEventListener('mousemove', move)
+    document.addEventListener('mouseup', end)
+    document.addEventListener('touchmove', move, { passive: false })
+    document.addEventListener('touchend', end)
+  }, [])
+
+  // 방향키 리사이즈(접근성) + 더블클릭 기본폭 리셋.
+  const onDividerKey = useCallback((event) => {
+    const STEP = 24
+    const w = mainRef.current?.clientWidth || window.innerWidth
+    if (event.key === 'ArrowLeft') {
+      setChatWidth((cw) => clampChatWidth(cw - STEP, w))
+      event.preventDefault()
+    } else if (event.key === 'ArrowRight') {
+      setChatWidth((cw) => clampChatWidth(cw + STEP, w))
+      event.preventDefault()
+    } else if (event.key === 'Home') {
+      setChatWidth(clampChatWidth(CHAT_DEFAULT, w))
+      event.preventDefault()
+    }
+  }, [])
+  const resetDivider = useCallback(() => {
+    const w = mainRef.current?.clientWidth || window.innerWidth
+    setChatWidth(clampChatWidth(CHAT_DEFAULT, w))
+  }, [])
 
   // 리포트 상담 컨텍스트 배너 — 우측 리포트에서 "이 리포트로 상담하기"를 누르면 {broker} 세팅.
   //   좌측 챗 상단에 "○○증권 리포트로 상담 중" 배너를 띄우고, 이후 후속 질문은 그 리포트 근거로 답변.
@@ -427,7 +501,7 @@ export default function App() {
         </div>
       )}
 
-      <main className="app__main">
+      <main className="app__main" ref={mainRef} style={{ '--chat-w': `${chatWidth}px` }}>
         <div className="app__left">
           <ChatPanel
             sessionId={sessionId.current}
@@ -442,6 +516,19 @@ export default function App() {
             onDeleteConversation={handleDeleteConversation}
             onTurnComplete={refreshConversations}
           />
+        </div>
+        <div
+          className="app__divider"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="채팅과 콘텐츠 패널 크기 조절 (드래그·방향키, 더블클릭 시 기본폭)"
+          tabIndex={0}
+          onMouseDown={startDividerDrag}
+          onTouchStart={startDividerDrag}
+          onKeyDown={onDividerKey}
+          onDoubleClick={resetDivider}
+        >
+          <span className="app__divider-grip" aria-hidden="true" />
         </div>
         <div className="app__right">
           <RightPanel

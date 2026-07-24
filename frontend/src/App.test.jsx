@@ -143,6 +143,19 @@ describe('App 2컬럼 레이아웃(모달 폐기 · 우측 동적 패널)', () =
     fireEvent.click(screen.getByText('quick-balance'))
     expect(screen.getByTestId('right-kind')).toHaveTextContent('balance')
   })
+
+  it('좌/우 분할선(separator) 렌더 + 방향키로 채팅폭 조절(--chat-w)', async () => {
+    await renderLoggedIn()
+    const divider = screen.getByRole('separator')
+    expect(divider).toHaveAttribute('aria-orientation', 'vertical')
+    const main = document.querySelector('.app__main')
+    const before = parseInt(main.style.getPropertyValue('--chat-w'), 10)
+    fireEvent.keyDown(divider, { key: 'ArrowRight' }) // 우측으로 → 채팅폭 증가
+    const after = parseInt(main.style.getPropertyValue('--chat-w'), 10)
+    expect(after).toBeGreaterThan(before)
+    fireEvent.keyDown(divider, { key: 'ArrowLeft' }) // 좌측으로 → 채팅폭 감소
+    expect(parseInt(main.style.getPropertyValue('--chat-w'), 10)).toBeLessThan(after)
+  })
 })
 
 describe('인증 게이트', () => {
