@@ -100,9 +100,11 @@ def health() -> dict:
 # 라우터를 별도 모듈로 분리(2단계 병렬 + partial_failure + 캐시 게이트는 api/detail.py).
 from api.detail import router as detail_router  # noqa: E402
 from api.stocks import router as stocks_router  # noqa: E402
+from api.screener import router as screener_router  # noqa: E402
 
 app.include_router(detail_router)
 app.include_router(stocks_router)
+app.include_router(screener_router)
 
 # 챗봇(§6.2~6.5) — POST /api/chat. live judgement 는 위 live_judgement() 재사용.
 from api.chat import router as chat_router  # noqa: E402

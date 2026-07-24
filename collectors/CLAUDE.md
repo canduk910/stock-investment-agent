@@ -25,6 +25,10 @@
 - 시세 아님(정적 참조) → `.cache/stock_master.json`로 **하루 캐시**(신규상장 때만 변동). 캐시 정책(현재가 금지)과 무관.
 - `search_stocks`: 숫자=코드 prefix, 문자=이름 prefix 우선+부분일치. **랭킹은 이름 길이순** — 정식 종목("SK하이닉스")이 파생상품("KODEX SK하이닉스레버리지")보다 먼저. 소비: `GET /api/stocks/search?q=&limit=`(api/stocks.py, 프로세스 메모리 1회 로드).
 
+## 순위 어댑터 (ranking.py) — 대순환 스크리너 유니버스
+- **`market_cap_rank(client, iscd="0000")`**(MCP 검증 `market_cap`, TR **`FHPST01740000`**, `/uapi/domestic-stock/v1/ranking/market-cap`) → **1콜로 시총상위 종목 리스트**(`[{ticker,name,rank,price,change_rate,market_cap}]`). 스크리너가 개별 일봉 조회 전 유니버스를 확정하는 원천(종목명 `hts_kor_isnm` 포함이라 별도 마스터 조인 불요). `normalize.normalize_market_cap_rank`(`normalize_multiprice` 패턴·`mksc_shrn_iscd`/`hts_kor_isnm`/`stck_prpr`/`prdy_ctrt`/`stck_avls`·결측 graceful).
+- **⚠ 파라미터 키는 소문자**(MCP 확정 — 재무 API 대소문자 함정 선례처럼 임의 통일 금지). `fid_cond_scr_div_code="20174"`(고정 Unique key)·`fid_div_cls_code="0"`(전체). `MARKET_ISCD={all:"0000", kospi:"0001", kosdaq:"1001", kospi200:"2001"}`(라우트가 market→iscd SSOT로 사용). 순위 TR 은 **real 전용 경향**·연속토큰 없이 상위 ~30행 → 실패는 호출측 graceful. **시가총액 단위 = 억원**(라이브: 삼성 14,586,465억=1,459조 → 프론트가 ÷10,000로 조 표시). 라이브 게이트: `tests/live/test_live_screener.py`.
+
 ## 네이버 애널리스트 리포트 (naver_research.py)
 - 소스 `finance.naver.com/research/company_list.naver` = **SSR HTML**(JS 불필요)·**robots `/research/` 허용**·**EUC-KR(cp949)**(응답 `meta`는 utf-8이라 속으므로 `resp.content.decode("euc-kr")` — stock_master 와 동일 패턴, `resp.text` 금지). 파싱은 bs4 `table.type_1` → 각 `tr`에서 `len(tds)>=6` + 종목링크(`?code=`) + 제목링크(`?nid=`) + 첨부(`.pdf`)를 모두 갖춘 행만. 첨부 없는 행·비종목 행은 제외.
 - 반환 dict: `{stock_name, stock_code, title, nid, broker, pdf_url, date}`. **목록만으로 전 필드 확보**(상세페이지 조회 불필요) — 라이브 검증됨(nid·broker·code·pdf_url 실제 채워짐).

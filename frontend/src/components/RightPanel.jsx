@@ -8,6 +8,7 @@ import MacroDashboard from './MacroDashboard.jsx'
 import BalancePanel from './BalancePanel.jsx'
 import KisSettingsPanel from './KisSettingsPanel.jsx'
 import AdminPanel from './AdminPanel.jsx'
+import ScreenerPanel from './ScreenerPanel.jsx'
 
 // 우측 동적 패널(리디자인) — 좌측 상시 채팅 옆에서 맥락형 콘텐츠를 인라인 렌더한다(모달 폐기).
 // 두 경로로 구동: (a) 챗봇 tool_call(App 이 onShowPanel 로 spec 리프팅) · (b) 상단 세그먼트 탭·종목검색(대화 없이 직접 탐색).
@@ -24,12 +25,14 @@ const PANEL_TITLE = {
   balance: '내 잔고',
   settings: '설정 · KIS API 키',
   admin: '회원 관리',
+  screener: '대순환 후보 종목',
 }
 
 // 세그먼트 탭(SSOT) — 대화 없이 직접 탐색. 클릭 시 해당 kind spec 을 onSelect 로 리프팅한다.
 //   종목검색은 탭이 아니라 우측 인라인 입력(ticker 형식 검증). 활성 표시는 spec.kind 로 판단.
 const TABS = [
   { key: 'watchlist', label: '관심종목' },
+  { key: 'screener', label: '후보 종목' },
   { key: 'macro_dashboard', label: '시장 국면' },
   { key: 'balance', label: '내 잔고' },
   { key: 'settings', label: '설정' },
@@ -69,6 +72,10 @@ function RightPanelBody({ spec, onClose, sessionId, onConsult, onSelect, current
 
     case 'watchlist':
       return <PopupWatchlist args={spec.args} onOpenStock={openStock} />
+    case 'screener':
+      // 대순환 단계 기반 후보 종목 스크리너 — 시총상위 유니버스를 대순환 단계로 스캔(탭 전용).
+      //   판정=백엔드 엔진(코드), 실데이터는 프론트 자체조회. 후보 클릭 → 종목 상세 전환(onOpenStock).
+      return <ScreenerPanel onOpenStock={openStock} />
     case 'manage_watchlist':
       // 챗봇 자연어 편집 — 사용자가 [확인]을 눌러야 실제 반영(confirm-before-write, IMP-08).
       return <ManageWatchlistConfirm args={spec.args} valid={spec.valid} onClose={onClose} />

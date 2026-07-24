@@ -332,6 +332,18 @@ def stage_segments_for_chart(chart) -> dict:
     return {"stage_segments": segments, "current_stage": current}
 
 
+def grand_cycle_for_chart(chart) -> dict | None:
+    """차트(candles) → 대순환 판정 dict(`_ma_grand_cycle`) 또는 None(봉<40·빈 차트). public·순수·LLM 0.
+
+    `stage_segments_for_chart` 의 richer 버전 — 현재 단계뿐 아니라 밴드폭/방향/지속봉수까지.
+    스크리너가 종목별 일봉으로 현재 단계+밴드를 얻는 진입점(`_ma_grand_cycle` 를 public 으로 노출).
+    """
+    dated = _sorted_dated_closes(chart)  # (date, close) 오름차순·결측 제외
+    closes = [c for (_, c) in dated]
+    dates = [d for (d, _) in dated]
+    return _ma_grand_cycle(closes, dates)
+
+
 # ── 조립 ─────────────────────────────────────────────────────────────────────
 
 def build_stock_summary(basic, financials, valuation, chart):

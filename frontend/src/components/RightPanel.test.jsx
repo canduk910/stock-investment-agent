@@ -49,6 +49,9 @@ vi.mock('./KisSettingsPanel.jsx', () => ({
 vi.mock('./AdminPanel.jsx', () => ({
   default: ({ currentUserId }) => <div data-testid="admin">admin:{String(currentUserId)}</div>,
 }))
+vi.mock('./ScreenerPanel.jsx', () => ({
+  default: ({ onOpenStock }) => <div data-testid="screener">screener:{String(!!onOpenStock)}</div>,
+}))
 // 종목검색 자동완성(항목6) — TickerSearch 가 searchStocks 를 부른다. 경계만 mock.
 vi.mock('../api.js', () => ({ searchStocks: vi.fn() }))
 import { searchStocks } from '../api.js'
@@ -69,6 +72,18 @@ describe('RightPanel 본문 라우팅(spec.kind → 인라인 컴포넌트)', ()
   it('macro_dashboard → MacroDashboard(시황 컨테이너)', () => {
     render(<RightPanel spec={spec({ kind: 'macro_dashboard' })} onSelect={() => {}} onClose={() => {}} />)
     expect(screen.getByTestId('macro-dashboard')).toBeInTheDocument()
+  })
+
+  it('screener → ScreenerPanel(onOpenStock 전달 — 후보 클릭 상세 이동)', () => {
+    render(<RightPanel spec={spec({ kind: 'screener' })} onSelect={() => {}} onClose={() => {}} />)
+    expect(screen.getByTestId('screener')).toHaveTextContent('screener:true')
+  })
+
+  it("'후보 종목' 탭 클릭 → onSelect({kind:screener})", () => {
+    const onSelect = vi.fn()
+    render(<RightPanel spec={spec({ kind: 'watchlist' })} onSelect={onSelect} onClose={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: '후보 종목' }))
+    expect(onSelect).toHaveBeenCalledWith({ kind: 'screener', args: {}, valid: true })
   })
 
   it('stock_report(valid) → PopupStockReport(ticker/stockName 전달)', () => {

@@ -130,6 +130,26 @@ def normalize_multiprice(body: dict) -> dict:
     return {"items": items}
 
 
+def normalize_market_cap_rank(body: dict) -> list[dict]:
+    """국내주식 시가총액 상위(순위) → [{ticker, name, rank, price, change_rate, market_cap}].
+
+    응답 output 리스트 각 행 필드(MCP COLUMN_MAPPING 확정): mksc_shrn_iscd(종목코드)/
+    hts_kor_isnm(종목명)/data_rank(순위)/stck_prpr(현재가)/prdy_ctrt(전일대비율)/stck_avls(시가총액).
+    필드 부재는 None(graceful, KeyError 금지). 스크리너 유니버스 확보용(랭킹은 라이브값·캐시 없음).
+    """
+    rows = []
+    for o in body.get("output", []) or []:
+        rows.append({
+            "ticker": pick(o, "mksc_shrn_iscd"),
+            "name": pick(o, "hts_kor_isnm"),
+            "rank": to_int(pick(o, "data_rank")),
+            "price": to_float(pick(o, "stck_prpr")),
+            "change_rate": to_float(pick(o, "prdy_ctrt")),
+            "market_cap": to_float(pick(o, "stck_avls")),
+        })
+    return rows
+
+
 def normalize_sector_index(body: dict, index_code: str) -> dict:
     """국내업종 현재지수 → {index_code, price, change, change_rate, volume, advancing, declining, unchanged}.
 

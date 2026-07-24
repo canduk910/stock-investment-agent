@@ -273,6 +273,13 @@ export async function fetchBalance() {
   return res.json()
 }
 
+// 대순환 후보 스크리너 — 시총상위 유니버스를 대순환 단계로 스캔. market: all/kospi/kosdaq/kospi200.
+export async function fetchScreener(market = 'all', size = 30) {
+  const res = await authFetch(`/api/screener?market=${encodeURIComponent(market)}&size=${size}`)
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
 // ── 유저별 KIS 자격증명(설정) ────────────────────────────────────────────────
 // GET /api/me/kis-credentials → {registered, source:'user'|'shared'|'none', app_key_masked, account_masked, env}.
 // 마스킹 상태만(원문 미반환). 인증 필수.
