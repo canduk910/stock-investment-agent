@@ -23,6 +23,7 @@ _TOP_HOLDINGS = 8
 _TOP_WATCHLIST = 10
 _TOP_ANALYST = 2
 _BRIEF_CHARS = 80  # 애널리스트 요약 원라인 길이
+_AI_SUMMARY_CHARS = 120  # 저장된 AI 리포트 요약·국면정합성 원라인 길이
 
 
 def _now_iso() -> str:
@@ -73,6 +74,22 @@ def _safe_judgement():
 def _stamp(body: str) -> str:
     """기준시각 헤더 + 본문, 전체 길이 상한 truncate."""
     return f"기준시각: {_now_iso()}\n{body}"[:_MAX_CHARS]
+
+
+def _latest_ai_report(ticker: str) -> dict | None:
+    """저장된 최신 AI 구조화 리포트 entry({created_at, regime_at_creation, report_json}) 또는 None.
+
+    사용자가 종목 상세에서 'AI 리포트 생성'을 눌러 저장해 둔 리포트를 그 종목 문의 시 챗이 참조하도록
+    view_context 에 실어 준다(생성 안 했으면 None → 컨텍스트 미포함). report_store 는 LLM 미호출 JSON 읽기·
+    순수·예외 없음(어떤 실패도 None → 기존 동작 유지).
+    """
+    try:
+        from chat.report_store import JsonFileReportStore
+
+        history = JsonFileReportStore().list_history(ticker)
+    except Exception:
+        return None
+    return history[0] if history else None
 
 
 def _resolve(user, db):
@@ -208,6 +225,29 @@ def _stock_context(args: dict, user, db) -> str | None:
         )
     else:
         lines.append("종목 시세 일시 조회 불가")
+
+    # 저장된 AI 구조화 리포트(사용자가 종목 상세에서 '생성'해 둔 것) — 그 종목 문의 시 챗이 자동 참조.
+    #   report_json = StockReport.model_dump()(한글 키). 종합의견은 Literal 긍정/중립/신중(매수·매도 아님).
+    #   없으면(미생성) 블록 생략 → '생성하고 나면' 시나리오와 정합. LLM 미호출·순수 JSON 읽기.
+    entry = _latest_ai_report(ticker)
+    rj = (entry or {}).get("report_json") or {}
+    if rj:
+        created = (entry.get("created_at") or "")[:10]
+        opinion = rj.get("종합의견") or "—"
+        lines.append(
+            "(이 종목에 대해 생성해 둔 AI 종합리포트 — '종합의견'은 긍정/중립/신중이며 매수·매도 판정 아님)"
+        )
+        lines.append(f"- 종합의견 {opinion}" + (f" · 생성 {created}" if created else ""))
+        if rj.get("요약"):
+            lines.append(f"- 요약: {str(rj['요약'])[:_AI_SUMMARY_CHARS]}")
+        pts = [str(p) for p in (rj.get("투자포인트") or []) if p]
+        if pts:
+            lines.append("- 투자포인트: " + " · ".join(pts[:3]))
+        risks = [str(r) for r in (rj.get("리스크요인") or []) if r]
+        if risks:
+            lines.append("- 리스크요인: " + " · ".join(risks[:3]))
+        if rj.get("국면정합성"):
+            lines.append(f"- 국면정합성: {str(rj['국면정합성'])[:_AI_SUMMARY_CHARS]}")
 
     # 애널리스트 top-2 원라인(0 KIS) — '리포트가 밝힌 의견' 출처 귀속(에이전트 판정 아님).
     try:

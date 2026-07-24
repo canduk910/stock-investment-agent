@@ -115,6 +115,7 @@ def test_stock_context(monkeypatch):
                                  "목표주가": "9만원", "요약": "실적 개선 기대"}}]
 
     monkeypatch.setattr("chat.analyst_store.default_store", lambda: _Store())
+    monkeypatch.setattr(vc, "_latest_ai_report", lambda t: None)  # 실 report_store 읽기 차단(hermetic)
     out = vc.build_view_context("stock_report", {"ticker": "005930", "stock_name": "삼성전자"})
     assert out is not None
     # 52주 고/저 원값 + 위치 — 에이전트 목표가 추천 근거(범위 앵커). 원값을 직접 핀(죽은 단정 방지).
@@ -122,11 +123,73 @@ def test_stock_context(monkeypatch):
     assert "52주 고" in out and "90,000" in out and "60,000" in out  # fixture high/low 원값 노출
     # 애널리스트 의견은 출처 귀속(판정 아님).
     assert "한화투자증권" in out and "리포트가 밝힌 의견" in out
+    # 저장된 AI 리포트가 없으면(None) AI 리포트 블록 미포함(기존 동작).
+    assert "AI 종합리포트" not in out
 
 
 def test_stock_bad_ticker_none():
     assert vc.build_view_context("stock_report", {"ticker": "bad"}) is None
     assert vc.build_view_context("stock_report", {}) is None
+
+
+def _stock_common(monkeypatch, *, analyst=None):
+    """_stock_context 공통 스텁 — KIS 해석·시세·애널리스트(기본 없음). AI 리포트는 테스트별 주입."""
+    _stub_resolve(monkeypatch)
+    monkeypatch.setattr(
+        "collectors.kis.inquire_price.inquire_price",
+        lambda c, t: {"ticker": "005930", "price": 78000, "change_rate": 1.2,
+                      "per": 12.0, "pbr": 1.3, "week52_high": 90000, "week52_low": 60000},
+    )
+
+    class _Store:
+        def list_reports(self, t):
+            return list(analyst or [])
+
+    monkeypatch.setattr("chat.analyst_store.default_store", lambda: _Store())
+
+
+def test_stock_context_includes_stored_ai_report(monkeypatch):
+    # 사용자가 종목 상세에서 생성해 둔 AI 리포트가 그 종목 문의 시 컨텍스트에 실린다.
+    _stock_common(monkeypatch)
+    entry = {
+        "created_at": "2026-07-24T01:00:00+00:00",
+        "regime_at_creation": "확장",
+        "report_json": {
+            "종합의견": "중립",
+            "요약": "메모리 업황 회복 기대와 밸류에이션 부담이 병존.",
+            "투자포인트": ["HBM 수요 확대", "원가 개선"],
+            "리스크요인": ["업황 둔화", "환율 변동"],
+            "국면정합성": "확장 국면 권장 현금비중 대비 무난한 편.",
+            "면책고지": "투자 판단 책임은 본인.",
+        },
+    }
+    monkeypatch.setattr(vc, "_latest_ai_report", lambda t: entry)
+    out = vc.build_view_context("stock_report", {"ticker": "005930", "stock_name": "삼성전자"})
+    assert out is not None
+    assert "AI 종합리포트" in out and "매수·매도 판정 아님" in out  # 출처·안전 문구
+    assert "종합의견 중립" in out and "2026-07-24" in out  # 의견 + 생성일
+    assert "HBM 수요 확대" in out and "업황 둔화" in out  # 투자포인트·리스크
+    assert "국면정합성" in out
+    assert len(out) <= vc._MAX_CHARS  # 예산 내
+
+
+def test_stock_context_ai_report_partial_graceful(monkeypatch):
+    # report_json 이 일부 키만 있어도 크래시 없이 있는 것만 렌더(폴백/구버전 방어).
+    _stock_common(monkeypatch)
+    monkeypatch.setattr(
+        vc, "_latest_ai_report",
+        lambda t: {"created_at": "2026-07-24T00:00:00+00:00", "report_json": {"종합의견": "긍정적"}},
+    )
+    out = vc.build_view_context("stock_report", {"ticker": "005930", "stock_name": "삼성전자"})
+    assert out is not None and "종합의견 긍정적" in out
+
+
+def test_stock_context_no_ai_report_when_store_empty(monkeypatch):
+    # 미생성(None) → AI 리포트 블록 없음(그대로 기존 스냅샷).
+    _stock_common(monkeypatch)
+    monkeypatch.setattr(vc, "_latest_ai_report", lambda t: None)
+    out = vc.build_view_context("stock_report", {"ticker": "005930", "stock_name": "삼성전자"})
+    assert out is not None and "AI 종합리포트" not in out
 
 
 def test_stock_kis_fail_graceful(monkeypatch):
