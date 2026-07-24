@@ -241,15 +241,13 @@ def _impl_search_report(args: dict) -> str:
 
 def _impl_summarize_youtube(args: dict) -> str:
     # 지연 import — tools.py 로드가 youtube_transcript_api 유무에 묶이지 않게.
-    from collectors.youtube import fetch_transcript
+    from collectors.youtube import fetch_transcript_detailed
 
     url = (args or {}).get("video_url", "")
-    transcript = fetch_transcript(url)
+    transcript, reason = fetch_transcript_detailed(url)
     if not transcript:
-        return (
-            "자막을 가져오지 못했습니다(비공개·자막 없음·불량 URL 가능). "
-            "사용자에게 다른 영상이나 URL 확인을 안내하세요."
-        )
+        # 분류된 사유를 그대로 전달(IP 차단 / 자막 없음 / 접근 불가 / 타임아웃 구분) — 사용자에게 정확히 안내.
+        return f"자막을 가져오지 못했습니다. 사유: {reason} 이 사유를 사용자에게 그대로 안내하세요."
     return (
         "[아래는 해당 YouTube 영상 화자의 발언 자막이다 — 3자 의견이므로 '영상에 따르면'으로 "
         "출처를 밝혀 요약하고, 매수/매도 판정으로 제시하지 말 것]\n" + transcript

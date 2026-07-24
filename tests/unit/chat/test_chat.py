@@ -127,7 +127,9 @@ def test_content_tool_feeds_transcript_not_popup(monkeypatch):
 
     표시 툴({ok:True}+팝업)과 달리 콘텐츠 툴은 실제 텍스트를 2번째 호출 컨텍스트로 되먹인다.
     """
-    monkeypatch.setattr("collectors.youtube.fetch_transcript", lambda url, **k: "영상 자막 내용")
+    monkeypatch.setattr(
+        "collectors.youtube.fetch_transcript_detailed", lambda url, *a, **k: ("영상 자막 내용", None)
+    )
     client = _FakeClient(
         [
             _resp(

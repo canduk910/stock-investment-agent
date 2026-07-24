@@ -90,3 +90,56 @@ def test_fetch_transcript_timeout_is_none(monkeypatch):
 
     monkeypatch.setattr(youtube, "YouTubeTranscriptApi", lambda: _SlowFake())
     assert fetch_transcript("https://youtu.be/vid123", timeout=0.1) is None
+
+
+# ── 실패 사유 분류(fetch_transcript_detailed) — IP 차단 vs 자막 없음 vs 접근불가 구분 ──────────
+
+
+def test_failure_reason_classifies():
+    from youtube_transcript_api import (
+        IpBlocked,
+        RequestBlocked,
+        TranscriptsDisabled,
+        VideoUnavailable,
+    )
+
+    assert youtube._failure_reason(RequestBlocked("v")) == youtube.REASON_BLOCKED
+    assert youtube._failure_reason(IpBlocked("v")) == youtube.REASON_BLOCKED
+    assert youtube._failure_reason(TranscriptsDisabled("v")) == youtube.REASON_NO_CAPTION
+    assert youtube._failure_reason(VideoUnavailable("v")) == youtube.REASON_UNAVAILABLE
+    assert youtube._failure_reason(RuntimeError("x")) == youtube.REASON_GENERIC
+
+
+def test_detailed_success(monkeypatch):
+    monkeypatch.setattr(youtube, "YouTubeTranscriptApi", _fake_api([_Snippet("안녕"), _Snippet("시장")]))
+    text, reason = youtube.fetch_transcript_detailed("https://youtu.be/vid123")
+    assert text == "안녕 시장" and reason is None
+
+
+def test_detailed_bad_url():
+    text, reason = youtube.fetch_transcript_detailed("https://example.com/x")
+    assert text is None and reason == youtube.REASON_BAD_URL
+
+
+def test_detailed_ip_block_reason(monkeypatch):
+    # ★핵심: YouTube 가 서버 IP 를 차단(RequestBlocked)하면 '자막 없음' 이 아니라 'IP 차단' 으로 안내.
+    from youtube_transcript_api import RequestBlocked
+
+    monkeypatch.setattr(youtube, "YouTubeTranscriptApi", _fake_api(raises=RequestBlocked("vid123")))
+    text, reason = youtube.fetch_transcript_detailed("https://youtu.be/vid123")
+    assert text is None and reason == youtube.REASON_BLOCKED
+    assert "차단" in reason and "로컬" in reason  # 사용자에게 원인·회피 정보 전달
+
+
+def test_detailed_no_caption_reason(monkeypatch):
+    from youtube_transcript_api import TranscriptsDisabled
+
+    monkeypatch.setattr(youtube, "YouTubeTranscriptApi", _fake_api(raises=TranscriptsDisabled("vid123")))
+    text, reason = youtube.fetch_transcript_detailed("https://youtu.be/vid123")
+    assert text is None and reason == youtube.REASON_NO_CAPTION
+
+
+def test_detailed_empty_reason(monkeypatch):
+    monkeypatch.setattr(youtube, "YouTubeTranscriptApi", _fake_api([]))
+    text, reason = youtube.fetch_transcript_detailed("https://youtu.be/vid123")
+    assert text is None and reason == youtube.REASON_NO_TEXT
