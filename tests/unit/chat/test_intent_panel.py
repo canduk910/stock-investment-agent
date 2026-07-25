@@ -6,7 +6,12 @@
 from __future__ import annotations
 
 from chat.intent import LABELS
-from chat.intent_panel import INTENT_PANEL, intent_panel_name, merge_intent_panel
+from chat.intent_panel import (
+    INTENT_PANEL,
+    intent_panel_name,
+    merge_intent_panel,
+    with_screener_panel,
+)
 from chat.tools import CONTENT_TOOLS, TOOLS
 
 _DISPLAY_TOOLS = {t["function"]["name"] for t in TOOLS} - set(CONTENT_TOOLS)
@@ -80,3 +85,37 @@ def test_merge_no_mapping_passthrough():
     assert merge_intent_panel("stock_analysis", llm) == llm  # ticker 필요 → LLM 유지
     assert merge_intent_panel(None, llm) == llm
     assert merge_intent_panel("general_qa", []) == []
+
+
+# ── 후보 종목 패널 보강(screen_stocks 콘텐츠 툴 턴) ─────────────────────────────────
+
+
+def test_with_screener_panel_adds_when_screen_stocks_ran():
+    # screen_stocks 가 돈 턴이면 후보 종목 패널(show_screener)을 맨 앞에 보강(콘텐츠 툴은 팝업이 아님).
+    out = with_screener_panel([], ["screen_stocks"])
+    assert out == [{"name": "show_screener", "args": {}}]
+
+
+def test_with_screener_panel_noop_without_screen_stocks():
+    # screen_stocks 가 안 돈 턴은 그대로(다른 콘텐츠/표시 툴엔 미개입).
+    assert with_screener_panel([], ["summarize_youtube"]) == []
+    assert with_screener_panel([], []) == []
+    llm = [{"name": "show_balance", "args": {}}]
+    assert with_screener_panel(llm, ["show_balance"]) == llm
+
+
+def test_with_screener_panel_dedups_and_fronts():
+    # LLM 이 직접 show_screener 를 냈어도 중복 없이 맨 앞으로(콘텐츠 툴 병행).
+    llm = [{"name": "show_watchlist", "args": {}}, {"name": "show_screener", "args": {}}]
+    out = with_screener_panel(llm, ["screen_stocks", "show_watchlist", "show_screener"])
+    assert out[0] == {"name": "show_screener", "args": {}}
+    assert sum(1 for p in out if p["name"] == "show_screener") == 1
+
+
+def test_merge_intent_panel_yields_to_screener_panel():
+    # "후보종목 확인"이 portfolio_advice 로 분류돼도, 후보 종목 패널이 있으면 잔고를 주입하지 않는다
+    #   (추천 답변 위에 엉뚱한 잔고 패널이 뜨던 잔여 버그 해소). 후보 종목 패널이 popups[0] 유지.
+    popups = with_screener_panel([], ["screen_stocks"])
+    out = merge_intent_panel("portfolio_advice", popups)
+    assert out[0]["name"] == "show_screener"
+    assert all(p["name"] != "show_balance" for p in out)

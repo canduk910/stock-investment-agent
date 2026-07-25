@@ -145,6 +145,20 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "show_screener",
+            "description": (
+                "대순환 후보 종목 목록 패널을 우측에 연다. 사용자가 '후보 종목 보여줘/확인', "
+                "'대순환 후보 화면 열어줘' 처럼 대순환 후보 종목 **목록·화면을 보고 싶어할 때** 호출한다. "
+                "종목 추천/후보를 물으면 설명·근거는 screen_stocks(콘텐츠 툴)로 전하고, 이 도구는 그 목록 "
+                "패널을 함께 띄우는 용도다(실제 후보 데이터는 화면이 직접 조회한다 — 네가 지어내지 않는다)."
+            ),
+            # 파라미터 없음: 후보 종목 패널(ScreenerPanel)이 시장·단계 필터를 자체 관리·조회한다.
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "summarize_youtube",
             "description": (
                 "사용자가 특정 YouTube 영상 내용을 요약·정리해 달라거나 '이 영상 뭐래?'처럼 "

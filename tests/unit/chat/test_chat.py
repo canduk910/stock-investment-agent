@@ -152,6 +152,28 @@ def test_content_tool_feeds_transcript_not_popup(monkeypatch):
     assert '"ok"' not in tool_msgs[0]["content"]
 
 
+def test_screen_stocks_turn_opens_screener_panel_not_balance(monkeypatch):
+    """screen_stocks(콘텐츠 툴) 턴 → 후보 종목 패널(show_screener)이 popups[0], 잔고 미주입.
+
+    "나 후보종목 확인" 이 portfolio_advice 로 분류돼 잔고(show_balance)가 추천 답변 위에 뜨던 잔여
+    버그 해소 — 추천 텍스트와 화면(후보 종목 패널)을 일치시킨다. 콘텐츠 툴 자체는 팝업 아님.
+    """
+    monkeypatch.setattr("chat.chat.run_content_tool", lambda name, args, **k: "[스크리너 결과] 후보 A·B")
+    client = _FakeClient(
+        [
+            _resp(
+                tool_calls=[_tool_call("screen_stocks", {"market": "all"})],
+                finish_reason="tool_calls",
+            ),
+            _resp(content="스크리너에 따르면 상승국면 후보입니다."),
+        ]
+    )
+    out = chat("나 후보종목 확인해줄래?", _JUDGE, Session(), client=client)
+    assert out["popups"] and out["popups"][0]["name"] == "show_screener"
+    assert all(p["name"] != "show_balance" for p in out["popups"])  # 잔고 주입 억제
+    assert all(p["name"] != "screen_stocks" for p in out["popups"])  # 콘텐츠 툴은 팝업 아님
+
+
 def test_first_create_passes_tools_and_model():
     client = _FakeClient([_resp(content="답변")])
     chat("질문", _JUDGE, Session(), client=client)

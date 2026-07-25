@@ -134,6 +134,25 @@ def test_intent_panel_emitted_in_stream_without_tool_calls(monkeypatch):
     assert done["popups"][0]["name"] == "show_macro_dashboard"
 
 
+def test_screen_stocks_stream_opens_screener_panel_not_balance(monkeypatch):
+    # 스트림: screen_stocks(콘텐츠 툴) 턴 → 후보 종목 패널(show_screener)이 popups[0]·done, 잔고 미주입.
+    #   portfolio_advice 로 분류돼도 추천 답변↔화면 일치(잔여 버그 해소).
+    monkeypatch.setattr(chatmod, "classify", lambda t: "portfolio_advice")
+    monkeypatch.setattr(chatmod, "run_content_tool", lambda name, args, **k: "[스크리너 결과]")
+    client = _FakeStreamClient(
+        [
+            [_tool_chunk([_tool_delta(0, tc_id="c0", name="screen_stocks", args="{}")], finish_reason="tool_calls")],
+            [_content_chunk("스크리너에 따르면 상승국면 후보입니다.")],
+        ]
+    )
+    events = _collect(chat_stream("나 후보종목 확인해줄래?", _JUDGE, Session(), client=client))
+    popup_events = [e for e in events if e["type"] == "popups"]
+    assert popup_events and popup_events[0]["popups"][0]["name"] == "show_screener"
+    done = [e for e in events if e["type"] == "done"][0]
+    assert done["popups"][0]["name"] == "show_screener"
+    assert all(p["name"] != "show_balance" for p in done["popups"])
+
+
 # --- guardrail: LLM 미호출 결정적 차단 ---
 def test_guardrail_blocks_without_calling_llm(monkeypatch):
     monkeypatch.setattr(chatmod, "classify", lambda t: "risk_guardrail")

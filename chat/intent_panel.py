@@ -25,6 +25,12 @@ INTENT_PANEL: dict[str, str] = {
 # 패널이 이 카드를 popups[0]에서 밀어내면 확인 카드가 안 보여 등록/편집이 불가능하다 → 인텐트 주입 예외.
 _ACTION_PANELS = frozenset({"manage_watchlist"})
 
+# 대순환 후보 종목 패널(show_screener)이 이미 있으면(=screen_stocks 콘텐츠 툴이 돈 턴, `with_screener_panel`)
+# 인텐트 네비 패널로 덮지 않는다 — "종목 추천/후보종목 확인" 이 portfolio_advice 로 분류돼 잔고(show_balance)
+# 패널이 후보 종목 답변 위에 뜨던 문제 해소. 추천 답변과 패널을 일치시킨다(엔진 산출·매수 추천 아님 불변).
+_SCREENER_PANEL = "show_screener"
+_SCREENER_CONTENT_TOOL = "screen_stocks"
+
 
 def intent_panel_name(intent: str | None) -> str | None:
     """인텐트 라벨 → 표시 툴명(패널). 매핑 없으면 None(패널 없음 / LLM 담당)."""
@@ -47,7 +53,25 @@ def merge_intent_panel(intent: str | None, popups: list[dict]) -> list[dict]:
     name = intent_panel_name(intent)
     if not name:
         return list(base)
-    if any(isinstance(p, dict) and p.get("name") in _ACTION_PANELS for p in base):
-        return list(base)  # 확인·편집 액션 카드 보존(popups[0] 유지)
+    if any(
+        isinstance(p, dict) and p.get("name") in (_ACTION_PANELS | {_SCREENER_PANEL})
+        for p in base
+    ):
+        return list(base)  # 확인·편집 액션 카드 / 후보 종목 패널 보존(popups[0] 유지)
     deduped = [p for p in base if isinstance(p, dict) and p.get("name") != name]
     return [{"name": name, "args": {}}] + deduped
+
+
+def with_screener_panel(popups: list[dict], tool_names) -> list[dict]:
+    """`screen_stocks` 콘텐츠 툴이 호출된 턴이면 후보 종목 패널(show_screener)을 popups **맨 앞**에 보강한다.
+
+    콘텐츠 툴은 팝업이 아니라 텍스트만 되먹이므로(추천을 글로만 줌), 같은 후보를 시각적으로 보여주는
+    show_screener 패널을 결정적으로 함께 열어 답변과 화면을 일치시킨다(LLM 이 별도 툴을 안 불러도 열림).
+    맨 앞에 두어 `merge_intent_panel` 의 잔고 등 인텐트 네비 주입을 억제한다(위 `_SCREENER_PANEL` 예외).
+    이미 show_screener 가 있으면(LLM 이 직접 호출) 중복 없이 맨 앞으로 정렬.
+    """
+    base = list(popups) if isinstance(popups, list) else []
+    if _SCREENER_CONTENT_TOOL not in set(tool_names or ()):
+        return base
+    deduped = [p for p in base if not (isinstance(p, dict) and p.get("name") == _SCREENER_PANEL)]
+    return [{"name": _SCREENER_PANEL, "args": {}}] + deduped

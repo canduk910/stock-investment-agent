@@ -164,14 +164,24 @@ describe('routePopup — manage_watchlist(IMP-08: 편집 확인 팝업)', () => 
   })
 })
 
-describe('POPUP_KIND — 라우팅 계약 상수(5종)', () => {
-  it('정확히 5종 툴 이름만 매핑(오발동 방지)', () => {
+describe('POPUP_KIND — 라우팅 계약 상수(6종)', () => {
+  it('정확히 6종 툴 이름만 매핑(오발동 방지)', () => {
     expect(Object.keys(POPUP_KIND).sort()).toEqual([
       'manage_watchlist',
       'show_balance',
       'show_macro_dashboard',
+      'show_screener',
       'show_stock_report',
       'show_watchlist',
     ])
+  })
+
+  it('show_screener → screener kind(후보 종목 패널)', () => {
+    expect(routePopup({ name: 'show_screener', args: {} })).toEqual({
+      kind: 'screener',
+      name: 'show_screener',
+      args: {},
+      valid: true,
+    })
   })
 })

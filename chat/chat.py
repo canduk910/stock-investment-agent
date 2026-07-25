@@ -19,7 +19,7 @@ import json
 
 from chat.build_prompt import build_prompt
 from chat.intent import classify, guardrail_label
-from chat.intent_panel import merge_intent_panel
+from chat.intent_panel import merge_intent_panel, with_screener_panel
 from chat.market_outlook import build_recent_outlook_context
 from chat.session import Session
 from chat.tools import (
@@ -216,6 +216,7 @@ def chat(user_query: str, judgement: dict, session: Session, *, client=None, use
     messages.append({"role": "user", "content": user_query})
 
     popups: list[dict] = []
+    called_names: list[str] = []
     try:
         resp = _create_with_retry(
             client,
@@ -230,6 +231,7 @@ def chat(user_query: str, judgement: dict, session: Session, *, client=None, use
             messages.append(choice.message)  # assistant(tool_calls) 그대로 누적
             for tc in choice.message.tool_calls:
                 name = tc.function.name
+                called_names.append(name)
                 try:
                     args = json.loads(tc.function.arguments or "{}")
                 except (json.JSONDecodeError, TypeError):
@@ -257,8 +259,11 @@ def chat(user_query: str, judgement: dict, session: Session, *, client=None, use
         text = _FALLBACK_MESSAGE
         popups = []
 
+    # screen_stocks(콘텐츠 툴)가 돈 턴이면 후보 종목 패널을 맨 앞에 보강(추천 텍스트↔화면 일치).
+    popups = with_screener_panel(popups, called_names)
     # 인텐트가 정하는 네비게이션 패널(macro/watchlist/balance)을 popups 앞에 주입(폴백에도 적용).
     #   프론트가 popups[0]로 우측 패널을 전환 → 인텐트가 패널을 권위적으로 결정(원 설계). LLM 중복은 dedup.
+    #   단 후보 종목 패널(show_screener)이 있으면 인텐트 잔고 주입을 억제한다(merge 예외).
     popups = merge_intent_panel(intent, popups)
     session.append(user_query, text)
     return {"text": text, "popups": popups}
@@ -379,8 +384,11 @@ def chat_stream(user_query: str, judgement: dict, session: Session, *, client=No
             #   done 이벤트도 이 표시 팝업을 싣도록 외부 popups 에 배정한다.
             popups = [c for c in all_calls if c["name"] not in CONTENT_TOOLS]
 
+        # screen_stocks(콘텐츠 툴)가 돈 턴이면 후보 종목 패널을 맨 앞에 보강(추천 텍스트↔화면 일치).
+        popups = with_screener_panel(popups, [c["name"] for c in all_calls])
         # 인텐트 네비게이션 패널(macro/watchlist/balance)을 popups 앞에 주입 — LLM 도구 호출이 없어도
         #   패널이 전환되게. 프론트가 popups[0]로 우측 패널을 바꾼다(인텐트 권위적, LLM 중복 dedup).
+        #   단 후보 종목 패널(show_screener)이 있으면 인텐트 잔고 주입을 억제한다(merge 예외).
         popups = merge_intent_panel(intent, popups)
         if popups:
             yield {"type": "popups", "popups": popups}  # 패널 선행 전환(설명 토큰보다 먼저)

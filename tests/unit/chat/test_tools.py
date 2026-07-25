@@ -37,6 +37,7 @@ def test_popup_tool_names__frontend_contract():
         "show_watchlist",
         "manage_watchlist",  # IMP-08: 자연어 워치리스트 편집(추가/제거/목표가)
         "show_balance",  # UX3: 계좌 잔고·평가액·보유종목 현황(파라미터 없음)
+        "show_screener",  # 대순환 후보 종목 패널(파라미터 없음) — screen_stocks 추천과 짝
     }
 
 

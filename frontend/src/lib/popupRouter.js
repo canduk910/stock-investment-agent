@@ -16,6 +16,7 @@ export const POPUP_KIND = {
   show_watchlist: 'watchlist',
   show_balance: 'balance', // UX3: 계좌 잔고·평가액·수익현황 → 프론트가 /api/balance 직접 조회(환각 차단)
   manage_watchlist: 'manage_watchlist', // IMP-08: 자연어 편집 → 화면 confirm 후 반영(자동 매매 아님)
+  show_screener: 'screener', // 대순환 후보 종목 패널 → ScreenerPanel 자체조회(추천 텍스트↔화면 일치)
 }
 
 // manage_watchlist 유효 action(워치리스트 편집만 — buy/sell 등 매매 어휘는 애초에 매핑되지 않음).
