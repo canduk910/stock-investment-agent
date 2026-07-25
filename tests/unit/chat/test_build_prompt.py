@@ -104,6 +104,15 @@ def test_prompt_screener_rule_engine_attributed_not_recommendation():
     assert "스크리너에 따르면" in text  # 판정 주체를 엔진에 귀속
 
 
+def test_prompt_generic_recommendation_triggers_screener():
+    # 일반 "종목 추천/후보 종목 알려줘" 도 screen_stocks 를 부르게 트리거를 넓혔는지(회귀 방지).
+    # 근거 없는 일반론·시장국면 대시보드 회피 금지 문구가 있어야 챗봇이 스크리너로 답한다.
+    text = build_prompt(_JUDGEMENT)
+    assert "발굴" in text or "종목 추천" in text  # 일반 추천 질의 트리거
+    assert "일반론" in text  # 방어주/배당주 나열로 회피 금지
+    assert "show_macro_dashboard" in text  # 시장국면 대시보드로 답 대신하지 말라
+
+
 def test_prompt_reflects_regime_change_on_reinjection():
     # judgement 를 매 호출 주입 → 다른 국면이면 다른 현금비중이 프롬프트에 반영.
     su = judge_regime({"yield_spread": 0.6, "hy_spread": 2.0, "vix": 30.0})  # 회복
