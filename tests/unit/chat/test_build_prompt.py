@@ -96,6 +96,14 @@ def test_prompt_regime_params_are_cash_only():
     assert set(params.keys()) == {"cash"}  # cash 외 국면 커트 파라미터 없음
 
 
+def test_prompt_screener_rule_engine_attributed_not_recommendation():
+    # ⑧ 스크리너 규칙 — 규칙 엔진 산출·매수 추천 아님·엔진 귀속·면책(개인화 투자자문 경계 방어).
+    text = build_prompt(_JUDGEMENT)
+    assert "screen_stocks" in text
+    assert "규칙 엔진" in text and "매수 추천이 아니다" in text
+    assert "스크리너에 따르면" in text  # 판정 주체를 엔진에 귀속
+
+
 def test_prompt_reflects_regime_change_on_reinjection():
     # judgement 를 매 호출 주입 → 다른 국면이면 다른 현금비중이 프롬프트에 반영.
     su = judge_regime({"yield_spread": 0.6, "hy_spread": 2.0, "vix": 30.0})  # 회복

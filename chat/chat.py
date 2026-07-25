@@ -236,7 +236,7 @@ def chat(user_query: str, judgement: dict, session: Session, *, client=None, use
                     args = {}
                 if name in CONTENT_TOOLS:
                     # 콘텐츠 툴: 서버가 실행해 실제 텍스트를 되먹인다(LLM 이 요약). 팝업 아님.
-                    content = run_content_tool(name, args)
+                    content = run_content_tool(name, args, user=user, db=db)
                 else:
                     # 표시 툴: "무엇을 띄울지"만 팝업으로 리프팅. 뷰 컨텍스트 툴이면 현재 화면 스냅샷도 되먹임(P2).
                     popups.append({"name": name, "args": args})
@@ -390,7 +390,7 @@ def chat_stream(user_query: str, judgement: dict, session: Session, *, client=No
             messages.append(_assistant_tool_calls_message(all_calls))
             for i, c in enumerate(all_calls):
                 if c["name"] in CONTENT_TOOLS:
-                    content = run_content_tool(c["name"], c["args"])  # 실제 텍스트 되먹임
+                    content = run_content_tool(c["name"], c["args"], user=user, db=db)  # 실제 텍스트 되먹임
                 else:
                     content = _display_tool_result(c["name"], c["args"], user=user, db=db)  # 확인 신호(+뷰 스냅샷 P2)
                 messages.append(

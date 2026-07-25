@@ -201,6 +201,33 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "screen_stocks",
+            "description": (
+                "대순환(이동평균선 배열) 단계로 시총상위 종목을 스캔해 특정 단계 후보 종목을 안내한다. "
+                "'대순환 상승 국면/상승 배열/N단계 종목 추천·스캔·찾아줘' 처럼 대순환 기준 후보를 물을 때 호출한다. "
+                "규칙 엔진(코드)이 산출한 **기술적 분류**이지 에이전트의 매수 추천이 아니다 — 결과는 '스크리너에 따르면'으로 "
+                "출처를 엔진에 귀속해 전하고, 특정 종목을 '사라'고 단정하거나 수익을 보장하지 않는다. "
+                "특정 개별 종목 하나의 분석은 이 도구가 아니라 종목 리포트(show_stock_report)를 쓴다."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "market": {
+                        "type": "string",
+                        "enum": ["all", "kospi", "kosdaq", "kospi200"],
+                        "description": "시장(기본 all)",
+                    },
+                    "stage": {
+                        "type": "string",
+                        "description": "단계 필터: 'rising'(상승국면 1·6단계, 기본) / '1'~'6'(특정 단계) / 'all'(전체)",
+                    },
+                },
+            },
+        },
+    },
 ]
 
 
@@ -208,12 +235,19 @@ TOOLS = [
 # 표시 툴(show_*)은 chat.py 가 tool 결과를 {"ok":True}로만 되먹이고 실데이터는 프론트가
 # 조회(환각 차단). 콘텐츠 툴은 서버가 실행해 실제 텍스트를 되먹여 LLM 이 요약한다.
 # 이름 집합 + 실행 레지스트리가 단일 출처 — chat.py(chat·chat_stream)가 이걸로 분기한다.
-CONTENT_TOOLS = frozenset({"summarize_youtube", "search_report", "fetch_analyst_reports"})
+CONTENT_TOOLS = frozenset(
+    {"summarize_youtube", "search_report", "fetch_analyst_reports", "screen_stocks"}
+)
 
 # 챗에서 애널리스트 리포트 수집 시 상한(지연 캡) — 프론트 '가져오기'(최대 30)보다 작게 잡아
 # 챗 응답이 과도하게 지연되지 않게 한다(각 리포트마다 PDF 다운로드 + LLM 요약이라 느림).
 ANALYST_CHAT_FETCH_LIMIT = 5
 _ANALYST_FEEDBACK_TOP_N = 5  # 되먹임에 실을 최근 리포트 수
+
+# 스크리너 콘텐츠 툴 — 스캔 규모 + 되먹임 상한(1500자 예산 내). 상승국면 기본(1·6단계).
+_SCREEN_CHAT_SIZE = 30
+_SCREEN_FEEDBACK_TOP_N = 20  # 되먹임 원라인 상한
+_SCREEN_RISING_STAGES = (1, 6)  # 상승국면(1 안정상승 · 6 상승진입)
 
 
 def _looks_like_ticker(t) -> bool:
@@ -221,8 +255,8 @@ def _looks_like_ticker(t) -> bool:
     return isinstance(t, str) and t.isdigit() and len(t) == 6
 
 
-def _impl_search_report(args: dict) -> str:
-    # 지연 import — tools.py 로드가 rag(pdfplumber/numpy) 유무에 묶이지 않게.
+def _impl_search_report(args: dict, *, user=None, db=None) -> str:
+    # 지연 import — tools.py 로드가 rag(pdfplumber/numpy) 유무에 묶이지 않게. (user/db 미사용)
     from rag import store
 
     query = (args or {}).get("query", "")
@@ -239,8 +273,8 @@ def _impl_search_report(args: dict) -> str:
     )
 
 
-def _impl_summarize_youtube(args: dict) -> str:
-    # 지연 import — tools.py 로드가 youtube_transcript_api 유무에 묶이지 않게.
+def _impl_summarize_youtube(args: dict, *, user=None, db=None) -> str:
+    # 지연 import — tools.py 로드가 youtube_transcript_api 유무에 묶이지 않게. (user/db 미사용)
     from collectors.youtube import fetch_transcript_detailed
 
     url = (args or {}).get("video_url", "")
@@ -254,9 +288,9 @@ def _impl_summarize_youtube(args: dict) -> str:
     )
 
 
-def _impl_fetch_analyst_reports(args: dict) -> str:
+def _impl_fetch_analyst_reports(args: dict, *, user=None, db=None) -> str:
     # 네이버에서 그 종목 애널리스트 리포트를 수집·요약·저장(느림 — 요청 시만 프롬프트가 호출) →
-    # 저장된 요약을 출처 귀속 프레이밍으로 되먹여 LLM 이 인용해 답한다(에이전트 판정 아님).
+    # 저장된 요약을 출처 귀속 프레이밍으로 되먹여 LLM 이 인용해 답한다(에이전트 판정 아님). (user/db 미사용)
     ticker = str((args or {}).get("ticker", "")).strip()
     if not _looks_like_ticker(ticker):
         return "종목코드(6자리)를 확인하지 못해 애널리스트 리포트를 수집할 수 없습니다."
@@ -290,20 +324,86 @@ def _impl_fetch_analyst_reports(args: dict) -> str:
     return "\n".join(lines)
 
 
+def _screen_stage_filter(stage) -> tuple[int, ...] | None:
+    """stage 인자 → 허용 단계 튜플. None(전체) / (1,6)(상승국면 기본) / (n,)(특정)."""
+    s = str(stage or "rising").strip().lower()
+    if s == "all":
+        return None
+    if s in ("1", "2", "3", "4", "5", "6"):
+        return (int(s),)
+    return _SCREEN_RISING_STAGES  # rising·미지정·불량 → 상승국면(1·6)
+
+
+def _impl_screen_stocks(args: dict, *, user=None, db=None) -> str:
+    # 대순환 스크리너(규칙 엔진·코드)로 시총상위 종목의 대순환 단계를 스캔 → 단계 필터 후 출처 귀속
+    # 프레이밍으로 되먹인다. 판정은 엔진(코드)·설명은 LLM. 매수 추천 아님·면책은 프롬프트+헤더 이중 강조.
+    # 지연 import — tools.py 로드가 KIS/스크리너 스택에 묶이지 않게, 사이클(api.detail) 회피.
+    from api.detail import _resolve_client
+    from collectors.kis.ranking import MARKET_ISCD
+    from stock.screener import screen_grand_cycle
+
+    market = str((args or {}).get("market", "all")).strip().lower()
+    if market not in MARKET_ISCD:
+        market = "all"
+    stages = _screen_stage_filter((args or {}).get("stage"))
+
+    # 프로덕션은 KIS 앱키가 __shared__ DB 에만 있어 db 필수(env fallback 은 비어 있음 — 잔고 P2 교훈).
+    client = _resolve_client(user, db)
+    result = screen_grand_cycle(client, market_iscd=MARKET_ISCD[market], size=_SCREEN_CHAT_SIZE)
+    candidates = result.get("candidates") or []
+    # 단계 필터(기본 상승국면). 판정보류(stage=None)는 항상 제외.
+    picked = [c for c in candidates if c.get("stage") is not None and
+              (stages is None or c.get("stage") in stages)]
+
+    market_label = {"all": "전체", "kospi": "코스피", "kosdaq": "코스닥", "kospi200": "코스피200"}[market]
+    stage_label = "전체 단계" if stages is None else (
+        "상승국면(1·6단계)" if stages == _SCREEN_RISING_STAGES else f"{stages[0]}단계"
+    )
+    if not picked:
+        return (
+            f"[대순환 스크리너({market_label}·{stage_label})] 해당 조건의 후보 종목이 없습니다. "
+            "없는 종목·목표가를 지어내지 말고, 다른 단계·시장을 제안하세요."
+        )
+    header = (
+        f"[대순환 스크리너 결과({market_label}·{stage_label}) — 규칙 엔진(코드)이 산출한 대순환 단계 "
+        "스캔이며 에이전트의 매수 추천이 아니다. '스크리너에 따르면 이 종목들이 …단계로 분류됨'처럼 판정 "
+        "주체를 엔진에 귀속해 전하고, 특정 종목을 '사라'고 단정하거나 수익을 보장하지 말 것. 아래 종목명·단계·"
+        "밴드 수치만 인용(날조 금지)·손실 위험 환기·면책 유지]"
+    )
+    lines = [header]
+    for c in picked[:_SCREEN_FEEDBACK_TOP_N]:
+        band = c.get("band_width_pct")
+        band_s = f" · 밴드 {band:+.1f}%" if isinstance(band, (int, float)) else ""
+        if c.get("band_direction"):
+            band_s += f"({c['band_direction']})"
+        # stage_name 은 스크리너가 constants(SSOT)에서 붙인 라벨 — LLM 복제 아님.
+        lines.append(
+            f"- {c.get('name') or c.get('ticker')}({c.get('ticker')}) "
+            f"{c.get('stage')}단계·{c.get('stage_name') or ''}{band_s}"
+        )
+    if len(picked) > _SCREEN_FEEDBACK_TOP_N:
+        lines.append(f"…외 {len(picked) - _SCREEN_FEEDBACK_TOP_N}종목")
+    return "\n".join(lines)
+
+
 _TOOL_IMPL = {
     "summarize_youtube": _impl_summarize_youtube,
     "search_report": _impl_search_report,
     "fetch_analyst_reports": _impl_fetch_analyst_reports,
+    "screen_stocks": _impl_screen_stocks,
 }
 
 
-def run_content_tool(name: str, args: dict) -> str:
-    """콘텐츠 툴 실행 → LLM 되먹임용 문자열. 미등록·예외는 안전 메시지(챗 안 죽임)."""
+def run_content_tool(name: str, args: dict, *, user=None, db=None) -> str:
+    """콘텐츠 툴 실행 → LLM 되먹임용 문자열. 미등록·예외는 안전 메시지(챗 안 죽임).
+
+    user/db 는 KIS client 가 필요한 툴(screen_stocks)로 관통(프로덕션 __shared__ DB 키). 나머지 툴은 무시.
+    """
     impl = _TOOL_IMPL.get(name)
     if impl is None:
         return "요청을 처리할 수 없습니다."
     try:
-        return impl(args or {})
+        return impl(args or {}, user=user, db=db)
     except Exception:
         return "콘텐츠를 불러오는 중 문제가 발생했습니다."
 

@@ -216,3 +216,100 @@ def test_descriptions_state_when_not_to_call__misfire_guard():
     ):
         desc = _tool(name)["description"]
         assert "호출하지 않는다" in desc
+
+
+# ── 대순환 스크리너 콘텐츠 툴(screen_stocks) — 추천은 엔진 귀속·매수 판정 아님 ──────────
+
+def _fake_screener_result():
+    return {
+        "candidates": [
+            {"ticker": "207940", "name": "삼성바이오로직스", "stage": 1, "stage_name": "안정 상승기",
+             "arrangement": "단>중>장", "band_width_pct": 2.6, "band_direction": "축소",
+             "price": 1000000, "change_rate": 10.0, "market_cap": 700000},
+            {"ticker": "005930", "name": "삼성전자", "stage": 4, "stage_name": "안정 하락기",
+             "arrangement": "장>중>단", "band_width_pct": -16.9, "band_direction": "확대",
+             "price": 78000, "change_rate": -7.5, "market_cap": 14586465},
+            {"ticker": "000660", "name": "SK하이닉스", "stage": 6, "stage_name": "상승 진입기",
+             "arrangement": "단>장>중", "band_width_pct": 1.2, "band_direction": "확대",
+             "price": 180000, "change_rate": -8.3, "market_cap": 12536435},
+            {"ticker": "999999", "name": "봉부족주", "stage": None, "stage_name": None,
+             "band_width_pct": None, "band_direction": None, "price": 1000, "change_rate": 0, "market_cap": 1000},
+        ],
+        "catalog": {"periods": {"short": 5, "medium": 20, "long": 40}, "stages": []},
+        "market_iscd": "0000", "size": 30, "partial_failure": [], "as_of": "t",
+    }
+
+
+def _patch_screener(monkeypatch, result=None, capture=None):
+    monkeypatch.setattr("api.detail._resolve_client", lambda user, db: object())
+
+    def _fake(client, *, market_iscd, size):
+        if capture is not None:
+            capture.update(market_iscd=market_iscd, size=size)
+        return result if result is not None else _fake_screener_result()
+
+    monkeypatch.setattr("stock.screener.screen_grand_cycle", _fake)
+
+
+def test_screen_stocks_registered_as_content_tool():
+    assert "screen_stocks" in CONTENT_TOOLS
+    names = {t["function"]["name"] for t in TOOLS}
+    assert "screen_stocks" in names  # 실제 TOOLS 스키마로 존재
+
+
+def test_screen_stocks_default_rising_and_safety_header(monkeypatch):
+    _patch_screener(monkeypatch)
+    out = run_content_tool("screen_stocks", {"market": "all"})
+    # 안전 프레이밍: 엔진 귀속 + 매수 추천 아님 + 면책
+    assert "스크리너에 따르면" in out and "매수 추천이 아니다" in out and "면책" in out
+    # 기본 상승국면(1·6) → 삼성바이오(1)·SK하이닉스(6) 포함, 하락(4) 삼성전자·판정보류(None) 제외
+    assert "삼성바이오로직스" in out and "SK하이닉스" in out
+    assert "삼성전자" not in out and "봉부족주" not in out
+    # 단계 라벨은 코드(SSOT) — LLM 복제 아님
+    assert "안정 상승기" in out and "상승 진입기" in out
+
+
+def test_screen_stocks_stage_all_shows_down_stage(monkeypatch):
+    _patch_screener(monkeypatch)
+    out = run_content_tool("screen_stocks", {"market": "all", "stage": "all"})
+    assert "삼성전자" in out and "안정 하락기" in out  # 전체 → 하락 단계도 포함
+
+
+def test_screen_stocks_specific_stage(monkeypatch):
+    _patch_screener(monkeypatch)
+    out = run_content_tool("screen_stocks", {"stage": "6"})  # 6단계만
+    assert "SK하이닉스" in out and "삼성바이오로직스" not in out
+
+
+def test_screen_stocks_market_mapping(monkeypatch):
+    cap = {}
+    _patch_screener(monkeypatch, capture=cap)
+    run_content_tool("screen_stocks", {"market": "kospi200"})
+    assert cap["market_iscd"] == "2001"  # 시장→iscd SSOT
+
+
+def test_screen_stocks_empty_graceful(monkeypatch):
+    _patch_screener(monkeypatch, result={
+        "candidates": [], "catalog": None, "market_iscd": "0000", "size": 30,
+        "partial_failure": [], "as_of": "t",
+    })
+    out = run_content_tool("screen_stocks", {})
+    assert "지어내" in out  # 없는 종목 날조 금지 안내(graceful)
+
+
+def test_run_content_tool_threads_user_db_to_impl(monkeypatch):
+    # run_content_tool 이 user/db 를 impl(→_resolve_client)로 관통(프로덕션 __shared__ DB 키 필수).
+    seen = {}
+    monkeypatch.setattr("api.detail._resolve_client",
+                        lambda user, db: seen.update(user=user, db=db) or object())
+    monkeypatch.setattr("stock.screener.screen_grand_cycle",
+                        lambda client, *, market_iscd, size: _fake_screener_result())
+    run_content_tool("screen_stocks", {"market": "all"}, user="U", db="DB")
+    assert seen == {"user": "U", "db": "DB"}
+
+
+def test_existing_content_tools_ignore_user_db(monkeypatch):
+    # 시그니처 통일(기존 3툴이 user/db 를 받아도 무시) — 하위호환.
+    monkeypatch.setattr("rag.store.search_reports", lambda q, top_k=3: [])
+    out = run_content_tool("search_report", {"query": "x"}, user="U", db="DB")
+    assert isinstance(out, str)  # 크래시 없음
