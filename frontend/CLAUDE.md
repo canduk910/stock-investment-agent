@@ -5,6 +5,13 @@
 - **`http://localhost:5173`로 연다** — Vite가 IPv6 localhost에 바인딩하므로 `127.0.0.1:5173`은 안 될 수 있다.
 - Vite dev가 `/api`를 `http://127.0.0.1:8000`으로 프록시 → 개발 중 CORS 불필요.
 
+## 공용 lib 훅·포맷 SSOT (리팩토링 2026-07-29 — 새 코드는 반드시 재사용)
+- `lib/format.js`: 기존 포맷터 + **`dirGlyph(dir)`(▲▼─)·`dirClass(dir)`('up'|'down'|'')** — 방향 글리프/색클래스 인라인 삼항 금지, 이 함수만. 예외: `FinancialTrendTable` 글리프(결측 시 '' 로 칩 자체 생략 — 동작이 달라 로컬 유지).
+- `lib/useModalOverlay.js`: 딤 배경 오버레이의 접근성 로직(닫기버튼 포커스·Esc 닫힘·배경 스크롤 잠금/복원) 훅 SSOT — `const closeRef = useModalOverlay(onClose)`. 마크업은 각 오버레이 소유(범용 Modal 부활 아님). 시황 상세·지표 히스토리가 사용.
+- `lib/useReportFetchStream.js`: 리포트 SSE 수집 상태기계(fetching/fetchMsg/progress + `run(streamFn, fallbackFn, after)`) 훅 SSOT — 진행 시작→스트림 소비→done/error 안내(`formatFetchResult`)→끊김 논스트림 폴백→진행 종료→after 재조회→해제. 시황(MacroDashboard)·애널리스트(AnalystReportsSection)가 사용. after 반환값을 돌려줘 후속 로직(시황 수집→요약 순차)에 쓴다.
+- 죽은 코드 삭제됨: `components/IndicatorCard.jsx`·`indicatorMeta.js`(미참조 고아 쌍 — 매크로 카드는 `MacroIndicatorCards` 내부 구현이 실사용).
+- 보류(과추상화 방지 기록): 등락 칩 공용 컴포넌트(M2 — dirGlyph/signedNum 통합 후 잔여 2곳·3줄, Rule of Three 미달)·세그먼트 선택기 공용화(M4)·LoadState 래퍼(M6)·api.js fetch 헬퍼(M7 — 44함수, characterization 테스트 선행 필요)·styles.css 분할(L4).
+
 ## 디자인 (반드시 준수)
 - 팔레트는 **흰색/회색/파랑/남색/검정 + 강조 주황(`--c-emph`) + 위험 빨강 경보(`--c-danger`)**. 초록·황색 금지.
 - **가격/손익 방향(사용자 확정, 전 화면)**: **모든 주식 수치 상승·수익 = 빨강(`--c-up`)/하락·손실 = 파랑(`--c-down`)/보합 = 회색(`--c-flat`)** — 한국 관습을 전 화면에 적용(이제 차트만의 예외 아님). 색만으로 구분 금지 → ▲▼─ 글리프 병기.
