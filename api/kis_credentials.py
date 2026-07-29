@@ -25,11 +25,12 @@ router = APIRouter()
 
 
 class KisCredentialsRequest(BaseModel):
+    # 시크릿(app_key/app_secret)은 요청 바디로만 수신 → 즉시 암호화 저장(평문 저장·로깅·응답 금지).
     app_key: str = Field(min_length=1)
     app_secret: str = Field(min_length=1)
-    account_no: str | None = None
-    acnt_prdt_cd: str = "01"
-    env: str = "real"
+    account_no: str | None = None  # "CANO-상품코드" 형태, store 가 하이픈 앞 CANO 만 저장
+    acnt_prdt_cd: str = "01"  # 계좌상품코드 기본 주식(01)
+    env: str = "real"  # real | demo — 라우트가 화이트리스트로 검증
 
 
 def _validate_kis(app_key: str, app_secret: str, env: str) -> None:
@@ -47,15 +48,19 @@ def set_kis_credentials(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
+    """유저 KIS 키 등록 — 실제 토큰 발급으로 검증 성공한 경우에만 암호화 저장. 검증 실패 400."""
+    # env 화이트리스트 강제 — 예상치 못한 값은 real 로 안전 폴백.
     env = body.env if body.env in ("real", "demo") else "real"
     try:
         _validate_kis(body.app_key, body.app_secret, env)  # 검증 후 저장(사용자 결정)
     except Exception:
+        # 예외 사유엔 키 값이 섞일 수 있어 그대로 노출하지 않고 일반 메시지로 치환(정보 누출 방지).
         raise HTTPException(
             status_code=400,
             detail="KIS 키 검증 실패 — app_key/app_secret/env(real·demo)를 확인하세요.",
         )
     store = KisCredentialStore(db)
+    # 검증 통과분만 암호화 upsert(scope_key=str(user.id)). 응답엔 마스킹 상태만(원문 미반환).
     store.upsert_encrypted(
         str(user.id), body.app_key, body.app_secret, body.account_no, body.acnt_prdt_cd, env
     )

@@ -25,7 +25,11 @@ def inquire_daily_itemchartprice(
     adj_price: str = "1",
     market: str = "J",
 ) -> dict:
-    """기간별 시세(캔들) 조회 → {ticker, candles:[...]}. 단일 호출(~100 상한)."""
+    """기간별 시세(캔들) 조회 → {ticker, candles:[...]}. 단일 호출(~100 상한).
+
+    KIS 파라미터 키는 MCP 검증 그대로 사용(대소문자·이름 임의 변경 시 KIS 파라미터 오류).
+    장기간은 이 함수를 직접 부르지 말고 fetch_chart_series(페이지네이션)를 쓴다.
+    """
     params = {
         "FID_COND_MRKT_DIV_CODE": market,
         "FID_INPUT_ISCD": ticker,
@@ -35,7 +39,7 @@ def inquire_daily_itemchartprice(
         "FID_ORG_ADJ_PRC": adj_price,   # 0:수정주가 1:원주가
     }
     body = client.get(TR_ID, API_PATH, params)
-    return normalize.normalize_daily_chart(body)
+    return normalize.normalize_daily_chart(body)  # 원시 응답 → {ticker, candles} 정규화
 
 
 def _prev_day(date_str: str) -> str:
@@ -62,28 +66,30 @@ def fetch_chart_series(
     종료: oldest ≤ start_date(구간 소진) · 새 캔들 0(무진행) · max_bars/max_pages 캡. 무한루프 방지.
     반환은 `inquire_daily_itemchartprice` 와 동일 계약 `{ticker, candles:[...date 오름차순]}`.
     """
-    by_date: dict[str, dict] = {}
-    cursor_end = end_date
+    by_date: dict[str, dict] = {}  # date(YYYYMMDD) → 캔들, 페이지 간 중복 제거용 누적기
+    cursor_end = end_date  # 후진 커서: 매 페이지 '가장 오래된 수신일 직전'으로 당긴다
     for _ in range(max_pages):
+        # 창을 [start_date, cursor_end] 로 잡아 한 페이지(~100봉) 조회.
         page = inquire_daily_itemchartprice(
             client, ticker, start_date, cursor_end,
             period=period, adj_price=adj_price, market=market,
         )
-        candles = [c for c in (page.get("candles") or []) if c.get("date")]
+        candles = [c for c in (page.get("candles") or []) if c.get("date")]  # date 있는 봉만
         if not candles:
-            break
-        before = len(by_date)
+            break  # 이 창에 데이터 없음 → 종료(상장 이전 등)
+        before = len(by_date)  # 병합 전 개수(무진행 감지 기준)
         for c in candles:
             by_date.setdefault(c["date"], c)  # 겹치는 날짜는 최신 페이지 값 유지(동일해야 정상)
-        oldest = min(c["date"] for c in candles)
-        # 구간을 다 덮었거나, 진행이 없거나(무한루프 방지), 캡 도달이면 종료.
+        oldest = min(c["date"] for c in candles)  # 이번 페이지에서 가장 오래된 날짜
+        # 종료 조건 3가지: 구간을 다 덮음(oldest<=start) / 새 봉 0(무한루프 방지) / max_bars 캡.
         if oldest <= start_date or len(by_date) == before or len(by_date) >= max_bars:
             break
-        cursor_end = _prev_day(oldest)
+        cursor_end = _prev_day(oldest)  # 다음 페이지는 이번 최오래일 하루 전까지
 
+    # start_date 이상만 남기고 date 오름차순 정렬(inquire_daily 와 동일 계약).
     rows = sorted(
         (c for d, c in by_date.items() if d >= start_date), key=lambda c: c["date"]
     )
     if len(rows) > max_bars:
-        rows = rows[-max_bars:]  # 최근 max_bars 만(안전)
+        rows = rows[-max_bars:]  # 최근 max_bars 만(안전 상한)
     return {"ticker": ticker, "candles": rows}

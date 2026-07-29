@@ -21,12 +21,18 @@ from macro.engine import (
 
 
 def build_criteria_text() -> str:
-    """판정 기준표 문자열 — 상수 유래(하드코딩 금지). llm-safety-guide §1."""
+    """판정 기준표 문자열 — 상수 유래(하드코딩 금지). llm-safety-guide §1.
+
+    임계값 숫자를 프롬프트에 직접 타이핑하지 않고 macro.engine 상수에서 생성한다 →
+    엔진 임계값이 바뀌면 이 문자열도 자동으로 갱신(코드·프롬프트 3중 일관성 보장).
+    """
     lines = ["[국면 판정 기준 — 시스템이 이 규칙으로 판정함]"]
+    # 지표별로 THRESHOLDS 의 (경계값→구간라벨) 매핑을 사람이 읽을 문장으로 펼친다.
     for key, label in INDICATOR_LABELS.items():
         parts = [f"{v}이면 {k}" for k, v in THRESHOLDS.get(key, {}).items()]
         lines.append(f"- {label}: {', '.join(parts)}")
     lines.append("- 신용·금리(경기축) 지표와 변동성·심리(심리축) 지표를 분리해 2축으로 판정")
+    # VIX_PANIC 도 상수 유래 — 패닉은 '표시용 플래그'일 뿐 국면 판정 자체는 2축 로직이 한다(오버라이드 아님).
     lines.append(f"- 경보 플래그: VIX > {VIX_PANIC}이면 패닉 경보(표시용 플래그, 판정은 2축 로직이 결정)")
     return "\n".join(lines)
 
@@ -47,21 +53,30 @@ def _format_params(regime: str) -> str:
 
 
 def build_prompt(judgement: dict) -> str:
-    """필수 6블록 시스템 프롬프트 — judgement 는 매 호출 최신값 주입."""
+    """필수 6블록 시스템 프롬프트 — judgement 는 매 호출 최신값 주입.
+
+    judgement 는 `macro.engine.judge_regime`(또는 api 의 live_judgement)이 코드로 확정한 결과다.
+    이 함수는 그 결과를 프롬프트 문자열로 박아넣기만 한다 — 재판정·숫자 변경은 하지 않는다(LLM=설명).
+    세션 시작 1회가 아니라 매 호출 재주입하므로 국면 변경이 다음 답변에 자동 반영된다.
+    """
+    # judgement 계약(필수 키)에서 값 추출 — regime/cash/confidence 는 반드시 존재(KeyError 로 계약 위반 조기 노출).
     regime = judgement["regime"]
     cash = judgement["recommended_cash_ratio"]
     confidence = judgement["confidence"]
+    # axes·vix_panic·missing 은 optional(.get) — 부분 데이터로도 프롬프트가 조립되게 방어.
     axes = judgement.get("axes", {})
     cycle = axes.get("cycle", {})
     sentiment = axes.get("sentiment", {})
     vix_panic = judgement.get("vix_panic", False)
     missing = judgement.get("missing_indicators", [])
 
+    # 패닉 플래그를 자연어 한 줄로 — 켜져 있으면 LLM 에게 손실 위험 환기를 명시적으로 지시.
     panic_line = (
         "현재 VIX 패닉 경보가 켜져 있다(변동성 극단) — 손실 위험을 특히 환기하라."
         if vix_panic
         else "현재 VIX 패닉 경보는 꺼져 있다."
     )
+    # 수집 실패로 빠진 지표를 명시 → LLM 이 그 지표를 '데이터 없음'으로 다루게(없는 값 날조 방지).
     missing_line = (
         f"수집 실패로 판정에서 제외된 지표: {', '.join(missing)}. 이 지표는 언급 시 '데이터 없음'으로 다뤄라."
         if missing

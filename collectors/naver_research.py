@@ -30,6 +30,10 @@ _CATEGORIES = {
 
 
 def _qs_param(href: str | None, key: str) -> str | None:
+    """href 의 쿼리스트링에서 key 값 하나 추출(없으면 None).
+
+    종목 링크의 `?code=005930`(종목코드)·제목 링크의 `?nid=...`(리포트 id)를 뽑는 데 쓴다.
+    """
     if not href:
         return None
     return parse_qs(urlparse(href).query).get(key, [None])[0]
@@ -43,10 +47,10 @@ def _parse_list_html(html: str, *, has_stock: bool = True) -> list[dict]:
       종목 없음(시장 전체) → stock_name/stock_code=None.
     """
     soup = BeautifulSoup(html, "html.parser")
-    table = soup.find("table", class_="type_1")
+    table = soup.find("table", class_="type_1")  # 네이버 리서치 목록 테이블(라이브 확인)
     if not table:
-        return []
-    # 컬럼 인덱스(종목 유무로 오프셋 결정).
+        return []  # 테이블 부재(레이아웃 변경·차단 페이지 등) → 빈 목록 graceful
+    # 종목 컬럼 유무로 컬럼 인덱스 오프셋이 1칸 밀린다(종목분석=6칸, 시황/투자/경제=5칸).
     if has_stock:
         min_cols, i_title, i_broker, i_pdf, i_date = 6, 1, 2, 3, 4
     else:
@@ -55,21 +59,23 @@ def _parse_list_html(html: str, *, has_stock: bool = True) -> list[dict]:
     for tr in table.find_all("tr"):
         tds = tr.find_all("td")
         if len(tds) < min_cols:
-            continue  # 헤더/구분 행
+            continue  # 칸 수 부족 = 헤더/구분 행 → skip
         a_title = tds[i_title].find("a")
         a_pdf = tds[i_pdf].find("a")
         if not (a_title and a_pdf):
-            continue  # 제목/첨부 중 하나라도 없으면 skip
+            continue  # 제목/첨부 중 하나라도 없으면 skip(불완전 행)
         pdf_url = a_pdf.get("href")
         if not (pdf_url and pdf_url.lower().endswith(".pdf")):
-            continue
+            continue  # 첨부가 실제 PDF 여야만 후속 다운로드·요약 가능
         if has_stock:
+            # 종목분석: 첫 칸이 종목 링크 → 이름과 code 파라미터 추출. 종목 링크 없으면 skip.
             a_stock = tds[0].find("a")
             if not a_stock:
                 continue
             stock_name = a_stock.get_text(strip=True)
             stock_code = _qs_param(a_stock.get("href"), "code")
         else:
+            # 시황/투자/경제: 시장 전체 리포트라 종목이 없다 → None(다운스트림 graceful 처리).
             stock_name = None
             stock_code = None
         out.append(
@@ -100,17 +106,18 @@ def _fetch_list(
                 timeout=timeout,
             )
             resp.raise_for_status()
+            # ⚠ resp.content 를 euc-kr 로 직접 디코드 — meta 가 utf-8 로 속여 resp.text 는 깨진다.
             html = resp.content.decode("euc-kr", errors="replace")  # cp949(stock_master 패턴)
         except Exception:
-            break
+            break  # 네트워크/HTTP 실패는 지금까지 수집분까지만 반환(graceful 부분 성공)
         rows = _parse_list_html(html, has_stock=has_stock)
         if not rows:
-            break
+            break  # 빈 페이지 = 목록 끝(더 넘길 필요 없음)
         reports.extend(rows)
         if len(reports) >= limit:
-            break
-        time.sleep(_PAGE_DELAY)  # 예의 크롤링
-    return reports[:limit]
+            break  # limit 채우면 조기 종료(불필요한 페이지 요청 절감)
+        time.sleep(_PAGE_DELAY)  # 예의 크롤링(페이지 간 지연)
+    return reports[:limit]  # limit 초과분 절삭
 
 
 def fetch_reports(

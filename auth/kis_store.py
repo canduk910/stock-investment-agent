@@ -58,11 +58,17 @@ class KisCredentialStore:
         return self._decrypt(row) if row else None
 
     def resolve(self, user_id: str | None) -> tuple[KisCreds, str] | None:
-        """본인(user_id) → 공유(__shared__) 순으로 (자격증명, source) 반환. 둘 다 없으면 None."""
+        """본인(user_id) → 공유(__shared__) 순으로 (자격증명, source) 반환. 둘 다 없으면 None.
+
+        우선순위가 중요하다 — 로그인해 본인 키를 등록했으면 그 키, 아니면 공유 데모 계좌.
+        복호화는 여기서만(사용 직전 in-memory) 일어난다. source 는 상위가 마스킹/표시에 쓴다.
+        """
+        # 본인 키 우선: user_id 가 있고 그 scope 행이 있으면 즉시 반환("user").
         if user_id:
             row = self._row(str(user_id))
             if row is not None:
                 return self._decrypt(row), "user"
+        # 본인 키 없으면 공유 fallback("shared"). 이마저 없으면 None(호출측이 env fallback/에러 처리).
         shared = self._row(SHARED_SCOPE)
         if shared is not None:
             return self._decrypt(shared), "shared"
@@ -78,19 +84,21 @@ class KisCredentialStore:
         env: str = "real",
     ) -> None:
         """자격증명을 암호화해 upsert(created_at 보존, updated_at 갱신). CANO 는 하이픈 앞만 저장."""
-        cano = _split_cano(account_no)
+        cano = _split_cano(account_no)  # "12345678-01" → "12345678"(하이픈 앞 CANO 만)
         row = self._row(scope_key)
         if row is None:
+            # 신규 등록 — 모든 시크릿 필드를 encrypt() 후 저장(DB엔 Fernet 암호문만 존재).
             row = KisCredentialRow(
                 scope_key=scope_key,
                 app_key_enc=encrypt(app_key),
                 app_secret_enc=encrypt(app_secret),
-                account_no_enc=encrypt(cano) if cano else None,
+                account_no_enc=encrypt(cano) if cano else None,  # 계좌 없으면 NULL
                 acnt_prdt_cd=acnt_prdt_cd or "01",
                 env=env or "real",
             )
             self._db.add(row)
         else:
+            # 기존 갱신 — created_at 은 보존, updated_at 만 현재로. 시크릿은 재암호화해 덮는다.
             row.app_key_enc = encrypt(app_key)
             row.app_secret_enc = encrypt(app_secret)
             row.account_no_enc = encrypt(cano) if cano else None
@@ -112,6 +120,7 @@ class KisCredentialStore:
         """
         own = self._row(str(user_id)) if user_id else None
         if own is not None:
+            # 본인 등록 상태 — 복호화는 하되 mask() 처리한 값만 응답에 실어 원문 노출 차단.
             creds = self._decrypt(own)
             return {
                 "registered": True,

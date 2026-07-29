@@ -10,7 +10,12 @@ from chat.report_progress import run_batch  # 비스트림 배치 루프 공용(
 
 
 def _process_one(meta: dict, *, store, client) -> str:
-    """리포트 1건 처리 → 결과 라벨('new'|'skipped'|'failed'). 예외는 'failed'로 흡수."""
+    """리포트 1건 처리 → 결과 라벨('new'|'skipped'|'failed'). 예외는 'failed'로 흡수.
+
+    단계: 필수 메타 검증 → 중복 skip → PDF 다운로드 → 텍스트 추출 → LLM 요약 → store.upsert.
+    한 건의 실패가 전체 배치를 막지 않도록 모든 예외를 'failed' 로 흡수(병렬 워커 안정성).
+    """
+    # 지연 import — 병렬 워커 진입 시점에 로드(모듈 임포트 사이클·무거운 의존 상단 로드 회피).
     from chat import analyst_report
     from collectors import naver_research
     from rag.ingest import extract_text
@@ -18,15 +23,16 @@ def _process_one(meta: dict, *, store, client) -> str:
     ticker = meta.get("stock_code")
     rid = meta.get("nid")
     if not ticker or not rid:
-        return "failed"
+        return "failed"  # 종목코드/리포트 id 없으면 저장 불가(scope_key·중복키 구성 못 함)
     if store.has(ticker, rid):
-        return "skipped"
+        return "skipped"  # 이미 요약·저장된 리포트 → 재다운로드·재요약 생략(idempotent)
     try:
         pdf = naver_research.download_pdf(meta.get("pdf_url", ""))
         if not pdf:
-            return "failed"
-        text = extract_text(pdf)
-        result = analyst_report.summarize_report(text, meta, client=client)
+            return "failed"  # PDF 다운로드 실패
+        text = extract_text(pdf)  # pdfplumber 텍스트 추출
+        result = analyst_report.summarize_report(text, meta, client=client)  # LLM 구조화 요약
+        # 검증 실패(스키마 미충족)·빈 요약은 저장 안 함 — 장밋빛 일변도·환각 방지 게이트.
         if result.get("validation_failed") or not result.get("summary"):
             return "failed"
         added = store.upsert(ticker, {
@@ -38,6 +44,7 @@ def _process_one(meta: dict, *, store, client) -> str:
             "pdf_url": meta.get("pdf_url", ""),
             "summary": result["summary"],
         })
+        # upsert 가 True 면 신규 저장, False 면 경쟁 스레드가 먼저 넣어 skip 된 것.
         return "new" if added else "skipped"
     except Exception:
         return "failed"  # 개별 리포트 실패는 전체를 막지 않음

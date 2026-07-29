@@ -45,7 +45,11 @@ _LABEL_BRIEFS = {
 
 
 def _gen_for_label(client: OpenAI, label: str, n: int) -> list[str]:
-    """한 라벨에 대해 n개의 한국어 질문을 생성해 리스트로 반환(JSON 배열 강제)."""
+    """한 라벨에 대해 n개의 한국어 질문을 생성해 리스트로 반환(JSON 배열 강제).
+
+    _LABEL_BRIEFS[label] 지침을 프롬프트에 실어 그 인텐트에 정확히 해당하는 질문만 뽑는다.
+    특히 risk_guardrail 은 차단 대상 4유형을 고루 섞도록 지시(하드블록 학습 커버리지).
+    """
     brief = _LABEL_BRIEFS[label]
     prompt = (
         f"너는 한국어 투자 챗봇의 학습데이터 생성기다. 아래 인텐트에 해당하는 "
@@ -54,6 +58,8 @@ def _gen_for_label(client: OpenAI, label: str, n: int) -> list[str]:
         f"규칙: 실제 개인 투자자가 쓸 법한 구어체·다양한 표현. 서로 겹치지 않게. "
         f'JSON 객체 하나만 출력: {{"questions": ["...", "..."]}}'
     )
+    # response_format=json_object 로 파싱 안정성 확보. CHAT_MODEL_PARAMS 는 추론형 모델 필수
+    # 파라미터(reasoning_effort='none' 등)를 매 create() 에 병합하는 단일 출처(chat 계층과 동일 규칙).
     resp = client.chat.completions.create(
         model=CHAT_MODEL,
         messages=[{"role": "user", "content": prompt}],
@@ -62,11 +68,16 @@ def _gen_for_label(client: OpenAI, label: str, n: int) -> list[str]:
     )
     data = json.loads(resp.choices[0].message.content)
     questions = data.get("questions", [])
-    # 개행·탭 제거(TSV 안전), 공백 질문 제외.
+    # 개행·탭 제거(TSV 안전 — 탭이 섞이면 `질문<TAB>라벨` 컬럼이 깨진다), 공백 질문 제외.
     return [q.replace("\t", " ").replace("\n", " ").strip() for q in questions if q.strip()]
 
 
 def generate(per_label: int = 60) -> Path:
+    """모든 라벨을 순회하며 per_label 개씩 생성 → TSV 로 저장. 반환은 저장 경로.
+
+    라벨별로 균형 있게(각 per_label 개) 뽑아 특정 인텐트 편중을 막는다 — 편중되면 char n-gram
+    분류기가 소수 라벨을 못 배운다. 산출 TSV 는 커밋하고, 학습은 intent_train.py 가 별도로 한다.
+    """
     client = OpenAI(api_key=openai_api_key())
     rows: list[tuple[str, str]] = []
     for label in LABELS:
@@ -75,6 +86,7 @@ def generate(per_label: int = 60) -> Path:
             rows.append((q, label))
 
     _OUT.parent.mkdir(parents=True, exist_ok=True)
+    # `질문<TAB>라벨\n` 한 줄 = 한 샘플. intent_train.py 가 이 포맷을 그대로 읽는다(계약).
     with _OUT.open("w", encoding="utf-8") as f:
         for q, label in rows:
             f.write(f"{q}\t{label}\n")
@@ -83,5 +95,6 @@ def generate(per_label: int = 60) -> Path:
 
 
 if __name__ == "__main__":
+    # CLI 인자로 라벨당 개수 조절(기본 60). 오프라인 데이터셋 생성 전용 진입점.
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 60
     generate(n)

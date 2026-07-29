@@ -35,14 +35,19 @@ class ScopedReportRepo:
         self._sf = session_factory
 
     def _run(self, fn):
+        """fn(db) 를 **새 짧은 세션**으로 실행하고 반드시 닫는다(스레드마다 자기 세션).
+
+        병렬 수집 스레드가 세션을 공유하면 SQLAlchemy 가 스레드 안전하지 않다 → 메서드마다 열고 닫음.
+        """
         factory = self._sf or get_sessionmaker()
         db = factory()
         try:
             return fn(db)
         finally:
-            db.close()
+            db.close()  # 예외가 나도 세션 누수 없이 정리
 
     def _find(self, db, scope_key, report_id):
+        # (scope_key, report_id) 복합키 단건 조회 — report_id 는 str 로 통일(nid 가 int/str 혼재 가능).
         return db.scalar(
             select(AnalystReportRow).where(
                 AnalystReportRow.scope_key == scope_key,
@@ -51,6 +56,7 @@ class ScopedReportRepo:
         )
 
     def has(self, scope_key: str, report_id) -> bool:
+        """이미 저장된 리포트인지 — 수집 오케스트레이션이 중복 다운로드·요약을 건너뛰는 데 쓴다."""
         return self._run(lambda db: self._find(db, scope_key, report_id) is not None)
 
     def upsert(self, scope_key: str, entry: dict) -> bool:
@@ -58,6 +64,7 @@ class ScopedReportRepo:
         rid = entry.get("report_id")
 
         def _op(db):
+            # 이미 있으면 덮지 않고 skip — 여러 스레드가 같은 리포트를 동시에 넣어도 중복 저장 방지.
             if rid is not None and self._find(db, scope_key, rid) is not None:
                 return False
             db.add(
@@ -79,7 +86,9 @@ class ScopedReportRepo:
         return self._run(_op)
 
     def list_reports(self, scope_key: str) -> list[dict]:
+        """scope_key(ticker | __MARKET__) 리포트를 작성일 내림차순으로 — 최신 리포트가 앞(종합요약 top-N 용)."""
         def _op(db):
+            # date 는 "YY.MM.DD" 문자열이지만 zero-padded 라 문자열 desc 정렬로도 최신순이 성립.
             rows = db.scalars(
                 select(AnalystReportRow)
                 .where(AnalystReportRow.scope_key == scope_key)

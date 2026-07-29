@@ -40,11 +40,13 @@ def _admin_user_view(user: User) -> dict:
 
 
 class UpdateUserRequest(BaseModel):
+    # 둘 다 Optional·기본 None → model_fields_set 으로 "바디에 실제로 온 필드"만 부분 갱신.
     is_admin: bool | None = None
-    daily_limit: int | None = Field(default=None, ge=0)  # 음수 한도 금지
+    daily_limit: int | None = Field(default=None, ge=0)  # 음수 한도 금지(ge=0, 위반 시 422)
 
 
 def _get_user_or_404(db: Session, user_id: int) -> User:
+    """대상 유저 조회 헬퍼 — 없으면 404. PATCH/reset/DELETE 가 공통으로 쓴다."""
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="user not found")
@@ -67,15 +69,17 @@ def update_user(
 ) -> dict:
     """is_admin·daily_limit 부분 갱신(바디에 온 필드만). 자기 자신 관리자 해제는 락아웃 방지 400."""
     user = _get_user_or_404(db, user_id)
+    # model_fields_set = 요청 바디에 명시적으로 온 필드만 → 안 온 필드는 절대 건드리지 않음(부분 갱신).
     fields = body.model_fields_set
     if "is_admin" in fields:
+        # 자기 자신의 관리자 권한 해제 방지 — 마지막 관리자가 스스로 잠기는 락아웃 예방.
         if user.id == admin.id and not body.is_admin:
             raise HTTPException(status_code=400, detail="자기 자신의 관리자 권한은 해제할 수 없습니다.")
         user.is_admin = bool(body.is_admin)
     if "daily_limit" in fields and body.daily_limit is not None:
         user.daily_limit = int(body.daily_limit)
     db.commit()
-    db.refresh(user)
+    db.refresh(user)  # DB 최신 상태로 재로드 후 응답(quota_snapshot 이 갱신값 반영)
     return _admin_user_view(user)
 
 
@@ -94,11 +98,13 @@ def reset_usage(
 
 def _purge_user_data(db: Session, user_id: int) -> None:
     """유저 삭제 전 스코프 데이터 정리(고아 방지). 관심종목·대화기록(+메시지 cascade)·KIS 자격증명."""
+    # 지연 import — 순환 의존 회피(admin 라우터가 모든 모델을 상단 import 하지 않게).
     from auth.kis_models import KisCredentialRow
     from chat.history_models import Conversation
     from watchlist.db_models import WatchlistItemRow
 
     scope = str(user_id)  # 유저별 데이터 스코프 키는 str(user.id)
+    # 관심종목·KIS 자격증명은 bulk delete(문자열 스코프 매칭·cascade 대상 없음, 빠름).
     db.query(WatchlistItemRow).filter(WatchlistItemRow.user_id == scope).delete(
         synchronize_session=False
     )
@@ -106,6 +112,7 @@ def _purge_user_data(db: Session, user_id: int) -> None:
         synchronize_session=False
     )
     # 대화는 ORM delete 로 지워 relationship cascade(delete-orphan)가 메시지까지 정리(DB무관).
+    # bulk delete 면 cascade 가 안 걸려 ChatMessage 가 고아로 남는다 → 반드시 건별 db.delete.
     for conv in db.scalars(select(Conversation).where(Conversation.user_id == scope)).all():
         db.delete(conv)
 
@@ -115,10 +122,11 @@ def delete_user(
     user_id: int, admin: User = Depends(get_admin_user), db: Session = Depends(get_db)
 ) -> dict:
     """유저 + 스코프 데이터 삭제. 자기 자신 삭제는 락아웃 방지 400."""
+    # 자기 계정 삭제 차단 — 관리자가 실수로 자신을 지워 접근 수단을 잃는 것 방지.
     if user_id == admin.id:
         raise HTTPException(status_code=400, detail="자기 자신의 계정은 삭제할 수 없습니다.")
     user = _get_user_or_404(db, user_id)
-    _purge_user_data(db, user_id)
+    _purge_user_data(db, user_id)  # 스코프 데이터 먼저 정리(고아 방지)
     db.delete(user)
-    db.commit()
+    db.commit()  # 스코프 정리 + 유저 삭제를 한 트랜잭션으로 커밋
     return {"ok": True, "deleted": user_id}

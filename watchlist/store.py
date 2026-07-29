@@ -77,6 +77,7 @@ class InMemoryWatchlistStore:
         return self._data.get(user_id, {}).get(ticker)
 
     def put(self, item: WatchlistItem) -> WatchlistItem:
+        # user_id 버킷을 확보 후 upsert(기존 있으면 added_at 보존한 갱신). 반환은 실제 저장본.
         bucket = self._data.setdefault(item.user_id, {})
         stored = _apply_upsert(bucket.get(item.ticker), item)
         bucket[item.ticker] = stored
@@ -129,14 +130,15 @@ class JsonFileWatchlistStore:
             return WatchlistItem(**d) if d else None
 
     def put(self, item: WatchlistItem) -> WatchlistItem:
+        # 락으로 read-modify-write 전체를 감싼다 — 동시 요청이 서로의 갱신을 덮어쓰는 경합 차단.
         with self._file.lock():
             raw = self._file.read()
             bucket = raw.setdefault(item.user_id, {})
             existing_d = bucket.get(item.ticker)
             existing = WatchlistItem(**existing_d) if existing_d else None
-            stored = _apply_upsert(existing, item)
-            bucket[item.ticker] = stored.model_dump()
-            self._file.write(raw)
+            stored = _apply_upsert(existing, item)  # 중복이면 added_at 보존 갱신
+            bucket[item.ticker] = stored.model_dump()  # Pydantic → JSON 직렬화 dict 로 저장
+            self._file.write(raw)  # 원자적 write(temp+replace)
             return stored
 
     def delete(self, user_id: str, ticker: str) -> None:
@@ -153,7 +155,8 @@ class JsonFileWatchlistStore:
             raw = self._file.read()
             d = raw.get(user_id, {}).get(ticker)
             if not d:
-                return None
+                return None  # 미등록 종목 목표가 갱신은 None(라우트가 404 로 변환)
+            # 넘어온 side 만 changes 에 담는다 — `_UNSET` 은 건드리지 않아 반대 side 기존값 보존.
             changes = {}
             if target_price is not _UNSET:
                 changes["target_price"] = target_price
