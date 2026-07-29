@@ -10,7 +10,8 @@
 - `lib/useModalOverlay.js`: 딤 배경 오버레이의 접근성 로직(닫기버튼 포커스·Esc 닫힘·배경 스크롤 잠금/복원) 훅 SSOT — `const closeRef = useModalOverlay(onClose)`. 마크업은 각 오버레이 소유(범용 Modal 부활 아님). 시황 상세·지표 히스토리가 사용.
 - `lib/useReportFetchStream.js`: 리포트 SSE 수집 상태기계(fetching/fetchMsg/progress + `run(streamFn, fallbackFn, after)`) 훅 SSOT — 진행 시작→스트림 소비→done/error 안내(`formatFetchResult`)→끊김 논스트림 폴백→진행 종료→after 재조회→해제. 시황(MacroDashboard)·애널리스트(AnalystReportsSection)가 사용. after 반환값을 돌려줘 후속 로직(시황 수집→요약 순차)에 쓴다.
 - 죽은 코드 삭제됨: `components/IndicatorCard.jsx`·`indicatorMeta.js`(미참조 고아 쌍 — 매크로 카드는 `MacroIndicatorCards` 내부 구현이 실사용).
-- 보류(과추상화 방지 기록): 등락 칩 공용 컴포넌트(M2 — dirGlyph/signedNum 통합 후 잔여 2곳·3줄, Rule of Three 미달)·세그먼트 선택기 공용화(M4)·LoadState 래퍼(M6)·api.js fetch 헬퍼(M7 — 44함수, characterization 테스트 선행 필요)·styles.css 분할(L4).
+- `api.js` **`_request` 내부 헬퍼 SSOT**(M7 완료): 44개 함수의 fetch 보일러플레이트를 플래그 5개(`auth`·`method`·`json`·`errStatus`[.status 부착 — watchlist 409/admin 403 분기]·`errDetail`[서버 detail 안내문 우선 — KIS 검증·admin 400])로 통합. **`src/api.test.js` characterization 41건이 URL·메서드·바디·에러 shape 를 잠근다** — api.js 를 고치면 이 테스트로 계약 불변을 증명할 것. SSE 스트림 3함수(postChatStream·streamFetch*)는 리더 소비 경로라 의도적 미적용.
+- 보류(과추상화 방지 기록): 등락 칩 공용 컴포넌트(M2 — dirGlyph/signedNum 통합 후 잔여 2곳·3줄, Rule of Three 미달)·세그먼트 선택기 공용화(M4)·LoadState 래퍼(M6)·styles.css 분할(L4).
 
 ## 디자인 (반드시 준수)
 - 팔레트는 **흰색/회색/파랑/남색/검정 + 강조 주황(`--c-emph`) + 위험 빨강 경보(`--c-danger`)**. 초록·황색 금지.
