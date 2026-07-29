@@ -3,13 +3,23 @@
 // styles.css 원본 텍스트를 파싱해 리디자인이 요구하는 애니메이션/유틸/폰트 스택이
 // 정의됐는지 고정한다(TOKENS_AND_CSS_SPEC.md §2·§3). jsdom 은 CSS 를 적용하지 않으므로
 // 텍스트 존재 검증이 회귀를 잡는 실용적 경계다.
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { describe, it, expect } from 'vitest'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const stylesCss = readFileSync(join(__dirname, 'styles.css'), 'utf8')
+// L4 분할 반영: styles.css 는 @import 진입점이고 실제 규칙은 styles/*.css 에 있다.
+// 계약 검증은 "전체 스타일 텍스트" 기준이므로 진입점 + 분할 파일 전부를 이어붙여 본다
+// (@import 순서와 무관한 존재 검증이라 정렬은 파일명 순으로 충분).
+const stylesDir = join(__dirname, 'styles')
+const stylesCss =
+  readFileSync(join(__dirname, 'styles.css'), 'utf8') +
+  readdirSync(stylesDir)
+    .filter((f) => f.endsWith('.css'))
+    .sort()
+    .map((f) => readFileSync(join(stylesDir, f), 'utf8'))
+    .join('\n')
 
 describe('styles.css — 키프레임 5종 신규(§3)', () => {
   // marker-ring(HTML box-shadow 펄스)은 통합 사분면에서 SVG-safe `rtraj-pulse`(transform scale)로 대체됨.
