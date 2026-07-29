@@ -1,0 +1,433 @@
+/* ── 고지로 이동평균선 대순환 카드(기술적 분석 하단) — 현재 단계만 주황 강조(방향색·경보색 아님). ── */
+.grand-cycle {
+  margin-top: 12px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  padding: 14px;
+}
+.grand-cycle__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.grand-cycle__title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--c-navy);
+}
+.grand-cycle__tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c-text-muted);
+}
+.grand-cycle__current {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.grand-cycle__badge {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--c-emph-strong);
+  background: var(--c-emph-soft);
+  border: 1px solid var(--c-emph-border);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.grand-cycle__stage-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--c-navy);
+}
+.grand-cycle__arr {
+  font-size: 12px;
+  color: var(--c-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.grand-cycle__steps {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.grand-cycle__step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface-2);
+  text-align: center;
+}
+.grand-cycle__step--current {
+  border-color: var(--c-emph-border);
+  background: var(--c-emph-soft);
+}
+.grand-cycle__step-glyph {
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+.grand-cycle__step-no {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--c-text-secondary);
+}
+.grand-cycle__step--current .grand-cycle__step-glyph,
+.grand-cycle__step--current .grand-cycle__step-no {
+  color: var(--c-emph-strong);
+}
+.grand-cycle__step-name {
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--c-text-secondary);
+}
+.grand-cycle__step--current .grand-cycle__step-name {
+  color: var(--c-emph-strong);
+  font-weight: 700;
+}
+.grand-cycle__readouts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.grand-cycle__readout {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface);
+}
+.grand-cycle__readout-label {
+  font-size: 11px;
+  color: var(--c-text-secondary);
+}
+.grand-cycle__readout-value {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--c-navy);
+  font-variant-numeric: tabular-nums;
+}
+.grand-cycle__insight {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--c-text);
+  margin: 0 0 8px;
+}
+.grand-cycle__disclaimer {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--c-text-muted);
+  margin: 0;
+}
+.grand-cycle__empty {
+  font-size: 12px;
+  color: var(--c-text-muted);
+  padding: 10px 0;
+}
+@media (max-width: 560px) {
+  .grand-cycle__steps {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .grand-cycle__readouts {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 히스토리 오버레이 — 차트 수용 위해 폭 확장(mo-overlay 재사용). */
+.mo-overlay__card--wide {
+  max-width: 620px;
+}
+.macro-hist__note {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--c-text-muted);
+  line-height: 1.5;
+}
+
+/* 월단위 라인차트 — 남색 선 + 주황 현재값 + 회색 임계 점선(방향색 아님, theme.css 토큰만). */
+.macro-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 4px;
+}
+.macro-chart__line {
+  stroke: var(--c-navy);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.macro-chart__guide {
+  stroke: var(--c-border-strong);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+.macro-chart__guide-label,
+.macro-chart__ytick,
+.macro-chart__xtick {
+  fill: var(--c-text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.macro-chart__last-dot {
+  fill: var(--c-emph);
+}
+.macro-chart__last-val {
+  fill: var(--c-emph-strong);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.gauge__note {
+  margin-top: 14px;
+  margin-bottom: 0;
+}
+
+.banner {
+  margin: 12px 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+.banner--error {
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-navy);
+  color: var(--c-navy);
+  font-weight: 500;
+}
+.banner--warn {
+  background: var(--c-blue-soft);
+  border: 1px solid var(--c-blue);
+  color: var(--c-blue-strong);
+}
+/* ⑤ 손실경고 — 역발상 매수 제안의 위험을 빨강(위험 전용색)으로 강조. 가장 눈에 띄는 배너 */
+.banner--loss {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 16px;
+  background: var(--c-danger);
+  border: 1px solid var(--c-danger-strong);
+  color: var(--c-white);
+  font-weight: 500;
+  line-height: 1.5;
+}
+.banner--loss strong {
+  font-weight: 700;
+}
+.banner__glyph {
+  flex: 0 0 auto;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+/* 구획 라벨 — 게이지와 지표 카드 그룹을 나눈다 */
+.section-label {
+  margin: 4px 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--c-text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 0;
+}
+
+.card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  padding: 18px;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.card:hover {
+  box-shadow: var(--shadow-raise);
+  border-color: var(--c-border-strong);
+}
+.card--failed {
+  background: var(--c-surface-2);
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.card__label {
+  color: var(--c-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.card__value {
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--c-black);
+  font-variant-numeric: tabular-nums;
+}
+.card__value--muted {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--c-text-muted);
+}
+
+.card__unit {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--c-text-muted);
+  margin-left: 3px;
+}
+
+.card__delta {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--c-text-muted);
+  min-height: 15px;
+}
+.card__delta.up {
+  color: var(--c-up);
+}
+.card__delta.down {
+  color: var(--c-down);
+}
+
+.card__meta {
+  margin-top: auto;
+  padding-top: 10px;
+  font-size: 11px;
+  color: var(--c-text-muted);
+}
+
+.dashboard__footer {
+  margin-top: 26px;
+  color: var(--c-text-muted);
+  font-size: 11.5px;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   WEEK 08 — 종목 종합리포트 (색은 theme.css 토큰만)
+   상승·수익=빨강(--c-up) / 하락·손실=파랑(--c-down) / 보합=회색(--c-flat) / 강조=주황(--c-emph).
+   위험 빨강(--c-danger)은 채움 배너/칩에만 — 방향 빨강과 형태로 구분.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* 리포트 페이지 구획 — 매크로 대시보드 아래 이어지는 두 번째 .dashboard 섹션 */
+.report-page {
+  border-top: 1px solid var(--c-border);
+  margin-top: 8px;
+}
+
+/* 티커 입력 폼 */
+.ticker-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ticker-form__box {
+  position: relative;
+  width: 260px;
+}
+.ticker-form__input {
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 14px;
+  color: var(--c-text);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s;
+}
+.ticker-form__input:focus {
+  outline: none;
+  border-color: var(--c-blue);
+}
+
+/* 종목 자동완성 드롭다운 — 팔레트 토큰만(흰 표면·회색 테두리·파랑 하이라이트). */
+.autocomplete {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-raise);
+  max-height: 320px;
+  overflow-y: auto;
+  text-align: left;
+}
+.autocomplete__item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.autocomplete__item.is-active {
+  background: var(--c-blue-soft);
+}
+.autocomplete__name {
+  color: var(--c-navy);
+  font-weight: 600;
+  font-size: 14px;
+}
+.autocomplete__meta {
+  color: var(--c-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.banner__retry {
+  margin-left: 8px;
+  background: transparent;
+  border: 1px solid var(--c-blue);
+  color: var(--c-blue-strong);
+  border-radius: var(--radius-sm);
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.report__empty {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--c-text-muted);
+  font-size: 14px;
+}
+

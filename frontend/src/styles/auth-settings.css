@@ -1,0 +1,293 @@
+/* ── 로그인/회원가입 화면(인증 게이트) ── */
+.login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--c-bg);
+  padding: 24px;
+}
+.login__card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 16px;
+  padding: 28px;
+  box-shadow: 0 8px 30px rgba(16, 27, 48, 0.08);
+}
+.login__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.login__title {
+  margin: 0;
+  font-size: 17px;
+  color: var(--c-navy);
+}
+.login__caption {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+.login__tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--c-surface-2);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 18px;
+}
+.login__tab {
+  flex: 1;
+  padding: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  background: transparent;
+  color: var(--c-text-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.login__tab[aria-pressed='true'] {
+  background: var(--c-navy);
+  color: var(--c-white);
+}
+.login__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.login__label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+}
+.login__input {
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+.login__input:focus {
+  outline: none;
+  border-color: var(--c-navy);
+}
+.login__error {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--c-danger);
+}
+.login__submit {
+  margin-top: 4px;
+  padding: 11px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--c-white);
+  background: var(--c-navy);
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.login__submit:disabled {
+  background: var(--c-border-strong);
+  cursor: default;
+}
+
+/* ── KIS API 키 설정 패널(우측 '설정' 탭) ── */
+.kis-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 2px;
+}
+.kis-settings__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--c-surface-2);
+  border-radius: var(--radius-sm, 8px);
+}
+.kis-settings__meta {
+  font-size: 13px;
+  color: var(--c-text-secondary);
+}
+.kis-settings__delete {
+  margin-left: auto;
+}
+.kis-settings__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.kis-settings__save {
+  margin-top: 4px;
+  padding: 11px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--c-white);
+  background: var(--c-emph);          /* 주황 강조 CTA(중요 액션) */
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.kis-settings__save:disabled {
+  background: var(--c-border-strong);
+  cursor: default;
+}
+.kis-settings__notice {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--c-emph-strong);
+}
+.kis-settings__help {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--c-text-muted);
+}
+.login__hint {
+  margin: 16px 0 0;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--c-text-muted);
+}
+.login__link {
+  border: none;
+  background: none;
+  color: var(--c-brand);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* 앱레벨 능동 알림 배너 — 강조 주황(패널 무관, 목표가 전이 시). 텍스트 + 우측 액션. */
+.app__alert {
+  margin: 14px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.app__alert-text {
+  min-width: 0;
+}
+.app__alert-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+/* [관심종목 보기] = 주황 채움 pill(강조 CTA). */
+.app__alert-view {
+  padding: 5px 13px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-white);
+  background: var(--c-emph);
+  border: 1px solid var(--c-emph);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* 2컬럼 그리드 — 좌 채팅(고정폭 근사) / 우 동적 패널(가변). 반응형: ~1024px 이하 세로 스택. */
+.app__main {
+  display: grid;
+  /* 좌: 드래그로 조절되는 채팅폭(--chat-w, App 이 인라인 주입) · 중앙: 분할선 14px(=DIVIDER_W) · 우: 나머지 */
+  grid-template-columns: var(--chat-w, 420px) 14px minmax(0, 1fr);
+  gap: 0; /* 분할선이 좌/우 간격을 담당(구 gap 20px 대체) */
+  margin-top: 18px;
+  align-items: start;
+}
+.app__left,
+.app__right {
+  min-width: 0; /* grid 자식 오버플로 방지(긴 텍스트·표) */
+}
+/* 좌/우 분할선 — 드래그(마우스·터치)·방향키로 채팅/콘텐츠 폭 조절. 좌측 sticky 와 동일하게 화면에 고정.
+   색은 토큰만: 평상시 회색 라인/그립, 상호작용(hover·focus·드래그) 시 주황 강조(=인터랙티브 어포던스). */
+.app__divider {
+  position: sticky;
+  top: 88px;
+  height: 80vh;
+  align-self: start;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  touch-action: none; /* 터치 드래그 중 페이지 스크롤 방지 */
+  user-select: none;
+}
+.app__divider::before {
+  content: '';
+  position: absolute;
+  width: 2px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--c-border);
+  transition: background 0.15s ease, width 0.15s ease;
+}
+.app__divider-grip {
+  position: relative;
+  width: 4px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--c-border-strong);
+  transition: background 0.15s ease, height 0.15s ease;
+}
+.app__divider:hover::before,
+.app__divider:focus-visible::before,
+body.is-col-resizing .app__divider::before {
+  background: var(--c-emph);
+  width: 3px;
+}
+.app__divider:hover .app__divider-grip,
+.app__divider:focus-visible .app__divider-grip,
+body.is-col-resizing .app__divider-grip {
+  background: var(--c-emph);
+  height: 56px;
+}
+.app__divider:focus-visible {
+  outline: 2px solid var(--c-emph);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+/* 드래그 중 전역 커서 고정 + 텍스트 선택 방지(패널 내용 하이라이트 방지). */
+body.is-col-resizing,
+body.is-col-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+/* 좌우 컬럼 — 하단 콘텐츠 높이 80vh(뷰포트의 ~80%), 각자 내부 스크롤. 채팅은 고정 헤더 아래에 sticky. */
+.app__left {
+  position: sticky;
+  top: 88px; /* 고정 헤더 높이(≈67px) 아래에 붙도록 */
+  height: 80vh;
+}
+@media (max-width: 1024px) {
+  .app__main {
+    grid-template-columns: 1fr; /* 세로 스택 — 분할선 무효(--chat-w 미사용) */
+  }
+  .app__divider {
+    display: none; /* 세로 스택에선 크기 조절 없음 */
+  }
+  .app__left {
+    position: static;
+    height: auto;
+  }
+  .chat__messages {
+    height: 420px; /* 세로 스택에선 고정 높이로 복원(무한 확장 방지) */
+    flex: none;
+  }
+}
+

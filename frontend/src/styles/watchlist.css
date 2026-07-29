@@ -1,0 +1,708 @@
+/* ── 카드 로우 목록(테이블 대체) ── */
+.wl__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wl__row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--radius);
+  transition: transform 0.16s, box-shadow 0.16s, border-color 0.16s;
+}
+.wl__row:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-raise);
+  border-color: var(--c-border-strong);
+}
+.wl__row-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+/* 종목 상세로 전환하는 클릭 영역(정보 영역만) — 커서·은은한 hover(토큰만). */
+.wl__row-top--clickable {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  margin: -4px -6px;
+  padding: 4px 6px;
+  transition: background 0.15s ease;
+}
+.wl__row-top--clickable:hover,
+.wl__row-top--clickable:focus-visible {
+  background: var(--c-surface-3);
+  outline: none;
+}
+.wl__row-id {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.wl__name {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--c-navy);
+}
+.wl__meta {
+  font-size: 11px;
+  color: var(--c-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wl__spark {
+  flex: 0 0 auto;
+  display: block;
+}
+.wl__row-price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex: 0 0 auto;
+  text-align: right;
+}
+.wl__price {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--c-black);
+  font-variant-numeric: tabular-nums;
+}
+/* 등락 칩 — 소프트 배경 pill(상승 빨강/하락 파랑/보합 회색). 글리프 병기(색만으로 구분 안 함). */
+.wl__change {
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  color: var(--c-flat);
+  background: var(--c-flat-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.wl__change.up {
+  color: var(--c-up);
+  background: var(--c-up-soft);
+}
+.wl__change.down {
+  color: var(--c-down);
+  background: var(--c-down-soft);
+}
+.wl__fail {
+  font-size: 13px;
+  color: var(--c-text-muted);
+}
+
+/* 하단 지표행 — PER/PBR · 진입 배지 · 목표가(게이지) · 제거. */
+.wl__row-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--c-hairline);
+}
+.wl__ratio {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 목표가 + 근접 게이지 + 인라인 편집(브라우저 prompt 금지 규칙 준수). */
+/* 목표가 셀 — 매수/매도 2행을 세로로 쌓는다(각 행은 라벨 + 값/게이지 + 편집버튼 가로 배치). */
+.wl__target {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.wl__target-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+/* 매수/매도 구분 라벨(색이 아니라 텍스트로 구분 — 가격 방향색 오용 금지). */
+.wl__target-label {
+  flex: 0 0 auto;
+  width: 28px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--c-text-secondary);
+}
+.wl__target-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.wl__target-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.wl__target-val {
+  font-size: 12px;
+  color: var(--c-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.wl__target-dist {
+  font-size: 11px;
+  color: var(--c-text-muted);
+}
+.wl__target-none {
+  flex: 1 1 auto;
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+/* 근접 게이지 — 4px 트랙, 채움=도달/근접(주황) / 여유(회색). 폭으로도 근접도 표현(색만 아님). */
+.wl__gauge {
+  margin-top: 5px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--c-hairline);
+  overflow: hidden;
+}
+.wl__gauge-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--c-border-strong);
+  transition: width 0.4s ease;
+}
+.wl__gauge-fill.is-near {
+  background: var(--c-emph);
+}
+
+.wl__target-edit-btn,
+.wl__target-save,
+.wl__target-cancel,
+.wl__remove {
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-white);
+  color: var(--c-text-secondary);
+  cursor: pointer;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.wl__target-edit-btn:hover,
+.wl__target-save:hover,
+.wl__remove:hover {
+  border-color: var(--c-blue);
+  color: var(--c-blue-strong);
+}
+.wl__target-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+}
+.wl__target-input {
+  width: 96px;
+  font-size: 13px;
+  padding: 4px 8px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-white);
+  color: var(--c-text);
+}
+
+/* 하단 캡션 — 색 관습 + 게이지 의미. */
+.wl__legend {
+  margin: 14px 0 0;
+  font-size: 11px;
+  color: var(--c-text-muted);
+  line-height: 1.6;
+}
+
+/* 종목 리포트 → 관심종목 담기 툴바 */
+.report-page__wl-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 4px;
+}
+.wl-add-btn,
+.wl-remove-btn {
+  font-size: 13px;
+  padding: 7px 14px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-white);
+  color: var(--c-text);
+  cursor: pointer;
+}
+.wl-add-btn:hover:not(:disabled),
+.wl-remove-btn:hover:not(:disabled) {
+  border-color: var(--c-blue);
+  color: var(--c-blue-strong);
+}
+.wl-add-btn:disabled,
+.wl-remove-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.wl-add-status {
+  font-size: 12px;
+  color: var(--c-text-secondary);
+}
+.wl-add-status--ok {
+  color: var(--c-blue-strong);
+}
+.wl-add-status--err {
+  color: var(--c-text-secondary);
+}
+
+/* ── 종목 리포트 헤더: 관심종목 별 토글(항목7). ★ 등록완료=주황(강조/확인), ☆ 미등록=회색. ── */
+.report__name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.wl-star-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.wl-star {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-pill);
+  background: var(--c-surface);
+  color: var(--c-text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.wl-star:hover:not(:disabled) {
+  border-color: var(--c-emph-border);
+  color: var(--c-emph);
+}
+.wl-star:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.wl-star:focus-visible {
+  outline: 2px solid var(--c-emph);
+  outline-offset: 2px;
+}
+.wl-star__glyph {
+  font-size: 15px;
+  line-height: 1;
+  color: var(--c-text-muted); /* ☆ 미등록 = 회색 */
+}
+/* ★ 등록완료 = 주황 소프트 채움(등록완료 식별). 가격방향색/경보색 아님. */
+.wl-star.is-on {
+  border-color: var(--c-emph-border);
+  background: var(--c-emph-soft);
+  color: var(--c-emph);
+}
+.wl-star.is-on .wl-star__glyph {
+  color: var(--c-emph);
+}
+.wl-star__status {
+  font-size: 11.5px;
+  color: var(--c-text-secondary); /* 담김/제거/409 안내 — 중립 회색(주황·빨강 아님) */
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * AI 종합 리포트(W10 P2) — 종목 리포트 하단. 종합의견 배지: 긍정적=파랑/중립=회색/신중=주황.
+ *   .badge 는 워치리스트와 공유. 톤(up/muted/emph)만 여기서 종합의견용으로 추가 매핑.
+ * ═════════════════════════════════════════════════════════════════════════ */
+.badge--up {
+  background: var(--c-blue-soft);
+  border-color: var(--c-blue);
+  color: var(--c-blue-strong);
+}
+
+.ai-report {
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  background: var(--c-surface);
+  box-shadow: var(--shadow-card);
+  padding: 16px;
+}
+.ai-report__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.ai-report__history-toggle {
+  font-size: 13px;
+  padding: 7px 12px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-white);
+  color: var(--c-text-secondary);
+  cursor: pointer;
+}
+.ai-report__history-toggle:hover {
+  border-color: var(--c-blue);
+  color: var(--c-blue-strong);
+}
+.ai-report__ts {
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+.ai-report__hint,
+.ai-report__failed {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--c-text-secondary);
+  line-height: 1.6;
+}
+.ai-report__failed {
+  padding: 12px 14px;
+  border: 1px dashed var(--c-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface-2);
+}
+.ai-report__body {
+  margin-top: 14px;
+}
+.ai-report__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.ai-report__opinion {
+  font-size: 14px;
+  padding: 5px 14px;
+}
+.ai-report__regime {
+  font-size: 12px;
+  color: var(--c-text-secondary);
+}
+.ai-report__summary {
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--c-text);
+}
+.ai-report__block {
+  margin: 0 0 14px;
+}
+.ai-report__block-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--c-text-secondary);
+}
+.ai-report__list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--c-text);
+}
+.ai-report__list li {
+  margin-bottom: 3px;
+}
+.ai-report__fit {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--c-text);
+}
+.ai-report__disclaimer {
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--c-border);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--c-text-muted);
+}
+
+.ai-report__history {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--c-border);
+}
+.ai-report__history-empty {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--c-text-muted);
+}
+.ai-report__history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ai-report__history-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--c-border);
+  font-size: 13px;
+}
+.ai-report__history-meta {
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+/* 과거 대비 변화 마커(종합의견/국면 전환) — 강조 주황(위험 아님, IMP-16). */
+.ai-report__history-delta {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-emph);
+}
+.ai-report__history-summary {
+  flex-basis: 100%;
+  color: var(--c-text-secondary);
+  line-height: 1.6;
+}
+
+@media (max-width: 640px) {
+  .chat__bubble {
+    max-width: 88%;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   UX 개편 — 좌측 상시 채팅 + 우측 동적 패널(모달 폐기). 색은 theme.css 토큰만.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.app {
+  max-width: none; /* 화면 전체폭 사용(사용자 결정) — 좌/우 배분은 분할선 드래그로. */
+  margin: 0 auto;
+  padding: 0 24px 32px; /* 상단 여백은 sticky 헤더가 자체 padding 으로 확보 */
+}
+
+/* 상단 톱바 — 디케이 브랜드(모노그램+워드마크) + 상태 칩 + 목표가 알림 CTA.
+   틀 고정(sticky): 스크롤해도 헤더가 상단에 머문다(콘텐츠는 헤더 배경 아래로 지나감). */
+.app__topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--c-bg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--c-border);
+}
+
+/* 좌측 브랜드 그룹 — DK 브랜드 + 구분선 + 연세 소속 마크(한 덩어리로 좌측 고정). */
+.app__brand-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* 브랜드 — DK 모노그램 + 워드마크. */
+.app__brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+/* 연세대 소속 마크 — 세로 구분선 + 엠블럼 + 대학명/과목명 2줄. */
+.app__affil-divider {
+  width: 1px;
+  align-self: stretch;
+  min-height: 30px;
+  background: var(--c-border);
+}
+.app__affiliation {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.app__yonsei {
+  flex: 0 0 auto;
+  display: block;
+  height: 34px; /* DK 모노그램과 정렬 */
+  width: auto; /* 공식 CI 비율 유지(228x97) */
+}
+.app__affiliation-text {
+  display: flex;
+  flex-direction: column;
+}
+.app__affiliation-univ {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--c-yonsei);
+}
+.app__affiliation-course {
+  margin-top: 1px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+}
+.app__monogram {
+  flex: 0 0 auto;
+  display: block;
+}
+.app__brand-text {
+  display: flex;
+  flex-direction: column;
+}
+.app__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--c-brand);
+}
+.app__caption {
+  margin: 2px 0 0;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--c-text-faint);
+}
+
+/* 상태 칩 영역 — 국면·현금비중·(VIX 패닉) + 알림 CTA. */
+.app__status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.app__chip {
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+/* 헤드라인 통계 — 가입자수·방문수 필(중립 표면 카드). '오늘'만 주황 강조(값=남색). */
+.app__stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 14px;
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-pill);
+}
+.app__stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.app__stat-label {
+  font-size: 11px;
+  color: var(--c-text-muted);
+}
+.app__stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--c-navy);
+  font-variant-numeric: tabular-nums;
+}
+.app__stat-unit {
+  font-size: 11px;
+  color: var(--c-text-muted);
+}
+.app__stat-today {
+  margin-left: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c-emph);
+  font-variant-numeric: tabular-nums;
+}
+.app__stat-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--c-border-strong);
+}
+/* 현재 국면 = 강조 주황 소프트(핵심 값). */
+.app__chip--regime {
+  background: var(--c-emph-soft);
+  border: 1px solid var(--c-emph-border);
+  color: var(--c-emph-strong);
+}
+/* 권장 현금비중 = 중립 회색 칩(값만 남색 강조). */
+.app__chip--cash {
+  background: var(--c-flat-soft);
+  border: 1px solid var(--c-border);
+  color: var(--c-text-secondary);
+  font-weight: 600;
+}
+.app__chip--cash b {
+  color: var(--c-navy);
+  font-weight: 700;
+}
+/* VIX 패닉 = 위험 경보(채움 빨강 + ⚠) — 상승 빨강과 형태로 구분. */
+.app__chip--panic {
+  background: var(--c-danger);
+  border: 1px solid var(--c-danger-strong);
+  color: var(--c-white);
+}
+
+/* 목표가 알림 CTA — 강조 주황(테두리), 위험 빨강 아님(IMP-11). */
+.app__notif-cta {
+  padding: 6px 13px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-emph-strong);
+  background: var(--c-emph-soft);
+  border: 1px solid var(--c-emph-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.app__notif-cta:hover {
+  background: var(--c-emph);
+  border-color: var(--c-emph);
+  color: var(--c-white);
+}
+/* 켜짐 상태 = 주황 채움(정적 표시). */
+.app__notif-cta--on {
+  background: var(--c-emph);
+  border-color: var(--c-emph);
+  color: var(--c-white);
+  cursor: default;
+}
+
+/* 톱바 유저 이메일 + 로그아웃(인증). */
+.app__user {
+  font-size: 12px;
+  color: var(--c-text-secondary);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app__logout {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.app__logout:hover {
+  border-color: var(--c-border-strong);
+  color: var(--c-text);
+}
+

@@ -1,0 +1,229 @@
+/* ── 국면 게이지(RegimeGauge, W07) ─────────────────────────── */
+.gauge {
+  margin: 22px 0;
+  padding: 20px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+
+/* 로딩/에러 등 축약 상태 — 한 줄로 조용히 안내 */
+.gauge--state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--c-text-secondary);
+  font-size: 14px;
+}
+.gauge--state-error {
+  border-color: var(--c-navy);
+}
+
+.gauge__badge {
+  background: var(--c-navy);
+  color: var(--c-white);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.04em;
+}
+
+.gauge__state-text {
+  flex: 1;
+}
+
+.gauge__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.gauge__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--c-navy);
+  letter-spacing: -0.01em;
+}
+
+/* 신뢰도 배지 — high=남색, medium=파랑, low=회색(테두리형) */
+.confidence {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+.confidence--high {
+  background: var(--c-navy);
+  color: var(--c-white);
+}
+.confidence--medium {
+  background: var(--c-blue);
+  color: var(--c-white);
+}
+.confidence--low {
+  background: var(--c-surface-2);
+  color: var(--c-text-secondary);
+  border: 1px solid var(--c-border-strong);
+}
+
+/* (정적 2×2 사분면 `.quadrant*`/`.qcell*` 은 통합 사분면[RegimeTrajectory SVG]로 흡수·제거됨.
+    현재 위치 마커·활성 셀·경기/심리 readout 은 이제 `.rtraj__*`(SVG)가 담당한다.) */
+
+/* VIX 패닉 칩 — 극단 변동성(>35) 시 헤드에 빨강 경보 칩(위험 전용색) */
+.panic-chip {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  background: var(--c-danger);
+  color: var(--c-white);
+  white-space: nowrap;
+}
+
+/* 국면 해설 한 줄 — 강조 국면명 + 축 조합 의미 */
+.regime-desc {
+  margin: 0 0 18px;
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--c-blue-soft);
+  border: 1px solid var(--c-border);
+  font-size: 13px;
+  color: var(--c-text-secondary);
+}
+.regime-desc__name {
+  color: var(--c-emph); /* 강조 — 현재 국면명 */
+  font-weight: 700;
+}
+
+.gauge__body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+/* ② 권장 현금비중 — 네이비 히어로 카드, 값은 주황(네이비 위). 대시보드 핵심 출력. */
+.cash-ratio {
+  padding: 18px 20px;
+  background: var(--c-navy-deep);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.cash-ratio__value {
+  font-size: 54px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--c-emph-onnavy); /* 네이비 위 강조 주황 — 핵심 값 */
+  font-variant-numeric: tabular-nums;
+}
+.cash-ratio__unit {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--c-text-faint);
+  margin-left: 2px;
+}
+.cash-ratio__label {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--c-text-faint);
+}
+
+/* ④ 판정 근거 지표 카드 — 값 + 구간(양호/중립/악화·탐욕/중립/공포) + 축. 클릭 → 최근 1년 히스토리. */
+.macro-cards {
+  margin-top: 16px;
+}
+.macro-cards__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+  margin-bottom: 10px;
+}
+.macro-cards__hint {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--c-text-muted);
+  margin-left: 4px;
+}
+.macro-cards__axis-group {
+  margin-bottom: 10px;
+}
+.macro-cards__axis {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--c-navy);
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+}
+.macro-cards__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.macro-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 12px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.macro-card:hover,
+.macro-card:focus-visible {
+  border-color: var(--c-blue);
+  background: var(--c-surface-3);
+  outline: none;
+}
+.macro-card__name {
+  font-size: 12px;
+  color: var(--c-text-secondary);
+}
+.macro-card__value {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--c-navy);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+/* 신호(중립 아님)=주황 강조 소프트(주목) / 중립=회색 / 결측=흐린 회색. 방향(양호/공포)은 텍스트로 — 가격 방향색 아님. */
+.macro-card__zone {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.macro-card__zone--signal {
+  color: var(--c-emph-strong);
+  background: var(--c-emph-soft);
+  border: 1px solid var(--c-emph-border);
+}
+.macro-card__zone--neutral {
+  color: var(--c-text-secondary);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+}
+.macro-card__zone--muted {
+  color: var(--c-text-muted);
+  background: var(--c-hairline);
+}
+.macro-card__more {
+  font-size: 10.5px;
+  color: var(--c-text-muted);
+  margin-top: 2px;
+}
+

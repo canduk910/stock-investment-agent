@@ -1,0 +1,451 @@
+/* ── 우측 동적 패널 ────────────────────────────────────────────── */
+.right-panel {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh; /* 하단 콘텐츠 높이 ~80% (내부 스크롤) */
+}
+
+/* 툴바 — 세그먼트 탭(관심종목/시장 국면/내 잔고) + 우측 인라인 종목검색. */
+.right-panel__toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-surface-2);
+}
+/* 세그먼트 탭 트랙 — 회색 트랙 안에서 활성 탭만 남색 채움. */
+.right-panel__tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--c-flat-soft);
+  border-radius: var(--radius);
+}
+.right-panel__tab {
+  padding: 6px 13px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--c-text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+}
+.right-panel__tab:hover {
+  color: var(--c-navy);
+}
+/* 활성(현재 위치) = 남색 채움 + 흰 글씨. */
+.right-panel__tab[aria-pressed='true'] {
+  background: var(--c-navy);
+  color: var(--c-white);
+  font-weight: 700;
+  box-shadow: var(--shadow-card);
+}
+
+/* 종목검색 인라인 폼 — 툴바 우측(브라우저 prompt 금지 규칙). 형식 오류 시 회색 힌트. */
+.right-panel__search {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.right-panel__search-row {
+  display: flex;
+  gap: 8px;
+}
+/* 종목명 자동완성(항목6) — 입력을 감싸 드롭다운(.autocomplete) 앵커. 좁은 입력 대비 드롭다운 최소폭 확보. */
+.right-panel__search-box {
+  position: relative;
+}
+.right-panel__search-box .autocomplete {
+  min-width: 230px;
+}
+/* 형식 불량 안내 — 뉴트럴 회색(빨강은 위험 전용, 폼 힌트엔 금지). */
+.right-panel__search-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--c-text-secondary);
+}
+.right-panel__search-input {
+  flex: 0 1 auto;
+  width: 150px;
+  min-width: 0;
+  padding: 7px 12px;
+  font-size: 13px;
+  color: var(--c-text);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm);
+}
+.right-panel__search-input:focus {
+  outline: none;
+  border-color: var(--c-blue);
+}
+.right-panel__search-go {
+  flex: 0 0 auto;
+}
+
+/* 패널 헤더 — kind 별 제목 + 닫기(빈 상태 복귀). */
+.right-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--c-border);
+}
+.right-panel__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--c-navy);
+}
+.right-panel__close {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--c-text-secondary);
+  background: transparent;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 14px;
+}
+.right-panel__close:hover {
+  border-color: var(--c-blue);
+  color: var(--c-blue);
+}
+
+/* 패널 본문 — 인라인 컴포넌트가 여기서 스크롤(패널 내부 overflow). */
+.right-panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* 빈 상태(닫힘) — 세그먼트 탭으로 탐색 유도(에러·스피너 아님). */
+.right-panel__empty {
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--c-text-muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+/* 패널 전환 스켈레톤 — kind 전환 시 짧게(450ms) shimmer(무한 스피너 대체). */
+.right-panel__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.right-panel__skel-title {
+  width: 150px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+}
+.right-panel__skel-row {
+  height: 64px;
+  border-radius: var(--radius);
+}
+.right-panel__skel-block {
+  height: 180px;
+  border-radius: var(--radius);
+}
+/* 순차 shimmer 지연 — 로우가 물결처럼 밝아지도록. */
+.right-panel__skel-row:nth-child(3) {
+  animation-delay: 0.08s;
+}
+.right-panel__skel-row:nth-child(4) {
+  animation-delay: 0.16s;
+}
+
+/* ── 잔고(포트폴리오) 패널 ────────────────────────────────────────
+   손익 색 = 글로벌 방향 규칙(수익=빨강 --c-up / 손실=파랑 --c-down / 보합=회색). 위험 빨강(--c-danger) 아님.
+   조회 전용(주문/매매 없음) · 현재가 무캐시 · 면책 상시. 색은 theme 토큰만. */
+.balance__state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 16px;
+  color: var(--c-text-secondary);
+  font-size: 14px;
+}
+.balance__error,
+.balance__partial {
+  margin: 0 0 14px;
+}
+
+/* 부분실패 dashed 카드 — "일시 조회 불가" + 재시도(전체 에러 화면 아님, 면책 유지). */
+.balance__partial-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 20px;
+  margin-bottom: 14px;
+  background: var(--c-surface-3);
+  border: 1px dashed var(--c-border-strong);
+  border-radius: var(--radius);
+}
+.balance__partial-text {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--c-text-secondary);
+}
+
+/* 네이비 히어로 카드 — 순자산(큰 흰 값) + 평가손익 pill(수익=밝은 빨강/손실=밝은 파랑). */
+.balance__hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  background: var(--c-navy-deep);
+  border-radius: var(--radius-lg);
+}
+.balance__hero-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.balance__hero-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-faint);
+}
+.balance__hero-value {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--c-white);
+  font-variant-numeric: tabular-nums;
+}
+.balance__hero-pnl {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  background: var(--c-navy);
+  color: var(--c-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.balance__hero-pnl.up {
+  color: var(--c-up-onnavy);
+} /* 네이비 위 수익 = 밝은 빨강 */
+.balance__hero-pnl.down {
+  color: var(--c-blue-soft);
+} /* 네이비 위 손실 = 밝은 파랑 */
+
+/* 보조 카드 그리드 — 예수금·매입액·평가액·보유종목. */
+.balance__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.balance__card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+}
+.balance__card-label {
+  font-size: 12px;
+  color: var(--c-text-secondary);
+}
+.balance__card-value {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--c-black);
+  font-variant-numeric: tabular-nums;
+}
+/* 순자산 = 강조(주황) — 가장 주목할 핵심 값. 가격 방향 아님(위험 빨강 아님). */
+.balance__card--emph {
+  border-color: var(--c-emph);
+  background: var(--c-emph-soft);
+}
+.balance__card--emph .balance__card-value {
+  color: var(--c-emph-strong);
+}
+/* 손익 카드 방향색은 값 내부(.balance__pnl)에서 처리 — 카드 배경은 중립 유지. */
+.balance__pnl-inline {
+  font-size: 15px;
+}
+
+/* 손익 표기 — 수익=빨강(--c-up)/손실=파랑(--c-down)(글리프 병기, 색만으로 구분 안 함). 위험 빨강 아님. */
+.balance__pnl {
+  font-weight: 600;
+  color: var(--c-text-secondary);
+  white-space: nowrap;
+}
+.balance__pnl.up {
+  color: var(--c-up);
+}
+.balance__pnl.down {
+  color: var(--c-down);
+}
+.balance__pnl-pct {
+  font-weight: 500;
+}
+
+/* 보유종목 표 — 가로 스크롤 격리(페이지 body 는 스크롤 안 함). */
+.balance__table-wrap {
+  overflow-x: auto;
+}
+.balance__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.balance__table th,
+.balance__table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--c-border);
+  text-align: left;
+}
+.balance__table thead th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+  white-space: nowrap;
+  background: var(--c-surface-3);
+}
+.balance__num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* 미니 스파크라인 열(관심종목과 동일 차트) — 우측 정렬, SVG 90×28 수용. */
+.balance__chart-col {
+  text-align: right;
+  white-space: nowrap;
+}
+.balance__chart-col .wl__spark {
+  margin-left: auto;
+}
+/* 종목 상세로 전환하는 클릭 가능한 보유종목 행 — 커서·은은한 hover(토큰만). */
+.balance__row--clickable {
+  cursor: pointer;
+}
+.balance__row--clickable:hover,
+.balance__row--clickable:focus-visible {
+  background: var(--c-surface-3);
+  outline: none;
+}
+.balance__name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.balance__name {
+  font-weight: 600;
+  color: var(--c-navy);
+}
+.balance__ticker {
+  font-size: 11.5px;
+  color: var(--c-text-muted);
+}
+.balance__empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--c-text-muted);
+  font-size: 14px;
+}
+.balance__asof {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+.balance__disclaimer {
+  margin: 8px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--c-border);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--c-text-muted);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * 리디자인 키프레임 + 스켈레톤 유틸(Phase 0). stage-pulse·blink 는 위 챗 영역에 이미 존재.
+ * ═════════════════════════════════════════════════════════════════════════ */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes shimmer {
+  0% {
+    background-position: -420px 0;
+  }
+  100% {
+    background-position: 420px 0;
+  }
+}
+/* 시세 플래시 — 60s 갱신 시 변경 종목에 1회. 상승=빨강 소프트 / 하락=파랑 소프트(방향 규칙 준수). */
+@keyframes flash-up {
+  0% {
+    background-color: rgba(229, 50, 45, 0.2);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+@keyframes flash-down {
+  0% {
+    background-color: rgba(37, 99, 235, 0.18);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+/* 스켈레톤 공통 — 패널 전환·AI 로딩 자리표시(무한 스피너 대체). */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--c-surface-2) 25%,
+    var(--c-surface-3) 50%,
+    var(--c-surface-2) 75%
+  );
+  background-size: 840px 100%;
+  animation: shimmer 1.1s linear infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* ── 내 질문 잔량 칩(톱바) — 중립 회색(정보). 소진 시 주황 강조(경보 빨강 아님). ── */
+.app__chip--quota {
+  background: var(--c-flat-soft);
+  border: 1px solid var(--c-border);
+  color: var(--c-text-secondary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.app__chip--quota.is-exhausted {
+  background: var(--c-emph-soft);
+  border-color: var(--c-emph-border);
+  color: var(--c-emph-strong);
+}
+

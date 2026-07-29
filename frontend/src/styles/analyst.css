@@ -1,0 +1,362 @@
+/* ── 애널리스트 리포트 요약 섹션(네이버 수집 · "이 리포트로 상담하기") ── */
+.analyst {
+  margin-top: 20px;
+}
+.analyst__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.analyst__head .report__section-label {
+  margin: 0;
+}
+.analyst__fetch {
+  flex: none;
+}
+.analyst__fetchmsg {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--c-text-secondary);
+}
+
+/* ── 리포트 수집 진행 체크리스트(항목1, SSE) ── */
+.fetch-progress {
+  margin: 10px 0 0;
+  padding: 12px 14px;
+  background: var(--c-surface-2);
+  border-radius: var(--radius-sm, 8px);
+}
+.fetch-progress__head {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--c-text-secondary);
+}
+.fetch-progress__bar {
+  margin: 8px 0;
+  height: 6px;
+  background: var(--c-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.fetch-progress__fill {
+  height: 100%;
+  background: var(--c-emph); /* 진행=주황 강조 */
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+.fetch-progress__list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.fetch-progress__item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--c-text-muted); /* 대기=뉴트럴 회색 */
+}
+.fetch-progress__item--new,
+.fetch-progress__item--skipped,
+.fetch-progress__item--failed {
+  color: var(--c-text); /* 완료 항목은 본문색으로 또렷하게 */
+}
+.fetch-progress__mark {
+  flex: none;
+  width: 14px;
+  text-align: center;
+}
+.fetch-progress__item--new .fetch-progress__mark {
+  color: var(--c-emph);
+}
+.fetch-progress__label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fetch-progress__status {
+  flex: none;
+  font-size: 11px;
+  color: var(--c-text-secondary);
+}
+.analyst__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+.analyst__card {
+  border: 1px solid var(--c-border);
+  border-radius: 12px;
+  background: var(--c-surface);
+  padding: 14px 16px;
+}
+.analyst__card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.analyst__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.analyst__broker {
+  font-weight: 800;
+  color: var(--c-navy);
+  font-size: 14px;
+}
+.analyst__date {
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+.analyst__opinion {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+/* 리포트 투자의견 = 출처 귀속(중립 회색). 가격 방향색·주황/빨강 아님(에이전트 판정 아님). */
+.analyst__chip-opinion {
+  background: var(--c-surface-2);
+  color: var(--c-text-secondary);
+  border: 1px solid var(--c-border);
+}
+.analyst__title {
+  margin: 10px 0 0;
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--c-text);
+}
+.analyst__summary {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--c-text-secondary);
+}
+.analyst__list {
+  margin-top: 10px;
+}
+.analyst__list-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-navy);
+}
+.analyst__bullets {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--c-text-secondary);
+}
+.analyst__bullets--risk {
+  color: var(--c-text);
+}
+.analyst__fine {
+  margin: 12px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--c-text-muted);
+}
+.analyst__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.analyst__pdf {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--c-navy);
+  text-decoration: none;
+}
+.analyst__pdf:hover {
+  text-decoration: underline;
+}
+/* 상담 CTA = 주황 강조(확인/핵심 행동). 채움형으로 존재감. */
+.analyst__consult {
+  margin-left: auto;
+  padding: 7px 14px;
+  border: 1px solid var(--c-emph);
+  border-radius: 8px;
+  background: var(--c-emph);
+  color: var(--c-white);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.analyst__consult:disabled {
+  background: var(--c-surface-2);
+  color: var(--c-text-muted);
+  border-color: var(--c-border);
+  cursor: default;
+}
+.analyst__err {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--c-text-secondary);
+}
+.analyst__empty {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px dashed var(--c-border-strong);
+  border-radius: 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--c-text-secondary);
+}
+.analyst__disclaimer {
+  margin: 12px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--c-text-muted);
+}
+
+/* ── 최근 3개 리포트 종합 10줄요약(항목5) — 개별 카드 위 종합 패널 ── */
+.analyst-combined {
+  margin: 12px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface-2);
+  border-radius: 12px;
+}
+/* 금일의 요약 — 시각 강조 카드(주황 강조 소프트·좌측 강조선). 강조=주황(--c-emph), 가격/경보색 아님. */
+.daily-summary {
+  margin: 12px 0;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--c-emph-border);
+  border-left: 4px solid var(--c-emph);
+  background: var(--c-emph-soft);
+  border-radius: 12px;
+}
+.daily-summary__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.daily-summary__title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--c-emph-strong);
+}
+.daily-summary__badge {
+  font-size: 15px;
+}
+.daily-summary__sub {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+}
+.daily-summary__gen {
+  flex: none;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-white);
+  background: var(--c-emph);
+  border: 1px solid var(--c-emph-strong);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.daily-summary__gen:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.daily-summary__loading {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: var(--c-emph-strong);
+}
+.daily-summary__body {
+  margin-top: 12px;
+  animation: rise-in 0.28s ease both;
+}
+.daily-summary__chips {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.daily-summary__chip {
+  background: var(--c-white);
+  border: 1px solid var(--c-emph-border);
+  color: var(--c-emph-strong);
+}
+.daily-summary__lines {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.daily-summary__lines li {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--c-text);
+}
+.analyst-combined__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.analyst-combined__title {
+  font-weight: 800;
+  font-size: 13.5px;
+  color: var(--c-navy);
+}
+/* 종합요약 생성 = 주황 확정 CTA(강조). */
+.analyst-combined__gen {
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--c-emph);
+  color: var(--c-white);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.analyst-combined__gen:hover:not(:disabled) {
+  background: var(--c-emph-strong);
+}
+.analyst-combined__gen:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.analyst-combined__body {
+  margin-top: 10px;
+}
+.analyst-combined__chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.analyst-combined__lines {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--c-text);
+}
+.analyst-combined__lines li {
+  margin-bottom: 2px;
+}
+
