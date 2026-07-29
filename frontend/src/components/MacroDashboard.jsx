@@ -6,7 +6,7 @@ import {
   fetchMarketOutlookSummary,
 } from '../api.js'
 import { isOutlookStale, todayStampKST } from '../lib/marketOutlook.js'
-import { applyProgressEvent } from './FetchProgress.jsx'
+import { useReportFetchStream } from '../lib/useReportFetchStream.js'
 import RegimeGauge from './RegimeGauge.jsx'
 import DailySummary from './DailySummary.jsx'
 import MarketOutlookSection from './MarketOutlookSection.jsx'
@@ -42,9 +42,8 @@ export default function MacroDashboard({ sessionId, onConsult } = {}) {
   const [reports, setReports] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [fetching, setFetching] = useState(false)
-  const [fetchMsg, setFetchMsg] = useState(null)
-  const [progress, setProgress] = useState(null) // SSE 진행 체크리스트
+  // SSE 수집 상태기계(fetching/안내문/진행 체크리스트)는 useReportFetchStream SSOT(애널리스트와 공유).
+  const { fetching, fetchMsg, progress, run: runFetchStream } = useReportFetchStream()
   const [autoNote, setAutoNote] = useState(null) // 자동 최신화 안내(수동과 구분)
   const autoTriedRef = useRef(false) // 마운트당 자동 오케스트레이션 1회(StrictMode 방어)
 
@@ -108,37 +107,13 @@ export default function MacroDashboard({ sessionId, onConsult } = {}) {
   }
 
   // 네이버 최신 시황 SSE 수집 → 완료 후 재조회 → [순차] 금일의 요약 재생성(수집 직후 항상 갱신).
+  // 스트림 소비·폴백·진행 표시는 훅(run)이 담당하고, 여기선 시황 도메인 후속(요약 재생성)만 잇는다.
   async function fetchNaver() {
-    setFetching(true)
-    setFetchMsg(null)
-    setProgress({ stage: 'list', reports: [], done: 0, total: 0 })
-    let finished = false
-    await streamFetchMarketOutlook({
-      limit: 15,
-      onEvent: (ev) => {
-        if (ev.type === 'done') {
-          finished = true
-          setFetchMsg(`새 요약 ${ev.new}건 · 확인 ${ev.fetched}건` + (ev.failed ? ` · 실패 ${ev.failed}건` : ''))
-        } else if (ev.type === 'error') {
-          finished = true
-          setFetchMsg(`수집 실패(${ev.message}).`)
-        } else {
-          setProgress((p) => applyProgressEvent(p, ev))
-        }
-      },
-      onError: async () => {
-        if (finished) return
-        try {
-          const res = await fetchNaverMarketOutlook(15)
-          setFetchMsg(`새 요약 ${res.new}건 · 확인 ${res.fetched}건` + (res.failed ? ` · 실패 ${res.failed}건` : ''))
-        } catch (e) {
-          setFetchMsg(`수집 실패(${e.message}).`)
-        }
-      },
-    })
-    setProgress(null)
-    const fresh = await load()
-    setFetching(false)
+    const fresh = await runFetchStream(
+      (handlers) => streamFetchMarketOutlook({ limit: 15, ...handlers }), // SSE 스트림
+      () => fetchNaverMarketOutlook(15), // 끊김 폴백(논스트림)
+      load, // 완료 후 재조회 — 반환값(fresh)을 요약 재생성에 사용
+    )
     setAutoNote(null)
     maybeAutoSummary(fresh, { force: true }) // [수집 → 요약] 순차 — 수집 직후 항상 요약 갱신
   }

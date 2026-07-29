@@ -6,7 +6,8 @@ import {
   setReportContext,
   streamFetchStockReports,
 } from '../api.js'
-import FetchProgress, { applyProgressEvent } from './FetchProgress.jsx'
+import FetchProgress from './FetchProgress.jsx'
+import { useReportFetchStream } from '../lib/useReportFetchStream.js'
 
 // 종목 상세(StockReportView) 하단 — 그 ticker 의 네이버 애널리스트 리포트 '요약' 카드 섹션.
 // 실데이터(요약)는 프론트가 fetchAnalystReports 로 직접 조회한다(환각 차단) — LLM 응답에서 꺼내지 않는다.
@@ -188,9 +189,8 @@ export default function AnalystReportsSection({ ticker, sessionId, onConsult }) 
   const [reports, setReports] = useState(null) // null=미로딩, []=없음
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [fetching, setFetching] = useState(false) // 네이버 수집 진행
-  const [fetchMsg, setFetchMsg] = useState(null)
-  const [progress, setProgress] = useState(null) // SSE 진행 체크리스트
+  // SSE 수집 상태기계(fetching/안내문/진행 체크리스트)는 useReportFetchStream SSOT(시황과 공유).
+  const { fetching, fetchMsg, progress, run: runFetchStream } = useReportFetchStream()
 
   async function load() {
     setLoading(true)
@@ -212,39 +212,13 @@ export default function AnalystReportsSection({ ticker, sessionId, onConsult }) 
   }, [ticker])
 
   // **이 종목** 네이버 리포트 수집을 **SSE 진행 스트림**으로 — 목록 조회→각 리포트 처리를 실시간 표시.
-  // done 카운트 안내 후 재조회. 스트림 끊김(onError)은 non-stream fetch 폴백(무한 스피너 방지).
+  // 스트림 소비·done 안내·끊김 폴백·완료 후 재조회는 훅(run)이 담당(useReportFetchStream 계약 참고).
   async function fetchNaver() {
-    setFetching(true)
-    setFetchMsg(null)
-    setProgress({ stage: 'list', reports: [], done: 0, total: 0 })
-    let finished = false
-    await streamFetchStockReports(ticker, {
-      limit: 10,
-      onEvent: (ev) => {
-        if (ev.type === 'done') {
-          finished = true
-          setFetchMsg(`새 요약 ${ev.new}건 · 확인 ${ev.fetched}건` + (ev.failed ? ` · 실패 ${ev.failed}건` : ''))
-        } else if (ev.type === 'error') {
-          finished = true
-          setFetchMsg(`수집 실패(${ev.message}).`)
-        } else {
-          setProgress((p) => applyProgressEvent(p, ev))
-        }
-      },
-      onError: async () => {
-        if (finished) return
-        // 스트림 미완료(끊김) → non-stream fetch 폴백.
-        try {
-          const res = await fetchNaverStockReports(ticker, 10)
-          setFetchMsg(`새 요약 ${res.new}건 · 확인 ${res.fetched}건` + (res.failed ? ` · 실패 ${res.failed}건` : ''))
-        } catch (e) {
-          setFetchMsg(`수집 실패(${e.message}).`)
-        }
-      },
-    })
-    setProgress(null)
-    await load()
-    setFetching(false)
+    await runFetchStream(
+      (handlers) => streamFetchStockReports(ticker, { limit: 10, ...handlers }), // SSE 스트림
+      () => fetchNaverStockReports(ticker, 10), // 끊김 폴백(논스트림)
+      load, // 완료 후 재조회
+    )
   }
 
   return (
