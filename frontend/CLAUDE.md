@@ -11,7 +11,8 @@
 - `lib/useReportFetchStream.js`: 리포트 SSE 수집 상태기계(fetching/fetchMsg/progress + `run(streamFn, fallbackFn, after)`) 훅 SSOT — 진행 시작→스트림 소비→done/error 안내(`formatFetchResult`)→끊김 논스트림 폴백→진행 종료→after 재조회→해제. 시황(MacroDashboard)·애널리스트(AnalystReportsSection)가 사용. after 반환값을 돌려줘 후속 로직(시황 수집→요약 순차)에 쓴다.
 - 죽은 코드 삭제됨: `components/IndicatorCard.jsx`·`indicatorMeta.js`(미참조 고아 쌍 — 매크로 카드는 `MacroIndicatorCards` 내부 구현이 실사용).
 - `api.js` **`_request` 내부 헬퍼 SSOT**(M7 완료): 44개 함수의 fetch 보일러플레이트를 플래그 5개(`auth`·`method`·`json`·`errStatus`[.status 부착 — watchlist 409/admin 403 분기]·`errDetail`[서버 detail 안내문 우선 — KIS 검증·admin 400])로 통합. **`src/api.test.js` characterization 41건이 URL·메서드·바디·에러 shape 를 잠근다** — api.js 를 고치면 이 테스트로 계약 불변을 증명할 것. SSE 스트림 3함수(postChatStream·streamFetch*)는 리더 소비 경로라 의도적 미적용.
-- 보류(과추상화 방지 기록): 등락 칩 공용 컴포넌트(M2 — dirGlyph/signedNum 통합 후 잔여 2곳·3줄, Rule of Three 미달)·세그먼트 선택기 공용화(M4)·LoadState 래퍼(M6)·styles.css 분할(L4).
+- **공용 UI 컴포넌트(M2·M4·M6 완료 — 새 코드는 반드시 재사용)**: `ChangeChip`(등락률 칩 — 방향색 클래스+▲▼─ 글리프+signedNum%, 자리 클래스는 `className` prop[기본 wl__change/리포트 report__change]) · `SegmentedControl`(세그먼트 버튼 그룹 — options/value/onChange/buttonClass/activeClass/disabled/keyOf, **버튼 배열만 반환**하고 래퍼·CSS 는 자리 소유; 우측 탭·차트 주기/기간·궤적 기간·스크리너 시장/단계·로그인 모드 7그룹 사용) · `LoadState`(popup__state 로딩/에러/재시도 3분기 — loadingText/errorContent/onRetry[없으면 버튼 생략]/retryLabel/retryClassName; wl__state 등 자리 전용 상태 클래스는 의도적 미통합).
+- **styles.css = @import 진입점(L4 완료)**: 구 4183줄 모놀리스를 `src/styles/` 기능별 13파일(base·regime-gauge·grand-cycle·report·analyst·market-outlook·chat·watchlist·auth-settings·panels·admin·trajectory·screener)로 분할. **@import 순서 = 구 물리 순서 = 캐스케이드 계약(재정렬 금지)**. 새 스타일은 해당 기능 파일에(공통은 base.css). `styles.test.js` 는 진입점+분할 파일 연결 텍스트로 계약 검증. 분할은 소스 연결·빌드 산출 CSS 모두 바이트 동일로 검증됨.
 
 ## 디자인 (반드시 준수)
 - 팔레트는 **흰색/회색/파랑/남색/검정 + 강조 주황(`--c-emph`) + 위험 빨강 경보(`--c-danger`)**. 초록·황색 금지.
