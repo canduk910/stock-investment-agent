@@ -9,7 +9,8 @@ import { sectionFailed, isValuationReady } from '../lib/reportLogic.js'
 // 표시 포맷 SSOT(순수, lib/format.js) — 값·판정은 백엔드 summary 가 확정, 여기선 표시만. 결측은 '—'.
 // 과거 로컬 재정의(signDir/signedPct/cagrPct)는 format.js 와 동일 동작이라 SSOT 로 흡수(리팩토링):
 //   signDir → changeDir(결측 null) · 로컬 signedPct(무%) → signedNum · cagrPct → pct.
-import { changeDir, dirGlyph, num, pct, signedNum } from '../lib/format.js'
+import { changeDir, num, pct, signedNum } from '../lib/format.js'
+import ChangeChip from './ChangeChip.jsx'
 
 // CAGR 은 이미 %(엔진 stock/summary.py::_cagr 가 ×100 반환) — 표시 시 ×100 재적용 금지(단위 규약).
 // pct(v, 1) 이 그대로 그 규약(소수 1자리·부호/% 접미사 없음)을 만족한다.
@@ -59,9 +60,6 @@ export default function StockReportView({ bundle, sessionId, onConsult }) {
   }
   fwdPers.forEach((x) => perTrend.push(`${estShort(x.period)} ${pct(x.forward_per, 1)}배`))
 
-  // 등락 방향(결측=null → 칩 글리프만 '─') — format.changeDir SSOT.
-  const priceDir = changeDir(valuation?.change_rate)
-
   return (
     <section className="report" aria-label="종목 종합리포트">
       {/* ── 헤더: 종목명·업종 + 현재가·등락률(파랑/회색) ── */}
@@ -85,12 +83,8 @@ export default function StockReportView({ bundle, sessionId, onConsult }) {
             <>
               <span className="report__price-val">{num(valuation.price)}</span>
               <span className="report__price-unit">원</span>
-              <span className={`report__change ${priceDir ?? ''}`}>
-                <span aria-hidden="true">
-                  {dirGlyph(priceDir)}
-                </span>{' '}
-                {signedNum(valuation.change_rate)}%
-              </span>
+              {/* 등락 칩은 ChangeChip SSOT — 자리 클래스만 report__change 로 주입(구조·글리프 공용). */}
+              <ChangeChip value={valuation.change_rate} className="report__change" />
               {valuation.as_of ? <span className="report__asof">기준 {valuation.as_of}</span> : null}
             </>
           )}

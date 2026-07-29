@@ -11,7 +11,8 @@ import {
   addErrorMessage,
 } from '../lib/watchlistLogic.js'
 // 등락률은 % 를 JSX 가 접미(`{signedNum(x)}%`) → 접미 없는 signedNum 사용(원본 로컬 signedPct 와 동일 동작).
-import { num, signedNum, changeDir, dirGlyph } from '../lib/format.js'
+import { num, signedNum, changeDir } from '../lib/format.js'
+import ChangeChip from './ChangeChip.jsx'
 import Sparkline from './Sparkline.jsx'
 
 // 워치리스트 본문 — 팝업(PopupWatchlist)과 독립 패널(App)이 공유하는 단일 컴포넌트.
@@ -251,10 +252,8 @@ function WatchlistRow({ item, onRemove, onSetTarget, onOpenStock }) {
           ) : (
             <>
               <span className="wl__price">{num(item.current_price)}원</span>
-              <span className={`wl__change ${dir ?? ''}`}>
-                <span aria-hidden="true">{dirGlyph(dir)}</span>{' '}
-                {signedNum(item.change_rate)}%
-              </span>
+              {/* 등락 칩은 ChangeChip SSOT(방향색 클래스+글리프+부호 규칙 공용). */}
+              <ChangeChip value={item.change_rate} />
             </>
           )}
         </div>

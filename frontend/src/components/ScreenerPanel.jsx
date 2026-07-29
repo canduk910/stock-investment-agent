@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { fetchScreener } from '../api.js'
 import { useFetch } from '../lib/useFetch.js'
 import { stageGlyph } from '../lib/grandCycle.js'
-import { num, signedNum, changeDir, dirGlyph } from '../lib/format.js'
+import { num, signedNum } from '../lib/format.js'
+import ChangeChip from './ChangeChip.jsx'
 
 // 대순환(고지로) 단계 기반 후보 종목 스크리너 — 시총상위 유니버스를 대순환 단계로 스캔.
 //   판정(단계)은 백엔드 엔진(코드)이 확정, 여기선 표시·필터만. 실데이터는 프론트가 직접 조회(환각 차단).
@@ -139,7 +140,6 @@ export default function ScreenerPanel({ onOpenStock }) {
 
 // 후보 종목 한 줄 — 관심종목(.wl__*) 카드 스타일 재사용. 정보 영역만 클릭 가능(상세 이동).
 function ScreenerRow({ c, meta, onOpenStock }) {
-  const dir = changeDir(c.change_rate) // 등락 방향(up/down/flat/null) — 색·글리프 결정
   const clickable = !!onOpenStock // onOpenStock 없으면 순수 표시(클릭 비활성·옵셔널)
   const openDetail = () => onOpenStock?.(c.ticker, c.name ?? c.ticker) // 상세 전환(종목명 전달)
   const hasStage = c.stage != null // 단계 판정 성공 여부(봉 부족·조회 실패 시 null)
@@ -173,10 +173,8 @@ function ScreenerRow({ c, meta, onOpenStock }) {
         </div>
         <div className="wl__row-price">
           <span className="wl__price">{num(c.price)}원</span>
-          <span className={`wl__change ${dir ?? ''}`}>
-            <span aria-hidden="true">{dirGlyph(dir)}</span>{' '}
-            {signedNum(c.change_rate)}%
-          </span>
+          {/* 등락 칩은 ChangeChip SSOT(방향색 클래스+글리프+부호 규칙 공용). */}
+          <ChangeChip value={c.change_rate} />
         </div>
       </div>
       <div className="wl__row-bottom">
