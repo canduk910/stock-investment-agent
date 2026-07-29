@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from chat.market_outlook import format_market_outlook_context  # 저장 entry → 가독 컨텍스트(재사용)
 from chat.market_outlook_combined_schema import CombinedMarketOutlookSummary
-from chat.structured_summary import generate_validated, make_client
+from chat.structured_summary import generate_validated, make_client, wrap_failure, wrap_success
 
 _DEFAULT_LIMIT = 5  # "최근 5개" 시황 종합(사용자 요구)
 _NO_REPORTS_MESSAGE = "종합할 저장된 시황 리포트가 없습니다. 먼저 시황을 가져오세요."
@@ -49,22 +49,14 @@ def summarize_recent_outlooks(*, limit: int = _DEFAULT_LIMIT, client=None, store
         store = default_store()
     reports = (store.list_reports() or [])[:limit]  # ticker 없음(시장 전체)
     count = len(reports)
+    # 저장 시황 0개 → LLM 미호출 폴백(report_count=0 은 코드 계산 — LLM 카운트 환각 방지).
     if count == 0:
-        return {
-            "summary": None,
-            "validation_failed": True,
-            "message": _NO_REPORTS_MESSAGE,
-            "report_count": 0,
-        }
+        return wrap_failure(_NO_REPORTS_MESSAGE, report_count=0)
     if client is None:
         client = make_client()
     prompt = _build_combined_prompt(reports)
+    # 생성→검증(1회 재시도 포함)은 공통 코어. 반환 포장도 공통 래퍼(shape SSOT — structured_summary).
     summary = generate_validated(client, prompt, CombinedMarketOutlookSummary)
     if summary is not None:
-        return {"summary": summary.model_dump(), "validation_failed": False, "report_count": count}
-    return {
-        "summary": None,
-        "validation_failed": True,
-        "message": _FALLBACK_MESSAGE,
-        "report_count": count,
-    }
+        return wrap_success(summary, report_count=count)
+    return wrap_failure(_FALLBACK_MESSAGE, report_count=count)

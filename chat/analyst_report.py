@@ -7,7 +7,7 @@ CHAT_MODEL 에 JSON 요약을 요청 → AnalystReportSummary 검증 → 실패 
 from __future__ import annotations
 
 from chat.analyst_schema import AnalystReportSummary
-from chat.structured_summary import generate_validated, make_client
+from chat.structured_summary import generate_validated, make_client, wrap_failure, wrap_success
 
 # 요약 컨텍스트로 넣을 원문 상한(프롬프트 예산). 애널리스트 리포트는 보통 2~5쪽.
 _MAX_TEXT_CHARS = 8000
@@ -65,12 +65,14 @@ def summarize_report(text: str, meta: dict, *, client=None) -> dict:
 
     빈 텍스트·검증 실패·OpenAI 예외는 validation_failed=True(폴백).
     """
+    # 빈 원문(추출 실패 PDF 등) → LLM 미호출 폴백(비용 0·graceful).
     if not text or not text.strip():
-        return {"summary": None, "validation_failed": True, "message": _FALLBACK_MESSAGE}
+        return wrap_failure(_FALLBACK_MESSAGE)
     if client is None:
         client = make_client()
     prompt = _build_summary_prompt(text, meta)
+    # 생성→검증(1회 재시도 포함)은 공통 코어. 반환 포장도 공통 래퍼(shape SSOT — structured_summary).
     summary = generate_validated(client, prompt, AnalystReportSummary)
     if summary is not None:
-        return {"summary": summary.model_dump(), "validation_failed": False}
-    return {"summary": None, "validation_failed": True, "message": _FALLBACK_MESSAGE}
+        return wrap_success(summary)
+    return wrap_failure(_FALLBACK_MESSAGE)

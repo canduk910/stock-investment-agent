@@ -10,7 +10,13 @@ from types import SimpleNamespace
 
 from pydantic import BaseModel, Field
 
-from chat.structured_summary import generate_validated, parse_and_validate, request_json
+from chat.structured_summary import (
+    generate_validated,
+    parse_and_validate,
+    request_json,
+    wrap_failure,
+    wrap_success,
+)
 
 
 class _Schema(BaseModel):
@@ -89,3 +95,28 @@ def test_generate_validated_two_failures_is_none():
 
 def test_generate_validated_openai_exception_is_none():
     assert generate_validated(_Boom(), "p", _Schema) is None
+
+# ── 결과 dict 래퍼(wrap_success/wrap_failure) — 4 summarizer 공유 반환 shape SSOT ──
+
+
+def test_wrap_success_shape():
+    """성공: summary=model_dump()·validation_failed=False, message 키 없음(계약)."""
+    obj = _Schema(name="삼성", n=3)
+    out = wrap_success(obj)
+    assert out == {"summary": {"name": "삼성", "n": 3}, "validation_failed": False}
+    assert "message" not in out
+
+
+def test_wrap_failure_shape():
+    """실패: summary=None·validation_failed=True·message=폴백 문구(계약)."""
+    out = wrap_failure("일시 불가")
+    assert out == {"summary": None, "validation_failed": True, "message": "일시 불가"}
+
+
+def test_wrap_extra_keys_for_combined():
+    """combined 계열은 report_count 등 도메인 추가 키를 extras 로 병합한다."""
+    obj = _Schema(name="시황", n=1)
+    ok = wrap_success(obj, report_count=5)
+    bad = wrap_failure("없음", report_count=0)
+    assert ok["report_count"] == 5 and ok["validation_failed"] is False
+    assert bad["report_count"] == 0 and bad["summary"] is None

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from chat.analyst_combined_schema import CombinedAnalystSummary
 from chat.analyst_report import format_report_context  # 저장 entry → 가독 컨텍스트(재사용)
-from chat.structured_summary import generate_validated, make_client
+from chat.structured_summary import generate_validated, make_client, wrap_failure, wrap_success
 
 _DEFAULT_LIMIT = 3  # "최근 3개" 종합(사용자 요구)
 _NO_REPORTS_MESSAGE = "종합할 저장된 리포트가 없습니다. 먼저 이 종목 리포트를 가져오세요."
@@ -65,26 +65,14 @@ def summarize_recent_reports(
         store = default_store()
     reports = (store.list_reports(ticker) or [])[:limit]
     count = len(reports)
+    # 저장 리포트 0개 → LLM 미호출 폴백(report_count=0 은 코드 계산 — LLM 카운트 환각 방지).
     if count == 0:
-        return {
-            "summary": None,
-            "validation_failed": True,
-            "message": _NO_REPORTS_MESSAGE,
-            "report_count": 0,
-        }
+        return wrap_failure(_NO_REPORTS_MESSAGE, report_count=0)
     if client is None:
         client = make_client()
     prompt = _build_combined_prompt(reports, ticker)
+    # 생성→검증(1회 재시도 포함)은 공통 코어. 반환 포장도 공통 래퍼(shape SSOT — structured_summary).
     summary = generate_validated(client, prompt, CombinedAnalystSummary)
     if summary is not None:
-        return {
-            "summary": summary.model_dump(),
-            "validation_failed": False,
-            "report_count": count,
-        }
-    return {
-        "summary": None,
-        "validation_failed": True,
-        "message": _FALLBACK_MESSAGE,
-        "report_count": count,
-    }
+        return wrap_success(summary, report_count=count)
+    return wrap_failure(_FALLBACK_MESSAGE, report_count=count)
