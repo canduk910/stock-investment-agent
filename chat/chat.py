@@ -186,26 +186,40 @@ def _create_with_retry(client, **kwargs):
         return client.chat.completions.create(**merged)
 
 
-def chat(user_query: str, judgement: dict, session: Session, *, client=None, user=None, db=None) -> dict:
-    """사용자 질의 → {"text","popups"}. 위험 요청은 2층 차단(결정적 키워드 + ML→LLM 재분류).
+def _prepare_turn(user_query: str, judgement: dict, session: Session, *, client):
+    """chat()·chat_stream() 공유 프리앰블 — 위험 2층 차단 + 인텐트 + 메시지 조립의 **단일 출처**.
 
-    user/db 는 P2 뷰 스냅샷(잔고·시세)이 DB KIS 자격증명을 쓰도록 관통한다(패널과 동일 경로).
+    과거 두 경로가 같은 ~25줄을 각자 들고 있어 "chat 만 고치고 stream 을 빠뜨리는" 회귀가
+    실제로 발생했다(P2 user/db 관통 누락 이력) → 안전 로직을 이 헬퍼 하나로 모은다.
+
+    수행 순서(안전 원칙 — 순서 자체가 계약):
+      1a. `guardrail_label`(결정적 키워드 4유형) → **LLM 미호출 하드블록**(안전 하한선).
+      (client 지연 생성 — 하드블록이면 OpenAI 클라이언트도 만들지 않는다.)
+      2.  `classify` 1회 — risk 체크 + 네비게이션 패널 라우팅 공용(아래 merge 에서 재사용).
+      1b. ML=risk 면 `_reclassify_risk`(LLM 2차) — 오탐 구제 / 위험 확정 차단.
+      3.  intent=macro_view 면 최신 시황 컨텍스트(per-turn·추가 LLM 0·graceful) 조회 후
+          system(build_prompt+핀 컨텍스트) + 세션 히스토리 + user 로 messages 조립.
+
+    반환: (blocked, client, intent, messages)
+      - blocked=True → 차단 확정. **세션 append 는 이미 완료** — 호출부는 _GUARDRAIL_MESSAGE 를
+        반환(chat)/yield(chat_stream)만 하면 된다. 이때 intent/messages 는 None.
+      - blocked=False → client 는 보장(None 이었으면 생성), messages 로 LLM 호출 진행.
     """
     # 1a. 결정적 키워드(4유형) → LLM 미호출 하드블록(안전 하한선, 재분류 없이).
     if guardrail_label(user_query):
         session.append(user_query, _GUARDRAIL_MESSAGE)
-        return {"text": _GUARDRAIL_MESSAGE, "popups": []}
+        return True, client, None, None
 
     if client is None:
         client = _make_client()
 
-    # 인텐트 1회 분류(risk 체크 + 네비게이션 패널 라우팅 공용). 라벨은 아래 두 용도로만 쓴다.
+    # 인텐트 1회 분류(risk 체크 + 네비게이션 패널 라우팅 공용).
     intent = classify(user_query)
 
     # 1b. ML 이 risk 로 보면 LLM 2차 재분류 — 오탐이면 통과(구제), 위험 확정이면 차단.
     if intent == "risk_guardrail" and _reclassify_risk(client, user_query):
         session.append(user_query, _GUARDRAIL_MESSAGE)
-        return {"text": _GUARDRAIL_MESSAGE, "popups": []}
+        return True, client, intent, None
 
     # 시장 질문이면 최신 시황 요약을 국면 판정과 함께 컨텍스트로 주입(per-turn·추가 LLM 0·graceful).
     outlook_context = build_recent_outlook_context() if intent == "macro_view" else None
@@ -214,6 +228,48 @@ def chat(user_query: str, judgement: dict, session: Session, *, client=None, use
     ]
     messages += session.history()
     messages.append({"role": "user", "content": user_query})
+    return False, client, intent, messages
+
+
+def _tool_feedback(name: str, args: dict, *, user=None, db=None) -> str:
+    """툴 1개의 되먹임 문자열 — 콘텐츠/표시 분기의 단일 출처(chat·stream 공용).
+
+    - 콘텐츠 툴(CONTENT_TOOLS): 서버가 실행해 **실제 텍스트**를 되먹인다(LLM 이 요약). 팝업 아님.
+    - 표시 툴(show_*): `{"ok":True}` 확인 신호만 — 실데이터는 프론트가 조회(환각 차단).
+      뷰 컨텍스트 툴이면 현재 화면 스냅샷도 함께 되먹인다(P2 — _display_tool_result 참고).
+    user/db 는 DB KIS 자격증명 경로(프로덕션 필수) 관통용.
+    """
+    if name in CONTENT_TOOLS:
+        return run_content_tool(name, args, user=user, db=db)
+    return _display_tool_result(name, args, user=user, db=db)
+
+
+def _finalize_popups(popups: list[dict], called_names: list[str], intent: str | None) -> list[dict]:
+    """chat()·chat_stream() 공유 에필로그 — 팝업 후처리 순서의 **단일 출처**(순서가 계약).
+
+    1. `with_screener_panel`: screen_stocks(콘텐츠 툴)가 돈 턴이면 후보 종목 패널(show_screener)을
+       맨 앞에 결정적 보강(추천 텍스트↔화면 일치, LLM 2차 호출 의존 0).
+    2. `merge_intent_panel`: 인텐트 네비게이션 패널(macro/watchlist/balance)을 popups 앞에 주입 —
+       프론트가 popups[0]로 우측 패널을 전환하므로 인텐트가 패널을 권위적으로 결정(LLM 중복 dedup).
+       단 편집 확인 카드(manage_watchlist)·후보 종목 패널(show_screener)이 있으면 주입 억제(merge 예외).
+    """
+    popups = with_screener_panel(popups, called_names)
+    return merge_intent_panel(intent, popups)
+
+
+def chat(user_query: str, judgement: dict, session: Session, *, client=None, user=None, db=None) -> dict:
+    """사용자 질의 → {"text","popups"}. 위험 요청은 2층 차단(결정적 키워드 + ML→LLM 재분류).
+
+    프리앰블(차단·인텐트·메시지 조립)은 `_prepare_turn`, 팝업 후처리는 `_finalize_popups` —
+    chat_stream 과 공유하는 단일 출처. user/db 는 P2 뷰 스냅샷(잔고·시세)이 DB KIS 자격증명을
+    쓰도록 관통한다(패널과 동일 경로).
+    """
+    blocked, client, intent, messages = _prepare_turn(
+        user_query, judgement, session, client=client
+    )
+    if blocked:
+        # 차단 안내는 _prepare_turn 이 세션에 이미 남겼다 — 응답만 반환(LLM 미호출).
+        return {"text": _GUARDRAIL_MESSAGE, "popups": []}
 
     popups: list[dict] = []
     called_names: list[str] = []
@@ -236,13 +292,11 @@ def chat(user_query: str, judgement: dict, session: Session, *, client=None, use
                     args = json.loads(tc.function.arguments or "{}")
                 except (json.JSONDecodeError, TypeError):
                     args = {}
-                if name in CONTENT_TOOLS:
-                    # 콘텐츠 툴: 서버가 실행해 실제 텍스트를 되먹인다(LLM 이 요약). 팝업 아님.
-                    content = run_content_tool(name, args, user=user, db=db)
-                else:
-                    # 표시 툴: "무엇을 띄울지"만 팝업으로 리프팅. 뷰 컨텍스트 툴이면 현재 화면 스냅샷도 되먹임(P2).
+                if name not in CONTENT_TOOLS:
+                    # 표시 툴만 "무엇을 띄울지"를 팝업으로 리프팅(콘텐츠 툴은 요약 소스일 뿐 팝업 아님).
                     popups.append({"name": name, "args": args})
-                    content = _display_tool_result(name, args, user=user, db=db)
+                # 되먹임 문자열은 콘텐츠/표시 공용 분기 헬퍼(_tool_feedback)가 단일 출처.
+                content = _tool_feedback(name, args, user=user, db=db)
                 messages.append(
                     {
                         "role": "tool",
@@ -259,12 +313,8 @@ def chat(user_query: str, judgement: dict, session: Session, *, client=None, use
         text = _FALLBACK_MESSAGE
         popups = []
 
-    # screen_stocks(콘텐츠 툴)가 돈 턴이면 후보 종목 패널을 맨 앞에 보강(추천 텍스트↔화면 일치).
-    popups = with_screener_panel(popups, called_names)
-    # 인텐트가 정하는 네비게이션 패널(macro/watchlist/balance)을 popups 앞에 주입(폴백에도 적용).
-    #   프론트가 popups[0]로 우측 패널을 전환 → 인텐트가 패널을 권위적으로 결정(원 설계). LLM 중복은 dedup.
-    #   단 후보 종목 패널(show_screener)이 있으면 인텐트 잔고 주입을 억제한다(merge 예외).
-    popups = merge_intent_panel(intent, popups)
+    # 공유 에필로그(스크리너 보강 → 인텐트 패널 주입, 폴백에도 적용) — 순서는 _finalize_popups 참고.
+    popups = _finalize_popups(popups, called_names, intent)
     session.append(user_query, text)
     return {"text": text, "popups": popups}
 
@@ -323,33 +373,15 @@ def chat_stream(user_query: str, judgement: dict, session: Session, *, client=No
     """
     yield {"type": "stage", "stage": "analyze"}
 
-    # 1a. 결정적 키워드(4유형) → LLM 미호출 하드블록(안전 하한선).
-    if guardrail_label(user_query):
-        session.append(user_query, _GUARDRAIL_MESSAGE)
+    # 공유 프리앰블(위험 2층 차단·인텐트·메시지 조립) — chat() 과 단일 출처(_prepare_turn).
+    blocked, client, intent, messages = _prepare_turn(
+        user_query, judgement, session, client=client
+    )
+    if blocked:
+        # 차단 안내는 _prepare_turn 이 세션에 이미 남겼다 — 토큰+done 만 흘리고 종료(LLM 미호출).
         yield {"type": "token", "text": _GUARDRAIL_MESSAGE}
         yield {"type": "done", "popups": []}
         return
-
-    if client is None:
-        client = _make_client()
-
-    # 인텐트 1회 분류(risk 체크 + 네비게이션 패널 라우팅 공용).
-    intent = classify(user_query)
-
-    # 1b. ML 이 risk 로 보면 LLM 2차 재분류 — 오탐이면 통과(구제), 위험 확정이면 차단.
-    if intent == "risk_guardrail" and _reclassify_risk(client, user_query):
-        session.append(user_query, _GUARDRAIL_MESSAGE)
-        yield {"type": "token", "text": _GUARDRAIL_MESSAGE}
-        yield {"type": "done", "popups": []}
-        return
-
-    # 시장 질문이면 최신 시황 요약을 국면 판정과 함께 컨텍스트로 주입(per-turn·추가 LLM 0·graceful).
-    outlook_context = build_recent_outlook_context() if intent == "macro_view" else None
-    messages = [
-        {"role": "system", "content": _build_system_prompt(judgement, session, outlook_context)}
-    ]
-    messages += session.history()
-    messages.append({"role": "user", "content": user_query})
 
     popups: list[dict] = []
     full_text = ""
@@ -384,12 +416,8 @@ def chat_stream(user_query: str, judgement: dict, session: Session, *, client=No
             #   done 이벤트도 이 표시 팝업을 싣도록 외부 popups 에 배정한다.
             popups = [c for c in all_calls if c["name"] not in CONTENT_TOOLS]
 
-        # screen_stocks(콘텐츠 툴)가 돈 턴이면 후보 종목 패널을 맨 앞에 보강(추천 텍스트↔화면 일치).
-        popups = with_screener_panel(popups, [c["name"] for c in all_calls])
-        # 인텐트 네비게이션 패널(macro/watchlist/balance)을 popups 앞에 주입 — LLM 도구 호출이 없어도
-        #   패널이 전환되게. 프론트가 popups[0]로 우측 패널을 바꾼다(인텐트 권위적, LLM 중복 dedup).
-        #   단 후보 종목 패널(show_screener)이 있으면 인텐트 잔고 주입을 억제한다(merge 예외).
-        popups = merge_intent_panel(intent, popups)
+        # 공유 에필로그(스크리너 보강 → 인텐트 패널 주입) — LLM 도구 호출이 없어도 패널이 전환되게.
+        popups = _finalize_popups(popups, [c["name"] for c in all_calls], intent)
         if popups:
             yield {"type": "popups", "popups": popups}  # 패널 선행 전환(설명 토큰보다 먼저)
 
@@ -397,10 +425,8 @@ def chat_stream(user_query: str, judgement: dict, session: Session, *, client=No
             # assistant(tool_calls)는 전부 되먹여야 tool 메시지와 짝이 맞는다(call_{i} 일치).
             messages.append(_assistant_tool_calls_message(all_calls))
             for i, c in enumerate(all_calls):
-                if c["name"] in CONTENT_TOOLS:
-                    content = run_content_tool(c["name"], c["args"], user=user, db=db)  # 실제 텍스트 되먹임
-                else:
-                    content = _display_tool_result(c["name"], c["args"], user=user, db=db)  # 확인 신호(+뷰 스냅샷 P2)
+                # 되먹임 문자열은 콘텐츠/표시 공용 분기 헬퍼(_tool_feedback)가 단일 출처.
+                content = _tool_feedback(c["name"], c["args"], user=user, db=db)
                 messages.append(
                     {
                         "role": "tool",
