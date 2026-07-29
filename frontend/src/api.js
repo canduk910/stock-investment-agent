@@ -3,10 +3,48 @@ import { readSSE } from './lib/sse.js'
 import { authFetch } from './auth.js'
 
 // 백엔드(FastAPI) 호출 헬퍼. 엔드포인트 계약은 api/main.py 와 일치해야 한다.
-export async function fetchMacroIndicators() {
-  const res = await fetch('/api/macro/indicators')
-  if (!res.ok) throw new Error(`API ${res.status}`)
+//
+// ── 내부 공용 요청 헬퍼(_request) — 44개 함수가 반복하던 보일러플레이트의 단일 출처 ──
+// (리팩토링 2026-07-29 · characterization 테스트 41건[api.test.js]으로 관측 동작 고정 후 통합)
+// 동작 변형은 옵션 플래그로만 표현한다(기존 각 함수의 에러 shape 를 그대로 보존):
+//   auth:      true 면 authFetch(Bearer 주입 — 로그인 시 본인 스코프/KIS 키), false 면 공개 fetch.
+//   method:    미지정이면 GET(옵션 객체 자체를 생략해 fetch(url) 1-인자 호출 — 기존 호출형 보존).
+//   json:      JSON 바디(지정 시 Content-Type 헤더 + stringify).
+//   errStatus: 실패 Error 에 res.status 를 .status 로 부착(호출부 분기 — 409 상한·403 관리자 등).
+//   errDetail: 실패 시 응답 JSON 의 detail 메시지를 우선 사용(서버 안내문 표면화 — KIS 검증 실패 등).
+//              이 모드는 성공 시에도 '미리 파싱한 JSON'을 반환한다(빈 바디는 {} 로 방어).
+// 성공은 res.json() 반환, 실패는 `API {status}` Error throw — 항상 200 graceful 인 엔드포인트는
+// 여기서 throw 되지 않는다(throw 는 네트워크/HTTP 오류만이라는 각 함수 주석과 일치).
+async function _request(url, { method, json, auth = false, errStatus = false, errDetail = false } = {}) {
+  const doFetch = auth ? authFetch : fetch
+  const opts = {}
+  if (method) opts.method = method
+  if (json !== undefined) {
+    opts.headers = { 'Content-Type': 'application/json' }
+    opts.body = JSON.stringify(json)
+  }
+  // GET(옵션 없음)은 1-인자 호출 — fetch(url). (characterization: toHaveBeenCalledWith(url))
+  const res = Object.keys(opts).length > 0 ? await doFetch(url, opts) : await doFetch(url)
+  if (errDetail) {
+    // 서버 detail 안내문을 쓰는 계열 — 성공/실패 모두 바디를 먼저 파싱(빈 바디는 {} 방어).
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      const err = new Error(data.detail || `API ${res.status}`)
+      if (errStatus) err.status = res.status
+      throw err
+    }
+    return data
+  }
+  if (!res.ok) {
+    const err = new Error(`API ${res.status}`)
+    if (errStatus) err.status = res.status // 호출부 분기용(addErrorMessage 등) — 플래그 켠 계열만
+    throw err
+  }
   return res.json()
+}
+
+export async function fetchMacroIndicators() {
+  return _request('/api/macro/indicators')
 }
 
 // 국면 판정(매크로 엔진, W07). judge_regime 결과 + indicators_used + partial_failure.
@@ -18,20 +56,14 @@ export async function fetchMacroIndicators() {
 //         indicators_used, partial_failure,
 //         indicator_breakdown:[{key,label,value,unit,zone,axis,source,thresholds:{lo,hi}}...]}  // 판정근거 카드
 export async function fetchMacroRegime() {
-  const res = await fetch('/api/macro/regime')
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request('/api/macro/regime')
 }
 
 // 국면 지표 1개의 월단위 히스토리(카드 클릭). GET /api/macro/indicators/{key}/history?months=
 // → {key, label, unit, source, thresholds:{lo,hi}, months, points:[{date,value}], available, note?}.
 // 항상 200 graceful — 불가·실패는 available:false + note(fear_greed 는 best-effort). 불량 key 는 400.
 export async function fetchMacroIndicatorHistory(key, months = 12) {
-  const res = await fetch(
-    `/api/macro/indicators/${encodeURIComponent(key)}/history?months=${months}`,
-  )
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request(`/api/macro/indicators/${encodeURIComponent(key)}/history?months=${months}`)
 }
 
 // 국면 이동 궤적(족적) — 최근 N개월 월별 국면 판정을 엔진으로 재현. GET /api/macro/regime/history?months=
@@ -40,23 +72,17 @@ export async function fetchMacroIndicatorHistory(key, months = 12) {
 // 항상 200 graceful — 불가/실패는 available:false + note(공포탐욕 결측이어도 심리축은 VIX 로 판정).
 // 판정은 코드(엔진 결정적 재현)이지 예측이 아니다.
 export async function fetchRegimeTrajectory(months = 36) {
-  const res = await fetch(`/api/macro/regime/history?months=${months}`)
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request(`/api/macro/regime/history?months=${months}`)
 }
 
 // 사이트 통계 — 방문 1건 기록(앱 로드 시 1회) + 가입자·방문 집계 조회. 공개·집계만(PII 없음).
 // 실패는 호출부(App)가 graceful 처리(칩만 생략).
 export async function recordVisit() {
-  const res = await fetch('/api/visit', { method: 'POST' })
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request('/api/visit', { method: 'POST' })
 }
 
 export async function fetchSiteStats() {
-  const res = await fetch('/api/stats')
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request('/api/stats')
 }
 
 // 종목 종합리포트 번들(W08). GET /api/detail/{ticker}/bundle 을 1회 호출한다(N+1 금지).
@@ -67,9 +93,7 @@ export async function fetchSiteStats() {
 // 여기서 throw 하는 건 네트워크/HTTP 오류(백엔드 미연결 등)뿐이다.
 // authFetch — 로그인 시 토큰을 실어 백엔드가 본인 KIS 키로 조회(미로그인/미등록은 공유 fallback).
 export async function fetchStockBundle(ticker) {
-  const res = await authFetch(`/api/detail/${encodeURIComponent(ticker)}/bundle`)
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request(`/api/detail/${encodeURIComponent(ticker)}/bundle`, { auth: true })
 }
 
 // 선택형 차트 — 일봉/주봉 × 3개월/1년/3년/10년. GET /api/detail/{ticker}/chart?period=&range=
@@ -79,9 +103,7 @@ export async function fetchStockBundle(ticker) {
 // KIS 실패는 항상 200 graceful(빈 candles + partial_failure). throw 는 네트워크/HTTP 오류만.
 export async function fetchStockChart(ticker, period = 'D', range = '1y') {
   const qs = new URLSearchParams({ period, range })
-  const res = await authFetch(`/api/detail/${encodeURIComponent(ticker)}/chart?${qs}`)
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request(`/api/detail/${encodeURIComponent(ticker)}/chart?${qs}`, { auth: true })
 }
 
 // ── 대화기록(대화 목록·생성·메시지·삭제, 유저 스코프) ─────────────────────────
@@ -89,47 +111,34 @@ export async function fetchStockChart(ticker, period = 'D', range = '1y') {
 
 // GET /api/conversations → {conversations:[{id, title, created_at, updated_at}]}(최근 갱신순).
 export async function fetchConversations() {
-  const res = await authFetch('/api/conversations')
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request('/api/conversations', { auth: true })
 }
 
 // POST /api/conversations {title?} → {id, title, created_at, updated_at}. 새 대화 생성.
 export async function createConversation(title) {
-  const res = await authFetch('/api/conversations', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title: title ?? null }),
-  })
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request('/api/conversations', { method: 'POST', json: { title: title ?? null }, auth: true })
 }
 
 // GET /api/conversations/{id}/messages → {conversation, messages:[{role, content, created_at}]}.
 export async function fetchConversationMessages(conversationId) {
-  const res = await authFetch(`/api/conversations/${encodeURIComponent(conversationId)}/messages`)
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request(`/api/conversations/${encodeURIComponent(conversationId)}/messages`, { auth: true })
 }
 
 // PATCH /api/conversations/{id} {title} → {id, title, ...}. 대화 이름 수정(소유권 검증·빈 제목 422).
 export async function renameConversation(conversationId, title) {
-  const res = await authFetch(`/api/conversations/${encodeURIComponent(conversationId)}`, {
+  return _request(`/api/conversations/${encodeURIComponent(conversationId)}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title }),
+    json: { title },
+    auth: true,
   })
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
 }
 
 // DELETE /api/conversations/{id} → {ok}. 대화 삭제(메시지 cascade).
 export async function deleteConversation(conversationId) {
-  const res = await authFetch(`/api/conversations/${encodeURIComponent(conversationId)}`, {
+  return _request(`/api/conversations/${encodeURIComponent(conversationId)}`, {
     method: 'DELETE',
+    auth: true,
   })
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
 }
 
 // 챗봇(W09). POST /api/chat body {session_id, message} → {text, popups:[{name, args}]}.
@@ -137,19 +146,18 @@ export async function deleteConversation(conversationId) {
 // 프론트 컴포넌트가 fetchStockBundle/fetchMacroRegime 로 직접 조회한다(환각 차단, frontend-engineer 원칙2).
 // 세션 히스토리는 서버가 session_id 로 보관(슬라이딩 윈도우) — 프론트는 id+메시지만 보낸다.
 export async function postChat(sessionId, message) {
-  const res = await authFetch('/api/chat', {
+  return _request('/api/chat', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session_id: sessionId, message }),
+    json: { session_id: sessionId, message },
+    auth: true,
   })
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
 }
 
 // 챗봇 SSE 스트리밍(W09). POST /api/chat/stream body {session_id, message} → text/event-stream.
 // 진행 단계(stage)·토큰(token)·팝업(popups)·완료(done) 이벤트를 도착하는 대로 handlers 로 흘린다.
 // POST+body 라 EventSource 대신 fetch 스트림(readChatStream)을 쓴다. 기존 postChat 는 폴백용으로 유지.
 // 팝업 실데이터는 여기가 아니라 프론트 컴포넌트가 직접 조회한다(환각 차단, 논스트림과 동일).
+// SSE 는 res.json() 이 아니라 스트림 리더 소비라 _request 를 쓰지 않는다(전용 경로).
 export async function postChatStream(sessionId, message, handlers = {}) {
   let res
   try {
@@ -177,66 +185,46 @@ export async function postChatStream(sessionId, message, handlers = {}) {
 // sort_by 는 서버가 에코만 하고 실제 정렬은 프론트(watchlistLogic.sortItems)가 재조회 없이 수행.
 export async function fetchWatchlist(sortBy) {
   const qs = sortBy ? `?sort_by=${encodeURIComponent(sortBy)}` : ''
-  const res = await authFetch(`/api/watchlist${qs}`)
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request(`/api/watchlist${qs}`, { auth: true })
 }
 
 // GET /api/watchlist/{ticker} → {ticker, member}. 경량 멤버십(시세 조회 없음) — 추가/제거 버튼 토글용.
 export async function fetchWatchlistMembership(ticker) {
-  const res = await authFetch(`/api/watchlist/${encodeURIComponent(ticker)}`)
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request(`/api/watchlist/${encodeURIComponent(ticker)}`, { auth: true })
 }
 
 // POST /api/watchlist {ticker, stock_name?, reason?, target_price?} → {ok, item}. upsert(중복=갱신, added_at 보존).
 // stock_name 없으면 백엔드가 KIS 마스터/시세로 해석. 상태코드: 불량 ticker=400(api.deps.assert_valid_ticker),
 // 상한 초과=409, target 음수=422(Pydantic ge=0) — err.status 로 실어 addErrorMessage 가 분기 안내.
 export async function addWatchlist({ ticker, stockName, reason, targetPrice, sellTargetPrice } = {}) {
+  // 옵션 키는 값이 있을 때만 바디에 포함(부분 upsert — 미제공 목표가는 기존값 보존, 백엔드 계약).
   const body = { ticker }
   if (stockName != null) body.stock_name = stockName
   if (reason != null) body.reason = reason
   if (targetPrice != null) body.target_price = targetPrice
   if (sellTargetPrice != null) body.sell_target_price = sellTargetPrice
-  const res = await authFetch('/api/watchlist', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) {
-    // status 를 에러에 실어 호출부가 분기(409=상한 초과 등, watchlistLogic.addErrorMessage 로 안내).
-    const err = new Error(`API ${res.status}`)
-    err.status = res.status
-    throw err
-  }
-  return res.json()
+  return _request('/api/watchlist', { method: 'POST', json: body, auth: true, errStatus: true })
 }
 
-// status 를 err.status 에 실어 던진다 — 호출부(WatchlistView)가 addErrorMessage(status)로 분기 안내(IMP-10).
-function _throwWithStatus(res) {
-  const err = new Error(`API ${res.status}`)
-  err.status = res.status
-  throw err
-}
-
-// DELETE /api/watchlist/{ticker} → {ok}.
+// DELETE /api/watchlist/{ticker} → {ok}. err.status 부착(IMP-10 — addErrorMessage 분기).
 export async function removeWatchlist(ticker) {
-  const res = await authFetch(`/api/watchlist/${encodeURIComponent(ticker)}`, { method: 'DELETE' })
-  if (!res.ok) _throwWithStatus(res)
-  return res.json()
+  return _request(`/api/watchlist/${encodeURIComponent(ticker)}`, {
+    method: 'DELETE',
+    auth: true,
+    errStatus: true,
+  })
 }
 
 // PATCH /api/watchlist/{ticker} {target_price?, sell_target_price?} → {ok, item}.
 // targets 객체에 있는 키만 전송(백엔드가 model_fields_set 로 부분 갱신) — 매수/매도를 독립 설정.
 // 값 null 은 '해제', 키 부재는 '변경 안 함'. 매수만: {target_price}, 매도만: {sell_target_price}.
 export async function updateWatchlistTarget(ticker, targets) {
-  const res = await authFetch(`/api/watchlist/${encodeURIComponent(ticker)}`, {
+  return _request(`/api/watchlist/${encodeURIComponent(ticker)}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(targets || {}),
+    json: targets || {},
+    auth: true,
+    errStatus: true,
   })
-  if (!res.ok) _throwWithStatus(res)
-  return res.json()
 }
 
 // ── AI 종합 리포트(W10 P2) ──────────────────────────────────────────────────
@@ -247,17 +235,13 @@ export async function updateWatchlistTarget(ticker, targets) {
 //   면책고지}|null, validation_failed, quant_summary, message, regime_at_creation, created_at}.
 // 검증 실패 시 report=null + validation_failed=true + message(정량요약은 quant_summary 로 보존). 항상 200.
 export async function generateStockReport(ticker) {
-  const res = await authFetch(`/api/detail/${encodeURIComponent(ticker)}/report`, { method: 'POST' })
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request(`/api/detail/${encodeURIComponent(ticker)}/report`, { method: 'POST', auth: true })
 }
 
 // GET /api/detail/{ticker}/report/history → {ticker, history:[{created_at, regime_at_creation, report_json}]}.
 // created_at 내림차순(최신 우선). 빈 종목은 history:[](과거 대비 비교 데모).
 export async function fetchReportHistory(ticker) {
-  const res = await authFetch(`/api/detail/${encodeURIComponent(ticker)}/report/history`)
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request(`/api/detail/${encodeURIComponent(ticker)}/report/history`, { auth: true })
 }
 
 // ── 잔고(포트폴리오, UX 개편) ────────────────────────────────────────────────
@@ -268,45 +252,37 @@ export async function fetchReportHistory(ticker) {
 // holdings=null·summary=null·partial_failure:['balance'](항상 200) → 컴포넌트가 graceful 안내.
 // 여기서 throw 하는 건 네트워크/HTTP 오류(백엔드 미연결 등)뿐이다.
 export async function fetchBalance() {
-  const res = await authFetch('/api/balance')  // 로그인 시 본인 계좌, 아니면 공유 데모 계좌
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  // 로그인 시 본인 계좌, 아니면 공유 데모 계좌
+  return _request('/api/balance', { auth: true })
 }
 
 // 대순환 후보 스크리너 — 시총상위 유니버스를 대순환 단계로 스캔. market: all/kospi/kosdaq/kospi200.
 export async function fetchScreener(market = 'all', size = 30) {
-  const res = await authFetch(`/api/screener?market=${encodeURIComponent(market)}&size=${size}`)
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request(`/api/screener?market=${encodeURIComponent(market)}&size=${size}`, { auth: true })
 }
 
 // ── 유저별 KIS 자격증명(설정) ────────────────────────────────────────────────
 // GET /api/me/kis-credentials → {registered, source:'user'|'shared'|'none', app_key_masked, account_masked, env}.
 // 마스킹 상태만(원문 미반환). 인증 필수.
 export async function fetchKisCredentialsStatus() {
-  const res = await authFetch('/api/me/kis-credentials')
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request('/api/me/kis-credentials', { auth: true })
 }
 
 // POST /api/me/kis-credentials {app_key, app_secret, account_no?, acnt_prdt_cd?, env?} → {ok, status}.
-// 서버가 실제 KIS 토큰 발급으로 검증 후 암호화 저장. 검증 실패 400(키 값은 서버·응답에 미노출).
+// 서버가 실제 KIS 토큰 발급으로 검증 후 암호화 저장. 검증 실패 400(키 값은 서버·응답에 미노출) —
+// errDetail 로 서버 detail 안내문(실패 사유)을 그대로 표면화한다.
 export async function setKisCredentials(body) {
-  const res = await authFetch('/api/me/kis-credentials', {
+  return _request('/api/me/kis-credentials', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    json: body,
+    auth: true,
+    errDetail: true,
   })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data.detail || `API ${res.status}`)
-  return data
 }
 
 // DELETE /api/me/kis-credentials → {ok, status}. 본인 키 삭제(이후 공유 fallback).
 export async function deleteKisCredentials() {
-  const res = await authFetch('/api/me/kis-credentials', { method: 'DELETE' })
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request('/api/me/kis-credentials', { method: 'DELETE', auth: true })
 }
 
 // ── 시황(market outlook) 요약 — 시장 국면 페이지 ─────────────────────────────
@@ -315,24 +291,18 @@ export async function deleteKisCredentials() {
 // GET /api/macro/market-outlook → {reports:[{report_id, broker, title, date, pdf_url,
 //   summary:{증권사,제목,시장전망,요약,핵심요지[],리스크요인[],면책고지}, created_at}]}. 없으면 reports:[].
 export async function fetchMarketOutlook() {
-  const res = await fetch('/api/macro/market-outlook')
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request('/api/macro/market-outlook')
 }
 
 // POST /api/macro/market-outlook/summary → 최근 5개 시황 종합 '금일의 요약'(10줄). 온디맨드·항상 200.
 export async function fetchMarketOutlookSummary() {
-  const res = await fetch('/api/macro/market-outlook/summary', { method: 'POST' })
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request('/api/macro/market-outlook/summary', { method: 'POST' })
 }
 
 // POST /api/macro/market-outlook/fetch?limit=N → {fetched, new, skipped, failed}. 네이버 최신 시황
 // 수집·요약(서버, idempotent). 항상 200. 완료 후 fetchMarketOutlook 재조회.
 export async function fetchNaverMarketOutlook(limit = 15) {
-  const res = await fetch(`/api/macro/market-outlook/fetch?limit=${limit}`, { method: 'POST' })
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request(`/api/macro/market-outlook/fetch?limit=${limit}`, { method: 'POST' })
 }
 
 // ── 애널리스트 리포트(네이버 수집 · 종목별 요약 · 챗 상담 연계) ────────────────
@@ -343,9 +313,7 @@ export async function fetchNaverMarketOutlook(limit = 15) {
 //   title, date, pdf_url, summary:{증권사,종목,목표주가,투자의견,요약,핵심요지[],리스크요인[],면책고지},
 //   created_at}]}. 저장된 게 없으면 reports:[]. throw 는 네트워크/HTTP 오류만.
 export async function fetchAnalystReports(ticker) {
-  const res = await fetch(`/api/detail/${encodeURIComponent(ticker)}/analyst-reports`)
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request(`/api/detail/${encodeURIComponent(ticker)}/analyst-reports`)
 }
 
 // POST /api/detail/{ticker}/analyst-reports/summary → {ticker, summary|null, validation_failed,
@@ -353,24 +321,20 @@ export async function fetchAnalystReports(ticker) {
 //   PDF 재다운로드 없음). summary={종목,의견분포,목표주가범위,종합요약[],면책고지}. 0개·검증실패는
 //   validation_failed=true(항상 200). throw 는 네트워크/HTTP 오류만.
 export async function fetchAnalystReportsSummary(ticker) {
-  const res = await fetch(
-    `/api/detail/${encodeURIComponent(ticker)}/analyst-reports/summary`,
-    { method: 'POST' },
-  )
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request(`/api/detail/${encodeURIComponent(ticker)}/analyst-reports/summary`, {
+    method: 'POST',
+  })
 }
 
 // POST /api/reports/fetch?limit=N → {fetched, new, skipped, failed}. 네이버 최신 리포트를 서버가
 // 수집·요약·저장(idempotent). 항상 200(수집/요약 실패는 graceful 카운트). 완료 후 fetchAnalystReports 재조회.
 export async function fetchNaverReports(limit = 20) {
-  const res = await fetch(`/api/reports/fetch?limit=${limit}`, { method: 'POST' })
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request(`/api/reports/fetch?limit=${limit}`, { method: 'POST' })
 }
 
 // SSE 진행 스트림 — 이 종목 리포트 수집·요약. onEvent 로 {stage|found|progress|done|error} 이벤트 전달
 // (실시간 체크리스트). 스트림 끊김/미지원 시 onError → 컴포넌트가 non-stream fetchNaverStockReports 폴백.
+// SSE 는 스트림 리더 소비(res.json() 아님)라 _request 미사용(전용 경로).
 export async function streamFetchStockReports(ticker, { onEvent, onError, limit = 10 } = {}) {
   try {
     const res = await fetch(
@@ -399,116 +363,83 @@ export async function streamFetchMarketOutlook({ onEvent, onError, limit = 15 } 
 // **이 종목**의 네이버 리포트만 수집·요약(itemCode 필터, 전체 최신 피드 아님). 항상 200(graceful).
 // 종목 상세 "이 종목 리포트 가져오기". 완료 후 fetchAnalystReports(ticker) 재조회. (SSE 폴백용.)
 export async function fetchNaverStockReports(ticker, limit = 10) {
-  const res = await fetch(
-    `/api/detail/${encodeURIComponent(ticker)}/analyst-reports/fetch?limit=${limit}`,
-    { method: 'POST' },
-  )
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
+  return _request(`/api/detail/${encodeURIComponent(ticker)}/analyst-reports/fetch?limit=${limit}`, {
+    method: 'POST',
+  })
 }
 
 // POST /api/chat/report-context {session_id, ticker, report_id} → {ok, set, broker?}.
 // 저장된 리포트 요약을 세션 상담 컨텍스트로 핀 고정(이후 후속 질문이 그 리포트 근거로 답변).
 // **요약 본문은 보내지 않는다** — 서버가 store 에서 조회(환각·조작 차단). ticker/reportId 가 없으면 해제.
 export async function setReportContext(sessionId, ticker, reportId) {
-  const res = await fetch('/api/chat/report-context', {
+  return _request('/api/chat/report-context', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session_id: sessionId, ticker: ticker ?? null, report_id: reportId ?? null }),
+    json: { session_id: sessionId, ticker: ticker ?? null, report_id: reportId ?? null },
   })
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
 }
 
 // 시황(매크로) 리포트로 상담 — 애널리스트와 동일 세션 핀 슬롯. 시황은 시장 전체라 ticker 없음.
 export async function setMarketOutlookContext(sessionId, reportId) {
-  const res = await fetch('/api/chat/market-outlook-context', {
+  return _request('/api/chat/market-outlook-context', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session_id: sessionId, report_id: reportId ?? null }),
+    json: { session_id: sessionId, report_id: reportId ?? null },
   })
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
 }
 
 // POST /api/chat/context {session_id, kind, args} → {ok, set, kind?}. 사용자가 현재 보고 있는 화면
 // (잔고·관심종목·종목상세)을 세션 핀 컨텍스트로 고정 → 이후 챗 질문이 그 데이터를 근거로 답변.
 // **화면 데이터는 보내지 않는다** — 서버가 kind/args 로 재조회(환각·조작 차단). 비데이터 kind/조회불가는 해제.
 export async function setViewContext(sessionId, kind, args = {}) {
-  const res = await fetch('/api/chat/context', {
+  return _request('/api/chat/context', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session_id: sessionId, kind: kind ?? null, args: args ?? {} }),
+    json: { session_id: sessionId, kind: kind ?? null, args: args ?? {} },
   })
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  return res.json()
 }
 
 // 종목 자동완성(W08). GET /api/stocks/search?q=&limit= → [{ticker, name, market}].
 // KIS 마스터(코스피+코스닥 전 종목) 기반. 실패 시 빈 배열(프론트는 코드 직접 입력 폴백).
 export async function searchStocks(query, limit = 8) {
-  const res = await fetch(
-    `/api/stocks/search?q=${encodeURIComponent(query)}&limit=${limit}`,
-  )
-  if (!res.ok) throw new Error(`API ${res.status}`)
-  const data = await res.json()
+  const data = await _request(`/api/stocks/search?q=${encodeURIComponent(query)}&limit=${limit}`)
   return data.results ?? []
 }
 
 // ── 관리자 — 유저 관리·이용 통계·질문 한도 제어 ────────────────────────────────
 // 전부 authFetch(Bearer) + get_admin_user 게이트(비관리자 403). 매매·자격증명 원문 무관(조회/제어만).
+// 403 분기(AdminPanel 안내)를 위해 전 함수 errStatus, 서버 안내문(자기 자신 해제/삭제 400 등)이 있는
+// PATCH/DELETE 는 errDetail 도 켠다.
 
 // GET /api/admin/users → {users:[{id,email,is_admin,daily_limit,used_today,remaining,total_questions,created_at}]}.
 export async function fetchAdminUsers() {
-  const res = await authFetch('/api/admin/users')
-  if (!res.ok) {
-    const err = new Error(`API ${res.status}`)
-    err.status = res.status
-    throw err
-  }
-  const data = await res.json()
+  const data = await _request('/api/admin/users', { auth: true, errStatus: true })
   return data.users ?? []
 }
 
 // PATCH /api/admin/users/{id} {is_admin?, daily_limit?} → 갱신된 유저. 자기 자신 관리자해제=400.
 export async function updateAdminUser(userId, patch) {
-  const res = await authFetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+  return _request(`/api/admin/users/${encodeURIComponent(userId)}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(patch),
+    json: patch,
+    auth: true,
+    errStatus: true,
+    errDetail: true,
   })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    const err = new Error(data.detail || `API ${res.status}`)
-    err.status = res.status
-    throw err
-  }
-  return data
 }
 
 // POST /api/admin/users/{id}/reset-usage → 갱신된 유저(오늘 사용량 0, 누적 통계 보존).
 export async function resetAdminUserUsage(userId) {
-  const res = await authFetch(`/api/admin/users/${encodeURIComponent(userId)}/reset-usage`, {
+  return _request(`/api/admin/users/${encodeURIComponent(userId)}/reset-usage`, {
     method: 'POST',
+    auth: true,
+    errStatus: true,
   })
-  if (!res.ok) {
-    const err = new Error(`API ${res.status}`)
-    err.status = res.status
-    throw err
-  }
-  return res.json()
 }
 
 // DELETE /api/admin/users/{id} → {ok, deleted}. 유저 + 스코프 데이터 삭제. 자기 자신 삭제=400.
 export async function deleteAdminUser(userId) {
-  const res = await authFetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+  return _request(`/api/admin/users/${encodeURIComponent(userId)}`, {
     method: 'DELETE',
+    auth: true,
+    errStatus: true,
+    errDetail: true,
   })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    const err = new Error(data.detail || `API ${res.status}`)
-    err.status = res.status
-    throw err
-  }
-  return data
 }
