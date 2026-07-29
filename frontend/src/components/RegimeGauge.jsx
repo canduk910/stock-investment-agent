@@ -18,7 +18,7 @@ const CONFIDENCE_META = {
   low: { label: '낮음', className: 'confidence--low' },
 }
 
-// 엔진 내부 지표 키 → 사람이 읽는 라벨(누락 안내용). indicatorMeta 와 별개(엔진 키 체계).
+// 엔진 내부 지표 키 → 사람이 읽는 라벨(누락 안내용). 엔진 키 체계 전용(백엔드 indicator_meta 와 별개).
 const ENGINE_KEY_LABEL = {
   yield_spread: '장단기 금리차',
   hy_spread: 'HY 신용스프레드',

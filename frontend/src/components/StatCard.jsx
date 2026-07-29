@@ -1,5 +1,5 @@
 // 순수 표현 카드 — 값·판정은 상위(백엔드 summary)가 확정하고, 여기선 표시만 한다.
-// 기존 .card* CSS 를 재사용한다(IndicatorCard 는 매크로 전용이라 건드리지 않음).
+// 기존 .card* CSS 를 재사용한다(매크로 카드 MacroIndicatorCards 와 스타일만 공유).
 // props: label, value, unit, badge({text}), sub, subDir('up'|'down'|'flat'), meta, muted.
 export default function StatCard({ label, value, unit, badge, sub, subDir, meta, muted }) {
   const subClass = subDir === 'up' ? 'up' : subDir === 'down' ? 'down' : ''
