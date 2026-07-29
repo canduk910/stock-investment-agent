@@ -24,27 +24,34 @@ function failed(bundle, section) {
   return sectionFailed(bundle.partial_failure, section) || bundle[section] == null
 }
 
+// 종목 종합리포트 뷰 — 번들(GET /api/detail/{ticker}) 한 덩어리를 섹션별로 렌더.
+// props: bundle(번들 데이터·부모가 조회), sessionId·onConsult(애널리스트 상담 연계 — 하위로 전달).
+// 부분 실패 보존: 섹션마다 failed() 로 판정해 실패 섹션만 "일시 조회 불가" 카드, 나머지는 정상 렌더.
+// 값·판정은 백엔드 summary 확정, 여기선 표시만. 등락/손익 방향색은 format.js 토큰(글리프 병기).
 export default function StockReportView({ bundle, sessionId, onConsult }) {
   if (!bundle) return null
 
   const { ticker, basic, valuation, financials, chart, summary } = bundle
+  // 지표 주기 설정(MA/RSI 기간). 번들에 없으면 기본값(20/14)으로 라벨만 안전 표시.
   const indicatorConfig = bundle.indicator_config ?? { ma_period: 20, rsi_period: 14 }
-  const sampleYears = summary?.sample_years
+  const sampleYears = summary?.sample_years // CAGR 계산에 쓴 표본 연수(라벨용)
   const yearsLabel = sampleYears ? `${sampleYears}년` : 'N년'
 
+  // 섹션별 실패 플래그 — partial_failure 또는 null. 차트는 캔들 배열이 실제 있어야 성공으로 본다.
   const valuationFailed = failed(bundle, 'valuation')
   const summaryFailed = failed(bundle, 'summary')
   const chartFailed = failed(bundle, 'chart') || !(chart?.candles?.length > 0)
   const financialsFailed = failed(bundle, 'financials')
+  // 밸류에이션 라벨은 avg_per 라이브 검증 게이트를 통과해야만 표시(미검증 시 '준비 중' — 임의 라벨 금지).
   const valuationReady = !summaryFailed && isValuationReady(summary)
 
   // 예측 PER(리서치 컨센서스) — 후행 PER 착시 보완. forward_valuation 은 null(조회실패)/빈배열(미대상) 가능.
-  const fwd = bundle.forward_valuation
-  const fwdPers = (fwd?.forward_per ?? []).filter((x) => x.forward_per != null)
+  const fwd = bundle.forward_valuation // null=조회실패, {forward_per:[]}=리서치 미대상 가능
+  const fwdPers = (fwd?.forward_per ?? []).filter((x) => x.forward_per != null) // 유효 예측 PER 만
   const fwdReady = fwdPers.length > 0
   const latestFwd = fwdReady ? fwdPers[fwdPers.length - 1] : null // 가장 먼 추정연도(예 2027E)
   const estShort = (p) => (p ? `${String(p).slice(2, 4)}E` : '') // "202612" → "26E"
-  // PER 추이: 직전년도(확정 실적) PER → 예측 PER(2026E·2027E). 모두 현재가 기준(동일 잣대).
+  // PER 추이: 직전년도(확정 실적) PER → 예측 PER(2026E·2027E). 모두 현재가 기준(동일 잣대)이라 비교 가능.
   const perTrend = []
   if (fwd?.prev_year_per != null) {
     const y = fwd.prev_year_period ? String(fwd.prev_year_period).slice(0, 4) : '직전'

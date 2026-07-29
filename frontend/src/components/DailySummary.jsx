@@ -1,8 +1,11 @@
 // 금일의 요약 — 최근 시황 리포트를 종합·중복제거해 최대 10줄 핵심메시지로. 시장국면 대시보드 **최상단**.
 //   시각 강조 카드(주황 강조 소프트·📌). 종합=여러 시황 리포트 인용·면책(에이전트 시장 판정 아님).
 //   **controlled/표시형** — 생성 상태·데이터는 상위(MacroDashboard)가 소유(자동 생성·하루 1회 재사용).
+//
+// props: state(idle|loading|done|error·생성 진행), data(종합요약 응답), errMsg(실패 사유), onGenerate(재생성 트리거).
+//   이 컴포넌트는 fetch 하지 않는다 — 상위가 하루 1회 캐시로 생성 비용을 제어하고 결과만 내려준다.
 export default function DailySummary({ state = 'idle', data = null, errMsg = null, onGenerate }) {
-  const s = data?.summary ?? {}
+  const s = data?.summary ?? {} // 구조화 요약(한글 키). 없으면 빈 객체로 graceful.
   return (
     <div className="daily-summary">
       <div className="daily-summary__head">
@@ -22,6 +25,7 @@ export default function DailySummary({ state = 'idle', data = null, errMsg = nul
           {state === 'loading' ? '생성 중…' : state === 'done' ? '↻ 다시 생성' : '금일의 요약 생성'}
         </button>
       </div>
+      {/* 최초 생성 중에만 스피너(이미 data 있으면 재생성 중에도 이전 요약 유지 — 깜빡임 방지) */}
       {state === 'loading' && !data ? (
         <p className="daily-summary__loading" role="status">
           최신 시황을 종합하는 중…

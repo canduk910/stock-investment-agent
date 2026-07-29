@@ -21,6 +21,8 @@ const SUGGESTIONS = [
   '카카오 목표가 4만원으로 바꿔줘',
 ]
 
+// props: sessionId(App 소유·현재 대화 id) · onShowPanel(우측 패널 전환) · consult/onEndConsult(리포트 상담 배너)
+//   · conversations/conversationId + 대화 CRUD 콜백(new/select/rename/delete) · onTurnComplete(턴 저장 후 목록 재조회).
 export default function ChatPanel({
   sessionId: sessionIdProp,
   onShowPanel,
@@ -34,7 +36,7 @@ export default function ChatPanel({
   onDeleteConversation,
   onTurnComplete,
 }) {
-  // 세션 id 는 App 이 소유(= 현재 대화 id). prop 미전달 시(구 테스트) 자체 생성 폴백.
+  // 세션 id 는 App 이 소유(= 현재 대화 id). prop 미전달 시(구 테스트) crypto.randomUUID 로 자체 생성 폴백.
   const sessionRef = useRef(null)
   if (sessionRef.current === null) {
     sessionRef.current =
@@ -43,29 +45,33 @@ export default function ChatPanel({
         ? crypto.randomUUID()
         : `sess-${Date.now()}-${Math.random().toString(16).slice(2)}`)
   }
+  // 매 렌더 prop 우선(App 이 대화 전환 시 즉시 반영), 없을 때만 폴백 유지.
   const sessionId = { current: sessionIdProp ?? sessionRef.current }
 
-  const [messages, setMessages] = useState([])
-  const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const lastQueryRef = useRef(null)
-  const listRef = useRef(null)
-  const [editingTitle, setEditingTitle] = useState(false) // 대화 이름 인라인 편집
-  const [draftTitle, setDraftTitle] = useState('')
+  const [messages, setMessages] = useState([]) // 말풍선 목록({role, text, popups, streaming?, stage?})
+  const [input, setInput] = useState('') // 입력창 controlled 값
+  const [loading, setLoading] = useState(false) // 응답 진행 중(입력·전송 비활성)
+  const [error, setError] = useState(null) // 스트림·폴백 모두 실패 시 배너(재시도 제공)
+  const lastQueryRef = useRef(null) // 마지막 질의(재시도용)
+  const listRef = useRef(null) // 메시지 리스트 DOM(자동 하단 스크롤)
+  const [editingTitle, setEditingTitle] = useState(false) // 대화 이름 인라인 편집 진입
+  const [draftTitle, setDraftTitle] = useState('') // 이름 편집 초안
   const [confirmDelete, setConfirmDelete] = useState(false) // 대화 삭제 2단계 확인
 
-  const activeConv = conversations.find((c) => c.id === conversationId) || null
+  const activeConv = conversations.find((c) => c.id === conversationId) || null // 현재 대화 객체(제목 편집 초기값)
 
+  // 이름 편집 시작 — 현재 제목을 초안으로 채우고 편집 모드 진입.
   function startEditTitle() {
     setDraftTitle(activeConv?.title || '')
     setEditingTitle(true)
   }
+  // 저장 — 빈 제목은 무시(공백만이면 저장 안 함). 상위 콜백으로 서버 반영.
   function saveTitle() {
     const t = draftTitle.trim()
     if (t && conversationId != null) onRenameConversation?.(conversationId, t)
     setEditingTitle(false)
   }
+  // 삭제 확정 — 상위가 서버 삭제·목록 정리·다음 대화 전환을 담당.
   function confirmDeleteConv() {
     if (conversationId != null) onDeleteConversation?.(conversationId)
     setConfirmDelete(false)
@@ -197,13 +203,13 @@ export default function ChatPanel({
     })
   }
 
-  // 사용자 질의 전송 공통 경로 — 폼 제출·제안 칩이 공유. 사용자 버블 push 후 runChat.
+  // 사용자 질의 전송 공통 경로 — 폼 제출·제안 칩이 공유. 빈 질의·응답 중이면 무시. 사용자 버블 push 후 runChat.
   function submitQuery(q) {
     const query = q.trim()
     if (!query || loading) return
     setMessages((m) => [...m, { role: 'user', text: query }])
     setInput('')
-    lastQueryRef.current = query
+    lastQueryRef.current = query // 재시도 대비 저장
     runChat(query)
   }
 
@@ -212,6 +218,7 @@ export default function ChatPanel({
     submitQuery(input)
   }
 
+  // 재시도 — 마지막 질의를 다시 실행(사용자 버블 재추가 없이 runChat 만).
   function retry() {
     if (lastQueryRef.current && !loading) runChat(lastQueryRef.current)
   }

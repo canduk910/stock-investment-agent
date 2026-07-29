@@ -49,21 +49,21 @@ const ACTIVE_CELL = {
 }
 
 export default function RegimeTrajectory({ live = null }) {
-  const [months, setMonths] = useState(24)
+  const [months, setMonths] = useState(24) // 조회 기간(기본 2년) — 변경 시 재조회
   const { data, loading, error, reload } = useFetch(() => fetchRegimeTrajectory(months), [months])
 
-  const raw = data?.points ?? []
-  const fearGreedMissing = (data?.partial_failure ?? []).includes('fear_greed')
+  const raw = data?.points ?? [] // 백엔드가 범위별 표본화한 과거 국면 점(엔진 재현·결정적)
+  const fearGreedMissing = (data?.partial_failure ?? []).includes('fear_greed') // 심리축 결측(VIX 단독 안내)
 
-  const hasLive = !!live
-  const livePos = hasLive ? regimeMarkerPos(live.cs, live.ss) : null
-  const activeCell = hasLive ? ACTIVE_CELL[live.regime] : null
+  const hasLive = !!live // 라이브 판정 주입 여부(RegimeGauge 에서 옴)
+  const livePos = hasLive ? regimeMarkerPos(live.cs, live.ss) : null // 라이브 마커 좌표(SSOT — 경로와 공유)
+  const activeCell = hasLive ? ACTIVE_CELL[live.regime] : null // 현재 국면 활성 셀(음영) 좌표
   // 표본별 개별 노드 궤적 — 같은 칸 반복은 오프셋, 가장 최근 표본이 라이브 칸이면 라이브가 대표(defer).
   const { visible, pathD, deferLast } = buildSampledTrajectory(raw, livePos)
   // 라이브 없으면 마지막 표본을 '현재'로 강조(하위호환) — 있으면 라이브 마커가 현재.
   const legacyCurrent = !hasLive && visible.length > 0 ? visible[visible.length - 1] : null
-  const lastVisible = visible.length > 0 ? visible[visible.length - 1] : null
-  const pathAvailable = visible.length > 0
+  const lastVisible = visible.length > 0 ? visible[visible.length - 1] : null // 브릿지 시작점(최근 확정 표본)
+  const pathAvailable = visible.length > 0 // 표시할 과거 경로 존재 여부
   // 사분면은 라이브가 있으면(현재 위치) 항상 그린다. 라이브 없으면 표시 노드가 있어야(기존).
   const showQuadrant = hasLive || (data?.available && pathAvailable)
   // 최근 표본이 라이브와 다른 칸(defer 아님)이면 그 점→라이브 파선 브릿지로 '확정월→이번달' 연결.
@@ -94,6 +94,7 @@ export default function RegimeTrajectory({ live = null }) {
         </div>
       </div>
 
+      {/* 사분면을 못 그릴 때(라이브도 없고 과거 경로도 없음)만 상태 표시로 대체 — 로딩/에러/빈결과 순 */}
       {!showQuadrant ? (
         loading ? (
           <div className="rtraj__state">국면 궤적 불러오는 중…</div>

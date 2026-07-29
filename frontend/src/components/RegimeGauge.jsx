@@ -3,6 +3,11 @@ import { useFetch } from '../lib/useFetch.js'
 import MacroIndicatorCards from './MacroIndicatorCards.jsx'
 import RegimeTrajectory from './RegimeTrajectory.jsx'
 
+// 시장 국면 판정 게이지 — /api/macro/regime 자체 조회(환각 차단). 국면·현금비중·신뢰도는 매크로 엔진(코드)이
+//   결정하고, 여기선 표시만(LLM 미개입). 통합 사분면(RegimeTrajectory)에 라이브 판정을 props 로 주입해
+//   현재 위치 + 최근 이동 경로를 한 매트릭스에 담는다. props 없음(자체 조회형).
+// 색: 강조=주황(--c-emph, 현금비중·현재 마커), 위험=남색 손실경고 배너·VIX 패닉 칩. 방향색·hex 금지.
+
 // 국면별 짧은 해설(결정적·정적, LLM 아님) — 축 조합의 의미를 한 줄로.
 const REGIME_DESC = {
   회복: '펀더멘털 개선 + 시장 공포 — 저가 매수 초입',
@@ -29,6 +34,7 @@ const ENGINE_KEY_LABEL = {
 export default function RegimeGauge() {
   const { data, loading, error, reload } = useFetch(fetchMacroRegime)
 
+  // 로딩/에러/무데이터 순으로 조기 반환(무한 스피너 금지 — 에러 시 재시도 버튼 제공).
   if (loading) {
     return (
       <section className="gauge gauge--state">
@@ -52,20 +58,21 @@ export default function RegimeGauge() {
 
   if (!data) return null
 
+  // 엔진 판정 결과 구조분해 — 전부 백엔드 산출값(프론트는 재판정하지 않는다).
   const {
-    regime,
-    recommended_cash_ratio,
-    confidence,
-    axes = {},
-    indicator_breakdown = [],
-    vix_panic = false,
-    missing_indicators = [],
+    regime, // 국면명(회복/확장/과열/수축)
+    recommended_cash_ratio, // 역발상 권장 현금비중(REGIME_PARAMS 단일 출처)
+    confidence, // 판정 신뢰도(high/medium/low)
+    axes = {}, // 경기·심리 2축 점수/부호
+    indicator_breakdown = [], // 판정 근거 4지표(값+구간)
+    vix_panic = false, // VIX 패닉 여부(극단 변동성)
+    missing_indicators = [], // 결측 지표(남은 지표로만 판정했음 안내용)
   } = data
 
-  const conf = CONFIDENCE_META[confidence] ?? CONFIDENCE_META.low
-  const cycleSign = axes?.cycle?.sign ?? '중립'
-  const sentimentSign = axes?.sentiment?.sign ?? '중립'
-  const missingLabels = missing_indicators.map((k) => ENGINE_KEY_LABEL[k] ?? k)
+  const conf = CONFIDENCE_META[confidence] ?? CONFIDENCE_META.low // 미지값은 낮음으로 폴백
+  const cycleSign = axes?.cycle?.sign ?? '중립' // 경기축 부호(readout 표시)
+  const sentimentSign = axes?.sentiment?.sign ?? '중립' // 심리축 부호
+  const missingLabels = missing_indicators.map((k) => ENGINE_KEY_LABEL[k] ?? k) // 엔진 키 → 한글 라벨
 
   // 라이브 현재 판정을 통합 사분면(RegimeTrajectory)에 넘길 축 점수. 좌표 변환은 궤적 컴포넌트가
   // regimeMarkerPos(단일 출처)로 수행 — 게이지가 별도 마커를 그리지 않는다(정적 사분면 흡수).

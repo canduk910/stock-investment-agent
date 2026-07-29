@@ -8,10 +8,12 @@ import { fetchStockChart } from '../api.js'
 // pin**(부모가 유지) — 차트 탐색이 정량 판정을 바꾸지 않게. 스테이지 리본은 표시 시계열로 재계산됨.
 // 초기·로딩·에러 시엔 부모가 준 번들 차트(fallback)를 그대로 보여 빈 화면·깜빡임을 막는다.
 
+// 봉 주기 선택지 — KIS FID_PERIOD_DIV_CODE(D/W)와 매핑. 라벨은 표시용.
 const PERIODS = [
   { key: 'D', label: '일봉' },
   { key: 'W', label: '주봉' },
 ]
+// 조회 기간 선택지 — 백엔드 _CHART_RANGE_DAYS 와 SSOT. 10년은 date-window 페이지네이션으로 조회.
 const RANGES = [
   { key: '3m', label: '3개월' },
   { key: '1y', label: '1년' },
@@ -19,6 +21,8 @@ const RANGES = [
   { key: '10y', label: '10년' },
 ]
 
+// props: ticker + fallback*(부모가 번들[일봉]에서 준 초기 차트/리본/현재단계). indicatorConfig(MA/RSI),
+//   valuation(52주·현재가선). fallback 은 조회 전·재조회 중·실패 시 표시 소스로 쓴다(빈 화면 방지).
 export default function ChartSection({
   ticker,
   fallbackCandles,
@@ -27,8 +31,8 @@ export default function ChartSection({
   indicatorConfig,
   valuation,
 }) {
-  const [period, setPeriod] = useState('D')
-  const [range, setRange] = useState('1y')
+  const [period, setPeriod] = useState('D') // 봉 주기(기본 일봉)
+  const [range, setRange] = useState('1y') // 조회 기간(기본 1년)
 
   // 선택 변경 시 재조회. useFetch 는 재조회 중 이전 data 를 유지 → 스왑 전까지 이전 차트가 남아 부드럽다.
   const { data, loading, error } = useFetch(
@@ -91,6 +95,8 @@ export default function ChartSection({
         ) : null}
       </div>
 
+      {/* 캔들 렌더 — 표시 시계열(displayed) 기준으로 3MA·스테이지 리본을 그린다(주기/기간 따라감).
+          단, 정량 요약·GrandCyclePanel 은 부모가 번들[일봉]에 pin(여기서 안 바꿈). */}
       <KLineChartPanel
         candles={displayed.candles}
         indicatorConfig={indicatorConfig}

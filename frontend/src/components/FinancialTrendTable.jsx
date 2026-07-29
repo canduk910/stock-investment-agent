@@ -4,7 +4,11 @@ import { dirClass } from '../lib/format.js'
 // 재무 추이 테이블 — financials.income(손익) + financials.ratio(주당·수익성).
 // YoY 증감은 파랑(증가)/회색(감소)만 + ▲▼ 글리프 병기(색만으로 구분 금지, 디자인 시스템 §4).
 // 난색(주황·빨강)은 절대 쓰지 않는다 — 재무 감소를 "위험"으로 오인시키지 않기 위함.
+//
+// props: income·ratio — 각각 기간별 배열. 같은 결산기간(period)을 공유하므로 buildRows 로 병합·정렬한다.
+// 순수 표시 컴포넌트(계산 없음·백엔드 수치 그대로). 증감 방향(dir)은 reportLogic.yoyChange 가 판정.
 
+// 숫자 포맷(천단위 콤마·소수 자리 고정). 비수치/결측은 '—'(결측 표기 SSOT).
 function fmtNum(n, digits = 0) {
   if (n === null || n === undefined || !Number.isFinite(Number(n))) return '—'
   const v = Number(n)
@@ -37,9 +41,9 @@ function buildRows(income, ratio) {
   return [...byPeriod.values()].sort((a, b) => String(a.period).localeCompare(String(b.period)))
 }
 
-// YoY 셀 — 값 + 전기 대비 방향 칩. pct=null(전기 0/음수/결측)이면 칩 생략.
+// YoY 셀 — 값 + 전기 대비 방향 칩. pct=null(전기 0/음수/결측)이면 칩 생략(왜곡된 증감률 표시 방지).
 function YoyValue({ value, prev, digits }) {
-  const { pct, dir } = yoyChange(Number(value), Number(prev))
+  const { pct, dir } = yoyChange(Number(value), Number(prev)) // 증감률·방향 판정(순수 로직)
   // 글리프는 여기만 결측(null) 시 ''(칩 자체 생략)로 dirGlyph('─')와 동작이 달라 로컬 유지(동작 보존).
   const glyph = dir === 'up' ? '▲' : dir === 'down' ? '▼' : dir === 'flat' ? '─' : ''
   const cls = dirClass(dir)
@@ -57,7 +61,7 @@ function YoyValue({ value, prev, digits }) {
 }
 
 export default function FinancialTrendTable({ income, ratio }) {
-  const rows = buildRows(income, ratio)
+  const rows = buildRows(income, ratio) // 기간 오름차순 병합 — i-1 이 전기(YoY 계산 기준)
 
   if (rows.length === 0) {
     return <div className="ftable__empty">재무 데이터가 없습니다.</div>
@@ -78,7 +82,7 @@ export default function FinancialTrendTable({ income, ratio }) {
         </thead>
         <tbody>
           {rows.map((r, i) => {
-            const prev = i > 0 ? rows[i - 1] : {}
+            const prev = i > 0 ? rows[i - 1] : {} // 첫 행은 전기 없음(빈 객체 → 칩 생략)
             return (
               <tr key={r.period}>
                 <th scope="row">{fmtPeriod(r.period)}</th>

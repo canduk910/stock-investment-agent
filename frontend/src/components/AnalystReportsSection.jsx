@@ -36,11 +36,13 @@ function BulletList({ label, items, tone }) {
 
 // 최근 3개 리포트 종합 10줄요약(항목5) — 온디맨드(버튼 클릭 시 서버가 저장 요약을 LLM 종합).
 // 여러 증권사 리포트 내용의 **종합·인용**(에이전트 판정 아님) — 의견은 분포로, 출처 복수 귀속·면책.
+// PDF 재다운로드 없이 이미 저장된 per-report 요약만으로 서버가 1회 종합(비용·지연 최소).
 function CombinedSummary({ ticker }) {
-  const [state, setState] = useState('idle') // idle | loading | done | error
-  const [data, setData] = useState(null)
-  const [errMsg, setErrMsg] = useState(null)
+  const [state, setState] = useState('idle') // idle(버튼) | loading(생성 중) | done(표시) | error(안내)
+  const [data, setData] = useState(null) // 종합요약 응답(summary·report_count)
+  const [errMsg, setErrMsg] = useState(null) // 생성 실패 사유
 
+  // 종합요약 생성 — validation_failed 또는 summary 없음은 '실패'로 처리(무한 스피너 대신 안내).
   async function generate() {
     setState('loading')
     setErrMsg(null)
@@ -105,12 +107,15 @@ function CombinedSummary({ ticker }) {
   )
 }
 
+// 개별 리포트 요약 카드 — 증권사·작성일·목표주가·투자의견(출처 귀속)·핵심요지·리스크·면책·PDF + 상담 CTA.
 function ReportCard({ report, ticker, sessionId, onConsult }) {
-  const s = report.summary ?? {}
-  const [consulting, setConsulting] = useState(false)
-  const [consulted, setConsulted] = useState(false)
+  const s = report.summary ?? {} // 구조화 요약(한글 키). 없으면 빈 객체로 graceful.
+  const [consulting, setConsulting] = useState(false) // 컨텍스트 설정 중
+  const [consulted, setConsulted] = useState(false) // 이미 상담 컨텍스트로 불러옴(재클릭 방지)
   const [err, setErr] = useState(null)
 
+  // "이 리포트로 상담하기" — 서버가 store 에서 요약을 조회해 세션 컨텍스트를 핀(요약 본문 신뢰전송 없음).
+  //   성공 시 onConsult 로 좌측 챗 배너 표시. sessionId 없으면(대화 미준비) 실행 불가 안내.
   async function consult() {
     if (!sessionId) {
       setErr('상담 세션이 없어 컨텍스트를 불러올 수 없습니다.')
@@ -121,6 +126,7 @@ function ReportCard({ report, ticker, sessionId, onConsult }) {
     try {
       const res = await setReportContext(sessionId, ticker, report.report_id)
       setConsulted(true)
+      // 배너에 표시할 증권사명 — 서버 응답 우선, 없으면 요약/원본 순으로 폴백.
       onConsult?.(res.broker || s.증권사 || report.broker || '')
     } catch (e) {
       setErr(`상담 컨텍스트를 불러오지 못했습니다(${e.message}).`)
@@ -186,12 +192,13 @@ function ReportCard({ report, ticker, sessionId, onConsult }) {
 }
 
 export default function AnalystReportsSection({ ticker, sessionId, onConsult }) {
-  const [reports, setReports] = useState(null) // null=미로딩, []=없음
+  const [reports, setReports] = useState(null) // null=미로딩(로딩 표시), []=조회했으나 없음(빈 상태 안내)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   // SSE 수집 상태기계(fetching/안내문/진행 체크리스트)는 useReportFetchStream SSOT(시황과 공유).
   const { fetching, fetchMsg, progress, run: runFetchStream } = useReportFetchStream()
 
+  // 저장된 요약 조회(수집이 아니라 이미 저장된 것 읽기). 실패 시 reports=null 로 에러 분기 유도.
   async function load() {
     setLoading(true)
     setError(null)
@@ -206,6 +213,7 @@ export default function AnalystReportsSection({ ticker, sessionId, onConsult }) 
     }
   }
 
+  // 종목(ticker) 바뀔 때마다 재조회(다른 종목 상세로 전환 시).
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps

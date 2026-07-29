@@ -31,8 +31,8 @@ function BulletList({ label, items, tone }) {
 
 // 컴팩트 카드 — 증권사·시장전망 칩·제목·3줄요약. 카드 전체가 버튼(클릭·키보드 → 상세 오버레이).
 function OutlookCard({ report, onOpen }) {
-  const s = report.summary ?? {}
-  const three = threeLineSummary(s)
+  const s = report.summary ?? {} // 구조화 요약(한글 키). 없으면 빈 객체로 graceful.
+  const three = threeLineSummary(s) // 세줄요약 우선, 없으면 핵심요지[:3] 폴백(순수 로직)
   return (
     <button type="button" className="mo-card" onClick={() => onOpen(report)}>
       <div className="mo-card__head">
@@ -153,22 +153,25 @@ function MarketOutlookDetailOverlay({ report, onClose, sessionId, onConsult }) {
   )
 }
 
+// controlled 카드 뷰 — 자체 fetch·자동 최신화·금일의 요약은 상위 MacroDashboard 가 소유하고 여기선
+//   주입된 props(reports·수집상태)를 표시만 한다. onFetch/onReload 는 상위 콜백으로 위임.
 export default function MarketOutlookSection({
   reports,
   loading = false,
   error = null,
-  fetching = false,
-  progress = null,
-  fetchMsg = null,
-  autoNote = null,
+  fetching = false, // 수집(SSE) 진행 중
+  progress = null, // 진행 체크리스트 상태
+  fetchMsg = null, // 수집 완료/실패 안내
+  autoNote = null, // 자동 최신화 안내(수동과 구분)
   onFetch,
   onReload,
   sessionId,
   onConsult,
 } = {}) {
   const [selected, setSelected] = useState(null) // 상세 오버레이 대상 report(null=닫힘)
-  const triggerRef = useRef(null) // 오버레이 닫을 때 포커스 복원 대상
+  const triggerRef = useRef(null) // 오버레이 닫을 때 포커스 복원 대상(트리거 카드)
 
+  // 상세 열기 — 현재 포커스(카드)를 기억했다가 닫을 때 되돌린다(키보드 접근성).
   function openDetail(report) {
     triggerRef.current = document.activeElement // 트리거(카드) 기억
     setSelected(report)
@@ -179,7 +182,7 @@ export default function MarketOutlookSection({
     triggerRef.current?.focus?.() // 포커스 복원(접근성)
   }
 
-  const groups = groupReportsByDate(reports ?? [])
+  const groups = groupReportsByDate(reports ?? []) // 작성일별 그룹(날짜 결측=맨 끝·순수 로직)
 
   return (
     <section className="analyst" aria-label="시황 리포트 요약">

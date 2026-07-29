@@ -7,6 +7,10 @@ import { num, signedNum, changeDir, dirGlyph } from '../lib/format.js'
 // 대순환(고지로) 단계 기반 후보 종목 스크리너 — 시총상위 유니버스를 대순환 단계로 스캔.
 //   판정(단계)은 백엔드 엔진(코드)이 확정, 여기선 표시·필터만. 실데이터는 프론트가 직접 조회(환각 차단).
 //   색: 단계 배지=주황 강조(--c-emph)+방향 글리프, 등락=방향색(--c-up/down). 경보색·hex 금지.
+//
+// props: onOpenStock(ticker, name) — 후보 카드 클릭 시 종목 상세로 전환(RightPanel openStock SSOT). 옵셔널.
+// 조회: useFetch(fetchScreener(market,30)) 자체 조회 — market 변경 시만 재조회. 단계 필터는 클라이언트(재조회 0).
+// 안전: 매매 API 없음(조회·표시만). 단계는 규칙 엔진 결과이고 매수·매도 판정이 아니다(하단 면책 고정).
 
 const MARKETS = [
   { key: 'all', label: '전체' },
@@ -34,23 +38,25 @@ function marketCapJo(v) {
 }
 
 export default function ScreenerPanel({ onOpenStock }) {
-  const [market, setMarket] = useState('all')
-  const [filter, setFilter] = useState('rising') // 기본 상승국면
+  const [market, setMarket] = useState('all') // 시장 선택 — 변경 시 재조회(useFetch deps)
+  const [filter, setFilter] = useState('rising') // 단계 필터(클라이언트) — 기본 상승국면(1·6)
   const { data, loading, error, reload } = useFetch(() => fetchScreener(market, 30), [market])
 
   // catalog(6단계 라벨 SSOT — 백엔드가 내려줌) → stage → {name, phase} 조회 맵.
+  // 프론트가 단계 이름을 복제하지 않도록 백엔드 카탈로그로 라벨/방향을 조회(useMemo 로 data 변경 시만 재구성).
   const stageMeta = useMemo(() => {
     const m = new Map()
     for (const s of data?.catalog?.stages || []) m.set(s.stage, s)
     return m
   }, [data])
 
-  const candidates = data?.candidates || []
-  const active = STAGE_FILTERS.find((f) => f.key === filter) || STAGE_FILTERS[0]
+  const candidates = data?.candidates || [] // 서버가 스캔한 전체 후보(단계 판정 포함)
+  const active = STAGE_FILTERS.find((f) => f.key === filter) || STAGE_FILTERS[0] // 현재 필터 정의
+  // 필터에 stages 목록이 있으면 그 단계만, null('전체 단계')이면 전부(클라이언트 필터 — 재조회 없음).
   const filtered = active.stages
     ? candidates.filter((c) => active.stages.includes(c.stage))
     : candidates
-  const partial = data?.partial_failure || []
+  const partial = data?.partial_failure || [] // 일봉 조회 실패로 단계가 빈 종목 목록(부분 실패 보존)
 
   return (
     <div className="screener">
@@ -83,6 +89,8 @@ export default function ScreenerPanel({ onOpenStock }) {
         </div>
       </div>
 
+      {/* 상태 분기: 최초 스캔 중 / 최초 조회 실패(재시도) / 결과(부분실패·개수·목록). 재조회 중엔
+          이전 data 를 유지하므로 `&& !data` 로 최초 로딩·에러만 전면 표시(스왑 깜빡임 방지). */}
       {loading && !data ? (
         <div className="popup__state">후보 종목을 스캔하는 중… (시총상위 일봉 조회)</div>
       ) : error && !data ? (
@@ -129,15 +137,18 @@ export default function ScreenerPanel({ onOpenStock }) {
   )
 }
 
+// 후보 종목 한 줄 — 관심종목(.wl__*) 카드 스타일 재사용. 정보 영역만 클릭 가능(상세 이동).
 function ScreenerRow({ c, meta, onOpenStock }) {
-  const dir = changeDir(c.change_rate)
-  const clickable = !!onOpenStock
-  const openDetail = () => onOpenStock?.(c.ticker, c.name ?? c.ticker)
-  const hasStage = c.stage != null
+  const dir = changeDir(c.change_rate) // 등락 방향(up/down/flat/null) — 색·글리프 결정
+  const clickable = !!onOpenStock // onOpenStock 없으면 순수 표시(클릭 비활성·옵셔널)
+  const openDetail = () => onOpenStock?.(c.ticker, c.name ?? c.ticker) // 상세 전환(종목명 전달)
+  const hasStage = c.stage != null // 단계 판정 성공 여부(봉 부족·조회 실패 시 null)
+  // 배지 라벨 — 백엔드 카탈로그(meta) 이름 우선, 없으면 서버가 준 stage_name 폴백.
   const stageLabel = hasStage ? `${c.stage}단계 · ${meta?.name ?? c.stage_name ?? ''}` : ''
 
   return (
     <li className="wl__row">
+      {/* 정보 영역(row-top)만 클릭·키보드 접근(role=button·Enter/Space). clickable 아니면 속성 없이 순수 표시 */}
       <div
         className={`wl__row-top${clickable ? ' wl__row-top--clickable' : ''}`}
         {...(clickable
@@ -169,6 +180,8 @@ function ScreenerRow({ c, meta, onOpenStock }) {
         </div>
       </div>
       <div className="wl__row-bottom">
+        {/* 단계 배지 = 주황 강조 + 방향 글리프(▲▼◆). 방향은 색이 아니라 글리프로(디자인 규칙).
+            판정 불가(봉 부족)면 뉴트럴 회색 배지로 구분. */}
         {hasStage ? (
           <span className="badge badge--emph">
             {stageLabel} {meta ? stageGlyph(meta.phase) : ''}
