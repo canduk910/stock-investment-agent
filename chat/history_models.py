@@ -6,16 +6,14 @@
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from infra.db import Base
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+# UTC now SSOT(infra/timeutil) — Column default 콜러블. 지역 정의를 별칭 import 로 대체(이름 보존).
+from infra.timeutil import utcnow as _utcnow
 
 
 # 새 대화 기본 제목(SSOT) — model default·create·자동명명 게이트(아직 이 값이면 첫 질문으로 자동 명명)가 공유.

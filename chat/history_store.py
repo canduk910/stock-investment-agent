@@ -5,18 +5,14 @@ recent_messages 는 LLM 컨텍스트 복원(재접속·재시작 시 슬라이�
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from chat.history_models import DEFAULT_CONVERSATION_TITLE, ChatMessage, Conversation
+# UTC now SSOT(infra/timeutil) — updated_at 명시 갱신용. 지역 정의를 별칭 import 로 대체.
+from infra.timeutil import utcnow as _utcnow
 
 _MAX_TITLE_LEN = 30  # 자동 명명 제목 길이 상한(초과 시 말줄임)
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 def _derive_title(text: str) -> str:

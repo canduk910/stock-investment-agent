@@ -22,6 +22,7 @@ from collectors.fred import fetch_fred_series_history
 from collectors.macro_snapshot import collect_macro_indicators
 from infra.config import fred_api_key
 from infra.parallel import fetch_parallel
+from infra.timeutil import KST as _KST  # 진행 중 당월 판정 기준 타임존 — timeutil SSOT 재사용
 from macro.engine import indicator_meta, judge_regime, regime_breakdown
 from macro.regime_history import build_trajectory, downsample_trajectory, trajectory_step
 
@@ -237,9 +238,6 @@ def macro_indicator_history(key: str, months: int = 12) -> dict:
 # 국면 이동 궤적 — 4지표 엔진 키(경기→심리 순, partial_failure 정렬용 SSOT).
 _REGIME_ENGINE_KEYS = [*_HISTORY_FRED_SERIES, "fear_greed"]  # yield_spread, hy_spread, vix, fear_greed
 _REGIME_TRAJECTORY_MAX_MONTHS = 60
-_KST = _dt.timezone(_dt.timedelta(hours=9))  # 진행 중 당월 판정 기준(앱 KST 관습과 일치)
-
-
 def _current_month_kst() -> str:
     """오늘(KST) 'YYYY-MM' — 진행 중 당월(부분 데이터) 제외 기준. 라우트가 빌더에 넘긴다(빌더는 순수)."""
     return _dt.datetime.now(_KST).strftime("%Y-%m")

@@ -10,21 +10,17 @@ list_history 는 created_at 내림차순(최신 우선)으로 반환한다.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from pathlib import Path
 
 from infra.json_store import AtomicJsonFile
+# UTC ISO 타임스탬프 SSOT(infra/timeutil) — created_at 자동 생성용. 지역 정의를 별칭 import 로 대체.
+from infra.timeutil import now_iso as _now_iso
 
 # 히스토리 파일 기본 경로(watchlist.json 과 나란히 .cache/ 아래).
 REPORT_STORE_PATH = ".cache/stock_reports.json"
 
 # ticker 당 히스토리 상한 — 오래된 평가부터 제거(무한 누적 방지, IMP-16). 과거 대비 비교엔 최근이면 충분.
 REPORT_HISTORY_CAP = 20
-
-
-def _now_iso() -> str:
-    """현재 UTC ISO8601(created_at 자동 생성)."""
-    return datetime.now(timezone.utc).isoformat()
 
 
 class JsonFileReportStore:

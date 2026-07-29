@@ -6,8 +6,6 @@
 """
 from __future__ import annotations
 
-import datetime as dt
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -16,6 +14,7 @@ from auth.deps import get_current_user_optional
 from auth.models import User
 from collectors.kis.ranking import MARKET_ISCD
 from infra.db import get_db
+from infra.timeutil import now_iso  # as_of 타임스탬프 — timeutil SSOT(인라인 datetime 조립 제거)
 from stock.screener import screen_grand_cycle
 
 router = APIRouter()
@@ -47,5 +46,5 @@ def screener(
         return {
             "candidates": [], "catalog": None, "market": market, "market_iscd": iscd,
             "size": size, "partial_failure": ["screener"],
-            "as_of": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "as_of": now_iso(),
         }

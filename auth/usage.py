@@ -7,11 +7,11 @@
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
 from auth.models import DEFAULT_DAILY_LIMIT, User
-
-_KST = timezone(timedelta(hours=9))
+# KST 타임존 SSOT(infra/timeutil) — 지역 정의를 별칭 import 로 대체(이름 보존, 리팩토링).
+from infra.timeutil import KST as _KST
 
 
 def today_kst() -> str:

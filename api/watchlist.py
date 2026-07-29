@@ -17,8 +17,6 @@ degraded(항상 200, partial_failure 에 'regime'). ticker 불량 → 400. 목�
 """
 from __future__ import annotations
 
-import datetime as dt
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -31,6 +29,8 @@ from auth.models import User
 from collectors.kis import stock_info
 from collectors.stock_master import load_stock_master, search_stocks
 from infra.db import get_db
+# UTC ISO 타임스탬프 SSOT(infra/timeutil) — added_at 생성용. 기존 지역 정의를 별칭 import 로 대체.
+from infra.timeutil import now_iso as _now_iso
 from watchlist import service
 from watchlist.constants import SORT_KEYS, WATCHLIST_MAX_ITEMS
 from watchlist.models import WatchlistItem
@@ -42,10 +42,6 @@ router = APIRouter()
 def _get_store(db: Session):
     """요청 스코프 DB Session 기반 store(유저별 durable). 테스트는 이 함수를 monkeypatch."""
     return SqlWatchlistStore(db)
-
-
-def _now_iso() -> str:
-    return dt.datetime.now(dt.timezone.utc).isoformat()
 
 
 # ── 요청 바디 ────────────────────────────────────────────────────────────────

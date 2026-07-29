@@ -5,16 +5,15 @@ scope_key = str(user.id)(본인 등록) 또는 "__shared__"(공유 fallback, 미
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import DateTime, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from infra.db import Base
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+# UTC now SSOT(infra/timeutil) — Column default 콜러블. `_utcnow` 이름은 kis_store 가
+# `from auth.kis_models import _utcnow` 로 재수출 소비하므로 별칭으로 보존한다.
+from infra.timeutil import utcnow as _utcnow
 
 
 class KisCredentialRow(Base):

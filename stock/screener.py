@@ -12,6 +12,7 @@ import datetime as dt
 
 from collectors.kis import chart, ranking
 from infra.parallel import fetch_parallel
+from infra.timeutil import now_iso  # as_of 타임스탬프 — timeutil SSOT(인라인 datetime 조립 제거)
 from stock import constants as C
 from stock.summary import grand_cycle_for_chart
 from watchlist.constants import WATCHLIST_FETCH_CONCURRENCY
@@ -80,5 +81,5 @@ def screen_grand_cycle(client, *, market_iscd: str = "0000", size: int = 30) -> 
         "market_iscd": market_iscd,
         "size": size,
         "partial_failure": failed,
-        "as_of": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "as_of": now_iso(),
     }

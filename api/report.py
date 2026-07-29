@@ -13,8 +13,6 @@ api/detail.py 의 자산을 재사용한다(_build_kis_client·_build_judgement�
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -31,6 +29,8 @@ from auth.models import User
 from chat.report import generate_stock_report
 from chat.report_store import JsonFileReportStore
 from infra.db import get_db
+# UTC ISO 타임스탬프 SSOT(infra/timeutil) — created_at 생성용. 지역 정의를 별칭 import 로 대체.
+from infra.timeutil import now_iso as _now_iso
 
 router = APIRouter()
 
@@ -41,10 +41,6 @@ _STORE = JsonFileReportStore()
 def _get_store():
     """store 접근 진입점 — watchlist.py 와 동일 규약(IMP-12). 라우트는 항상 이 함수 경유."""
     return _STORE
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _same_as_latest(store, ticker: str, opinion, regime) -> bool:

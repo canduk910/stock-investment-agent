@@ -12,7 +12,8 @@
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+# UTC ISO 타임스탬프 SSOT(infra/timeutil) — 스냅샷 기준시각 헤더용. 지역 정의를 별칭 import 로 대체.
+from infra.timeutil import now_iso as _now_iso
 
 # 데이터 보유 kind SSOT — 엔드포인트·프론트 매핑이 공유. 그 외(macro_dashboard·manage_watchlist)는
 # 컨텍스트 없음(국면은 이미 시스템 프롬프트 ③④⑤, manage 는 제안 액션).
@@ -24,10 +25,6 @@ _TOP_WATCHLIST = 10
 _TOP_ANALYST = 2
 _BRIEF_CHARS = 80  # 애널리스트 요약 원라인 길이
 _AI_SUMMARY_CHARS = 120  # 저장된 AI 리포트 요약·국면정합성 원라인 길이
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _num(v) -> str:

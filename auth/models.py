@@ -5,19 +5,17 @@ id 는 유저별 데이터(관심종목·대화기록)의 스코프 키(user_id)
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from infra.db import Base
+# UTC now SSOT(infra/timeutil) — Column default 콜러블. 지역 정의를 별칭 import 로 대체(이름 보존).
+from infra.timeutil import utcnow as _utcnow
 
 # 관리자 제외 계정의 하루 질문 한도 기본값(대략 20회). 관리자는 무제한.
 DEFAULT_DAILY_LIMIT = 20
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 class User(Base):

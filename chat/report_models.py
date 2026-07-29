@@ -7,18 +7,17 @@ report_id) 유니크 = idempotent(같은 nid 재요약 방지). summary_json 은
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import JSON, DateTime, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from infra.db import Base
+# UTC now SSOT(infra/timeutil) — Column default 콜러블. `_utcnow` 이름은 report_repo 가
+# `from chat.report_models import _utcnow` 로 재수출 소비하므로 별칭으로 보존한다.
+from infra.timeutil import utcnow as _utcnow
 
 MARKET_SCOPE = "__MARKET__"  # 시황(시장 전체) 요약의 scope_key
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 class AnalystReportRow(Base):
