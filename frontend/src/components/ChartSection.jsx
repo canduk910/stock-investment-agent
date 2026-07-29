@@ -2,6 +2,7 @@ import { useState } from 'react'
 import KLineChartPanel from './KLineChartPanel.jsx'
 import { useFetch } from '../lib/useFetch.js'
 import { fetchStockChart } from '../api.js'
+import SegmentedControl from './SegmentedControl.jsx'
 
 // 종목 차트 섹션 — 주기(일봉/주봉) × 기간(3개월/1년/3년/10년) 선택 + 캔들 스왑.
 // 판정(대순환·요약)은 백엔드; 여기선 표시 차트만 교체한다. **정량 요약·GrandCyclePanel 은 번들(일봉)에
@@ -53,35 +54,16 @@ export default function ChartSection({
         <div className="chart-controls__group">
           <span className="chart-controls__label">봉 주기</span>
           <div className="chart-controls__seg">
-            {PERIODS.map((p) => (
-              <button
-                key={p.key}
-                type="button"
-                className="chart-control-btn"
-                aria-pressed={period === p.key}
-                disabled={loading}
-                onClick={() => setPeriod(p.key)}
-              >
-                {p.label}
-              </button>
-            ))}
+            {/* 선택기 골격은 SegmentedControl SSOT — 로딩 중 전환 방지(disabled) 유지. */}
+            <SegmentedControl options={PERIODS} value={period} onChange={setPeriod}
+              buttonClass="chart-control-btn" disabled={loading} />
           </div>
         </div>
         <div className="chart-controls__group">
           <span className="chart-controls__label">기간</span>
           <div className="chart-controls__seg">
-            {RANGES.map((r) => (
-              <button
-                key={r.key}
-                type="button"
-                className="chart-control-btn"
-                aria-pressed={range === r.key}
-                disabled={loading}
-                onClick={() => setRange(r.key)}
-              >
-                {r.label}
-              </button>
-            ))}
+            <SegmentedControl options={RANGES} value={range} onChange={setRange}
+              buttonClass="chart-control-btn" disabled={loading} />
           </div>
         </div>
         {loading ? (

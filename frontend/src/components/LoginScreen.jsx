@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { login, signup } from '../auth.js'
 import DkMonogram from './DkMonogram.jsx'
+import SegmentedControl from './SegmentedControl.jsx'
 
 // 로그인/회원가입 화면 — 비로그인 시 App 이 전체 대신 이 화면을 렌더한다(인증 게이트).
 // 성공하면 onAuthed(user)로 App 에 알린다. 비밀번호는 서버가 bcrypt 해시(프론트는 전송만).
@@ -53,24 +54,14 @@ export default function LoginScreen({ onAuthed }) {
           </div>
         </div>
 
-        {/* 모드 탭 — aria-pressed 로 활성 표시. 클릭 시 필드 유지한 채 호출 함수만 전환 */}
+        {/* 모드 탭 — SegmentedControl SSOT(aria-pressed 활성 표시). 클릭 시 필드 유지한 채 모드만 전환. */}
         <div className="login__tabs" role="tablist">
-          <button
-            type="button"
-            className="login__tab"
-            aria-pressed={!isSignup}
-            onClick={() => switchMode('login')}
-          >
-            로그인
-          </button>
-          <button
-            type="button"
-            className="login__tab"
-            aria-pressed={isSignup}
-            onClick={() => switchMode('signup')}
-          >
-            회원가입
-          </button>
+          <SegmentedControl
+            options={[{ key: 'login', label: '로그인' }, { key: 'signup', label: '회원가입' }]}
+            value={mode}
+            onChange={switchMode}
+            buttonClass="login__tab"
+          />
         </div>
 
         <form className="login__form" onSubmit={submit} autoComplete="on">

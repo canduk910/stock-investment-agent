@@ -4,6 +4,7 @@ import { useFetch } from '../lib/useFetch.js'
 import { stageGlyph } from '../lib/grandCycle.js'
 import { num, signedNum } from '../lib/format.js'
 import ChangeChip from './ChangeChip.jsx'
+import SegmentedControl from './SegmentedControl.jsx'
 
 // 대순환(고지로) 단계 기반 후보 종목 스크리너 — 시총상위 유니버스를 대순환 단계로 스캔.
 //   판정(단계)은 백엔드 엔진(코드)이 확정, 여기선 표시·필터만. 실데이터는 프론트가 직접 조회(환각 차단).
@@ -63,30 +64,13 @@ export default function ScreenerPanel({ onOpenStock }) {
     <div className="screener">
       <div className="screener__controls">
         <div className="screener__markets" role="group" aria-label="시장 선택">
-          {MARKETS.map((mk) => (
-            <button
-              key={mk.key}
-              type="button"
-              className={`screener__seg${market === mk.key ? ' is-active' : ''}`}
-              aria-pressed={market === mk.key}
-              onClick={() => setMarket(mk.key)}
-            >
-              {mk.label}
-            </button>
-          ))}
+          {/* 선택기 골격은 SegmentedControl SSOT — 활성은 is-active 클래스 주입. */}
+          <SegmentedControl options={MARKETS} value={market} onChange={setMarket}
+            buttonClass="screener__seg" activeClass="is-active" />
         </div>
         <div className="screener__stages" role="group" aria-label="대순환 단계 필터">
-          {STAGE_FILTERS.map((f) => (
-            <button
-              key={f.key}
-              type="button"
-              className={`screener__chip${filter === f.key ? ' is-active' : ''}`}
-              aria-pressed={filter === f.key}
-              onClick={() => setFilter(f.key)}
-            >
-              {f.label}
-            </button>
-          ))}
+          <SegmentedControl options={STAGE_FILTERS} value={filter} onChange={setFilter}
+            buttonClass="screener__chip" activeClass="is-active" />
         </div>
       </div>
 

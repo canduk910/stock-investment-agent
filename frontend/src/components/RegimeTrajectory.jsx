@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { fetchRegimeTrajectory } from '../api.js'
 import { useFetch } from '../lib/useFetch.js'
+import SegmentedControl from './SegmentedControl.jsx'
 import {
   buildSampledTrajectory,
   regimeMarkerPos,
@@ -80,17 +81,9 @@ export default function RegimeTrajectory({ live = null }) {
       <div className="rtraj__head">
         <h3 className="rtraj__title">국면 이동 (경기 × 심리)</h3>
         <div className="rtraj__range" role="group" aria-label="기간 선택">
-          {RANGES.map((r) => (
-            <button
-              key={r.months}
-              type="button"
-              className="rtraj__range-btn"
-              aria-pressed={months === r.months}
-              onClick={() => setMonths(r.months)}
-            >
-              {r.label}
-            </button>
-          ))}
+          {/* 선택기 골격은 SegmentedControl SSOT — 키 필드가 months 라 keyOf 주입. */}
+          <SegmentedControl options={RANGES} value={months} onChange={setMonths}
+            buttonClass="rtraj__range-btn" keyOf={(r) => r.months} />
         </div>
       </div>
 

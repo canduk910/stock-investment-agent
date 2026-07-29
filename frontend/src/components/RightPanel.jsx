@@ -9,6 +9,7 @@ import BalancePanel from './BalancePanel.jsx'
 import KisSettingsPanel from './KisSettingsPanel.jsx'
 import AdminPanel from './AdminPanel.jsx'
 import ScreenerPanel from './ScreenerPanel.jsx'
+import SegmentedControl from './SegmentedControl.jsx'
 
 // 우측 동적 패널(리디자인) — 좌측 상시 채팅 옆에서 맥락형 콘텐츠를 인라인 렌더한다(모달 폐기).
 // 두 경로로 구동: (a) 챗봇 tool_call(App 이 onShowPanel 로 spec 리프팅) · (b) 상단 세그먼트 탭·종목검색(대화 없이 직접 탐색).
@@ -296,17 +297,9 @@ export default function RightPanel({
       {/* ── 툴바: 세그먼트 탭(관심종목/시장 국면/내 잔고) + 우측 인라인 종목검색 ── */}
       <div className="right-panel__toolbar" role="toolbar" aria-label="빠른 탐색">
         <div className="right-panel__tabs">
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              className="right-panel__tab"
-              aria-pressed={activeKind === t.key}
-              onClick={() => select(t.key)}
-            >
-              {t.label}
-            </button>
-          ))}
+          {/* 탭 골격은 SegmentedControl SSOT — 활성 시각은 CSS [aria-pressed] 이 담당. */}
+          <SegmentedControl options={tabs} value={activeKind} onChange={select}
+            buttonClass="right-panel__tab" />
         </div>
         <TickerSearch
           onSubmit={(ticker, stockName) =>
