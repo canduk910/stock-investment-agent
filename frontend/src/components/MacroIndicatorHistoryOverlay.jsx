@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import LoadState from './LoadState.jsx'
 import { fetchMacroIndicatorHistory } from '../api.js'
 import { useModalOverlay } from '../lib/useModalOverlay.js'
 import MacroLineChart from './MacroLineChart.jsx'
@@ -63,10 +64,11 @@ export default function MacroIndicatorHistoryOverlay({ indicator, onClose }) {
           </button>
         </header>
 
+        {/* 로딩/에러 박스는 LoadState SSOT — 이 자리는 재시도 없음(onRetry 미전달·카드 재클릭 유도). */}
         {state === 'loading' ? (
-          <div className="popup__state">히스토리 불러오는 중…</div>
+          <LoadState loading loadingText="히스토리 불러오는 중…" />
         ) : state === 'error' ? (
-          <div className="popup__state">히스토리를 불러오지 못했습니다.</div>
+          <LoadState error errorContent="히스토리를 불러오지 못했습니다." />
         ) : available ? (
           <>
             <MacroLineChart points={points} unit={hist.unit} thresholds={hist.thresholds} />

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import LoadState from './LoadState.jsx'
 import { fetchStockBundle } from '../api.js'
 import StockReportView from './StockReportView.jsx'
 
@@ -30,21 +31,22 @@ export default function PopupStockReport({ ticker, stockName, sessionId, onConsu
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker])
 
+  // 로딩/에러 박스는 LoadState SSOT — 문구(종목명 포함)·에러 본문은 이 자리가 소유.
   if (loading) {
     return (
-      <div className="popup__state">
-        {stockName ? `${stockName}(${ticker})` : ticker} 리포트 조회 중…
-      </div>
+      <LoadState
+        loading
+        loadingText={<>{stockName ? `${stockName}(${ticker})` : ticker} 리포트 조회 중…</>}
+      />
     )
   }
   if (error || !bundle) {
     return (
-      <div className="popup__state">
-        <span>리포트 조회 실패: {error ?? '데이터 없음'}</span>
-        <button type="button" className="refresh" onClick={load}>
-          ↻ 재시도
-        </button>
-      </div>
+      <LoadState
+        error
+        errorContent={<span>리포트 조회 실패: {error ?? '데이터 없음'}</span>}
+        onRetry={load}
+      />
     )
   }
   return <StockReportView bundle={bundle} sessionId={sessionId} onConsult={onConsult} />

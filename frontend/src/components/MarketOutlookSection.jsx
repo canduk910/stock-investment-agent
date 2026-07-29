@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import LoadState from './LoadState.jsx'
 import { setMarketOutlookContext } from '../api.js'
 import { groupReportsByDate, threeLineSummary } from '../lib/marketOutlook.js'
 import { useModalOverlay } from '../lib/useModalOverlay.js'
@@ -207,15 +208,11 @@ export default function MarketOutlookSection({
         </p>
       ) : null}
 
+      {/* 로딩/에러 박스는 LoadState SSOT(popup__state·재시도 규칙 공용). */}
       {loading ? (
-        <div className="popup__state">시황 요약 조회 중…</div>
+        <LoadState loading loadingText="시황 요약 조회 중…" />
       ) : error ? (
-        <div className="popup__state">
-          <span>시황 조회 실패: {error}</span>
-          <button type="button" className="refresh" onClick={onReload}>
-            ↻ 재시도
-          </button>
-        </div>
+        <LoadState error errorContent={<span>시황 조회 실패: {error}</span>} onRetry={onReload} />
       ) : reports && reports.length > 0 ? (
         <>
           <div className="mo-groups">

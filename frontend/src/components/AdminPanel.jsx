@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import LoadState from './LoadState.jsx'
 import {
   fetchAdminUsers,
   updateAdminUser,
@@ -181,15 +182,17 @@ export default function AdminPanel({ currentUserId }) {
     setUsers((list) => list.filter((x) => x.id !== id))
   }, [])
 
-  if (loading) return <div className="popup__state">회원 목록 불러오는 중…</div>
+  // 로딩/에러 박스는 LoadState SSOT — 라벨('다시 시도')·클래스(admin__retry)만 자리 주입.
+  if (loading) return <LoadState loading loadingText="회원 목록 불러오는 중…" />
   if (error) {
     return (
-      <div className="popup__state">
-        {error}
-        <button type="button" className="refresh admin__retry" onClick={load}>
-          다시 시도
-        </button>
-      </div>
+      <LoadState
+        error
+        errorContent={error}
+        onRetry={load}
+        retryLabel="다시 시도"
+        retryClassName="refresh admin__retry"
+      />
     )
   }
 

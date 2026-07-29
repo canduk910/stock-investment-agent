@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import LoadState from './LoadState.jsx'
 import {
   fetchAnalystReports,
   fetchAnalystReportsSummary,
@@ -251,15 +252,11 @@ export default function AnalystReportsSection({ ticker, sessionId, onConsult }) 
         </p>
       ) : null}
 
+      {/* 로딩/에러 박스는 LoadState SSOT(popup__state·재시도 규칙 공용). */}
       {loading ? (
-        <div className="popup__state">애널리스트 리포트 조회 중…</div>
+        <LoadState loading loadingText="애널리스트 리포트 조회 중…" />
       ) : error ? (
-        <div className="popup__state">
-          <span>리포트 조회 실패: {error}</span>
-          <button type="button" className="refresh" onClick={load}>
-            ↻ 재시도
-          </button>
-        </div>
+        <LoadState error errorContent={<span>리포트 조회 실패: {error}</span>} onRetry={load} />
       ) : reports && reports.length > 0 ? (
         <>
           <CombinedSummary ticker={ticker} />
