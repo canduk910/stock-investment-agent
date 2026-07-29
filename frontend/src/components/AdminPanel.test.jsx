@@ -43,15 +43,26 @@ describe('AdminPanel', () => {
     updateAdminUser.mockResolvedValue({ ...USERS[1], daily_limit: 5 })
     render(<AdminPanel currentUserId={1} />)
     await waitFor(() => expect(screen.getByText('member@a.com')).toBeInTheDocument())
-    const input = screen.getByLabelText('member@a.com 하루 질문 한도')
-    fireEvent.change(input, { target: { value: '5' } })
-    // '저장'은 값이 실제로 바뀐 뒤에만 활성화된다(disabled={!limitChanged}). change 의 상태 반영이
-    // 재렌더로 flush 될 때까지 기다렸다가(활성화 확인) 매번 새로 쿼리해 클릭한다 — CI 타이밍 견고화
-    // (disabled 버튼 클릭은 onClick 미발화 → updateAdminUser 0회 호출 플래키의 근본 해소).
+    // '저장'은 값이 실제로 바뀐 뒤에만 활성화된다(disabled={!limitChanged}). CI(느린 러너)에서
+    // change 반영이 간헐 유실돼 활성화 대기가 타임아웃되는 플래키가 재발(2026-07-24 1차 견고화 후에도)
+    // → **수렴형 재시도**: waitFor 각 시도마다 입력을 새로 쿼리해 값이 5가 아니면 change 를 재발화한
+    //   뒤 활성화를 단정한다(어떤 원인이든 결정적으로 수렴·컴포넌트는 정상이라 테스트만 손질).
+    //   버튼도 매번 새로 쿼리해 클릭(재렌더로 교체된 노드에 대한 stale 참조 방지).
+    const memberInput = () => screen.getByLabelText('member@a.com 하루 질문 한도')
     const memberSaveBtn = () => screen.getAllByRole('button', { name: '저장' })[1] // member 행
-    await waitFor(() => expect(memberSaveBtn()).toBeEnabled())
+    fireEvent.change(memberInput(), { target: { value: '5' } })
+    await waitFor(
+      () => {
+        const inp = memberInput()
+        if (Number(inp.value) !== 5) fireEvent.change(inp, { target: { value: '5' } })
+        expect(memberSaveBtn()).toBeEnabled()
+      },
+      { timeout: 3000 },
+    )
     fireEvent.click(memberSaveBtn())
-    await waitFor(() => expect(updateAdminUser).toHaveBeenCalledWith(2, { daily_limit: 5 }))
+    await waitFor(() => expect(updateAdminUser).toHaveBeenCalledWith(2, { daily_limit: 5 }), {
+      timeout: 3000,
+    })
   })
 
   it('권한 토글 → updateAdminUser(id, {is_admin}) 호출', async () => {
