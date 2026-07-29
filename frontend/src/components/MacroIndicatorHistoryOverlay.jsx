@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { fetchMacroIndicatorHistory } from '../api.js'
+import { useModalOverlay } from '../lib/useModalOverlay.js'
 import MacroLineChart from './MacroLineChart.jsx'
 
 // 판정근거 지표 카드 클릭 → 최근 5년 월단위 히스토리 오버레이.
@@ -11,23 +12,10 @@ const HISTORY_MONTHS = 60 // 백엔드 clamp 상한(=5년, 월단위)
 const HISTORY_LABEL = `최근 ${Math.round(HISTORY_MONTHS / 12)}년 · 월단위` // 값-텍스트 SSOT(하드코딩 결합 제거)
 
 export default function MacroIndicatorHistoryOverlay({ indicator, onClose }) {
-  const closeRef = useRef(null)
+  // 오버레이 접근성(닫기 포커스·Esc·스크롤 잠금)은 useModalOverlay SSOT — 시황 상세와 공유.
+  const closeRef = useModalOverlay(onClose)
   const [state, setState] = useState('loading') // loading | ready | error
   const [hist, setHist] = useState(null)
-
-  useEffect(() => {
-    closeRef.current?.focus() // 열릴 때 닫기 버튼 포커스(접근성)
-    const onKey = (e) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden' // 배경 스크롤 잠금
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prevOverflow
-    }
-  }, [onClose])
 
   useEffect(() => {
     let cancelled = false

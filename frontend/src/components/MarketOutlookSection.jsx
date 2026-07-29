@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { setMarketOutlookContext } from '../api.js'
 import { groupReportsByDate, threeLineSummary } from '../lib/marketOutlook.js'
+import { useModalOverlay } from '../lib/useModalOverlay.js'
 import FetchProgress from './FetchProgress.jsx'
 
 // 증권사 '시황(market outlook) 리포트' 요약 카드 뷰 — **controlled**(reports·수집상태를 상위 MacroDashboard
@@ -63,22 +64,9 @@ function OutlookCard({ report, onOpen }) {
 // '클릭 팝업'(사용자 결정)에 한해 접근성 오버레이를 도입한다(범용 모달 부활 아님, 이 뷰 전용).
 // Esc·배경 클릭·✕ 로 닫힘. React DOM 오버레이(브라우저 alert/confirm 아님 — 이벤트 블로킹 없음).
 function MarketOutlookDetailOverlay({ report, onClose, sessionId, onConsult }) {
-  const closeRef = useRef(null)
+  // 오버레이 접근성(닫기 포커스·Esc·스크롤 잠금)은 useModalOverlay SSOT — 지표 히스토리와 공유.
+  const closeRef = useModalOverlay(onClose)
   const [consulting, setConsulting] = useState(false)
-
-  useEffect(() => {
-    closeRef.current?.focus() // 열릴 때 닫기 버튼에 포커스(접근성)
-    const onKey = (e) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden' // 배경 스크롤 잠금
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prevOverflow
-    }
-  }, [onClose])
 
   const s = report.summary ?? {}
 
