@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { fetchScreener } from '../api.js'
 import { useFetch } from '../lib/useFetch.js'
 import { stageGlyph } from '../lib/grandCycle.js'
-import { num, signedNum, changeDir } from '../lib/format.js'
+import { num, signedNum, changeDir, dirGlyph } from '../lib/format.js'
 
 // 대순환(고지로) 단계 기반 후보 종목 스크리너 — 시총상위 유니버스를 대순환 단계로 스캔.
 //   판정(단계)은 백엔드 엔진(코드)이 확정, 여기선 표시·필터만. 실데이터는 프론트가 직접 조회(환각 차단).
@@ -163,7 +163,7 @@ function ScreenerRow({ c, meta, onOpenStock }) {
         <div className="wl__row-price">
           <span className="wl__price">{num(c.price)}원</span>
           <span className={`wl__change ${dir ?? ''}`}>
-            <span aria-hidden="true">{dir === 'up' ? '▲' : dir === 'down' ? '▼' : '─'}</span>{' '}
+            <span aria-hidden="true">{dirGlyph(dir)}</span>{' '}
             {signedNum(c.change_rate)}%
           </span>
         </div>

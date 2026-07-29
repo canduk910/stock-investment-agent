@@ -53,6 +53,18 @@ export function qty(v) {
   return Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })
 }
 
+// 방향 → 글리프(▲▼─) — 색만으로 방향을 구분하지 않는 접근성 규칙의 표시 짝(팔레트 규칙).
+// 인라인 삼항으로 7곳에 흩어져 있던 것을 단일화. up/down 외(flat/null/undefined)는 전부 '─'.
+export function dirGlyph(dir) {
+  return dir === 'up' ? '▲' : dir === 'down' ? '▼' : '─'
+}
+
+// 방향 → CSS 클래스('up'|'down'|'') — theme.css 방향색 토큰(.up/.down)과 짝.
+// flat/결측은 빈 문자열(기본 회색) — 기존 각 컴포넌트 인라인 삼항과 동일 동작.
+export function dirClass(dir) {
+  return dir === 'up' ? 'up' : dir === 'down' ? 'down' : ''
+}
+
 // 방향(등락) — 결측이면 null(배지·글리프 생략). up/down/flat.
 export function changeDir(v) {
   if (_miss(v)) return null

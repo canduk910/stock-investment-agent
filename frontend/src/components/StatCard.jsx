@@ -1,8 +1,11 @@
 // 순수 표현 카드 — 값·판정은 상위(백엔드 summary)가 확정하고, 여기선 표시만 한다.
 // 기존 .card* CSS 를 재사용한다(매크로 카드 MacroIndicatorCards 와 스타일만 공유).
 // props: label, value, unit, badge({text}), sub, subDir('up'|'down'|'flat'), meta, muted.
+import { dirClass } from '../lib/format.js'
+
 export default function StatCard({ label, value, unit, badge, sub, subDir, meta, muted }) {
-  const subClass = subDir === 'up' ? 'up' : subDir === 'down' ? 'down' : ''
+  // 방향 → 색 클래스는 format.dirClass SSOT(up/down 만 클래스, flat/결측은 기본 회색).
+  const subClass = dirClass(subDir)
   return (
     <div className="card">
       <div className="card__label">{label}</div>

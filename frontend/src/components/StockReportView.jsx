@@ -6,23 +6,13 @@ import AiReportPanel from './AiReportPanel.jsx'
 import AnalystReportsSection from './AnalystReportsSection.jsx'
 import WatchlistStar from './WatchlistStar.jsx'
 import { sectionFailed, isValuationReady } from '../lib/reportLogic.js'
-// 표시 포맷 SSOT(순수) — 값·판정은 백엔드 summary 가 확정, 여기선 표시만. 결측은 '—'.
-import { num, pct } from '../lib/format.js'
+// 표시 포맷 SSOT(순수, lib/format.js) — 값·판정은 백엔드 summary 가 확정, 여기선 표시만. 결측은 '—'.
+// 과거 로컬 재정의(signDir/signedPct/cagrPct)는 format.js 와 동일 동작이라 SSOT 로 흡수(리팩토링):
+//   signDir → changeDir(결측 null) · 로컬 signedPct(무%) → signedNum · cagrPct → pct.
+import { changeDir, dirGlyph, num, pct, signedNum } from '../lib/format.js'
 
-// CAGR 은 이미 %(엔진 stock/summary.py::_cagr 가 ×100 반환). 프론트는 ×100 재적용 금지(단위 규약).
-function cagrPct(v, digits = 1) {
-  if (v === null || v === undefined || !Number.isFinite(Number(v))) return '—'
-  return `${Number(v).toFixed(digits)}`
-}
-function signDir(v) {
-  if (v === null || v === undefined || !Number.isFinite(Number(v))) return null
-  return Number(v) > 0 ? 'up' : Number(v) < 0 ? 'down' : 'flat'
-}
-function signedPct(v, digits = 2) {
-  if (v === null || v === undefined || !Number.isFinite(Number(v))) return '—'
-  const n = Number(v)
-  return `${n > 0 ? '+' : ''}${n.toFixed(digits)}`
-}
+// CAGR 은 이미 %(엔진 stock/summary.py::_cagr 가 ×100 반환) — 표시 시 ×100 재적용 금지(단위 규약).
+// pct(v, 1) 이 그대로 그 규약(소수 1자리·부호/% 접미사 없음)을 만족한다.
 
 // 면책 고지 — LLM 없이 코드로 상시 고정 노출(회색 톤, 빨강 아님). RegimeGauge 문구 계승.
 const DISCLAIMER =
@@ -62,7 +52,8 @@ export default function StockReportView({ bundle, sessionId, onConsult }) {
   }
   fwdPers.forEach((x) => perTrend.push(`${estShort(x.period)} ${pct(x.forward_per, 1)}배`))
 
-  const changeDir = signDir(valuation?.change_rate)
+  // 등락 방향(결측=null → 칩 글리프만 '─') — format.changeDir SSOT.
+  const priceDir = changeDir(valuation?.change_rate)
 
   return (
     <section className="report" aria-label="종목 종합리포트">
@@ -87,11 +78,11 @@ export default function StockReportView({ bundle, sessionId, onConsult }) {
             <>
               <span className="report__price-val">{num(valuation.price)}</span>
               <span className="report__price-unit">원</span>
-              <span className={`report__change ${changeDir ?? ''}`}>
+              <span className={`report__change ${priceDir ?? ''}`}>
                 <span aria-hidden="true">
-                  {changeDir === 'up' ? '▲' : changeDir === 'down' ? '▼' : '─'}
+                  {dirGlyph(priceDir)}
                 </span>{' '}
-                {signedPct(valuation.change_rate)}%
+                {signedNum(valuation.change_rate)}%
               </span>
               {valuation.as_of ? <span className="report__asof">기준 {valuation.as_of}</span> : null}
             </>
@@ -109,24 +100,24 @@ export default function StockReportView({ bundle, sessionId, onConsult }) {
         <div className="grid">
           <StatCard
             label={`매출 CAGR (${yearsLabel})`}
-            value={cagrPct(summary.rev_cagr)}
+            value={pct(summary.rev_cagr)}
             unit="%"
-            subDir={signDir(summary.rev_cagr)}
+            subDir={changeDir(summary.rev_cagr)}
             sub={summary.rev_cagr == null ? '표본 부족' : ' '}
           />
           <StatCard
             label={`영업이익 CAGR (${yearsLabel})`}
-            value={cagrPct(summary.op_cagr)}
+            value={pct(summary.op_cagr)}
             unit="%"
-            subDir={signDir(summary.op_cagr)}
+            subDir={changeDir(summary.op_cagr)}
             sub={summary.op_cagr == null ? '표본 부족' : ' '}
           />
           <StatCard
             label={`PER vs ${yearsLabel}평균`}
-            value={valuationReady ? signedPct(summary.per_vs_avg, 1) : '준비 중'}
+            value={valuationReady ? signedNum(summary.per_vs_avg, 1) : '준비 중'}
             unit={valuationReady ? '%' : ''}
             muted={!valuationReady}
-            subDir={valuationReady ? signDir(summary.per_vs_avg) : null}
+            subDir={valuationReady ? changeDir(summary.per_vs_avg) : null}
             meta={
               valuationReady
                 ? `현재 ${pct(summary.current_per, 1)} · 평균 ${pct(summary.avg_per, 1)}`
@@ -155,7 +146,7 @@ export default function StockReportView({ bundle, sessionId, onConsult }) {
             meta={
               summary.ma20_gap_pct == null
                 ? 'MA20 대비 —'
-                : `MA${indicatorConfig.ma_period} 대비 ${signedPct(summary.ma20_gap_pct, 1)}%`
+                : `MA${indicatorConfig.ma_period} 대비 ${signedNum(summary.ma20_gap_pct, 1)}%`
             }
           />
           <StatCard

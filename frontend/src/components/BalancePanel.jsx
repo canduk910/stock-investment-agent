@@ -1,7 +1,7 @@
 import { fetchBalance } from '../api.js'
 import { useFetch } from '../lib/useFetch.js'
 import Sparkline from './Sparkline.jsx'
-import { won, signedWon, signedPct, qty, flatDir } from '../lib/format.js'
+import { won, signedWon, signedPct, qty, flatDir, dirGlyph } from '../lib/format.js'
 
 // 잔고(포트폴리오) 패널 — 우측 동적 패널에서 /api/balance 를 자체 조회한다(환각 차단).
 // 조회 전용(주문/매매 없음). 현재가 포함 → 무캐시(팝업 열 때마다 조회, 원칙1).
@@ -37,7 +37,7 @@ function Pnl({ amount, pct }) {
   const d = flatDir(amount ?? pct)
   return (
     <span className={`balance__pnl ${d}`}>
-      <span aria-hidden="true">{d === 'up' ? '▲' : d === 'down' ? '▼' : '─'}</span>{' '}
+      <span aria-hidden="true">{dirGlyph(d)}</span>{' '}
       {signedWon(amount)}
       {pct !== null && pct !== undefined && Number.isFinite(Number(pct)) ? (
         <span className="balance__pnl-pct"> ({signedPct(pct)})</span>
@@ -101,9 +101,8 @@ export default function BalancePanel({ onOpenStock } = {}) {
               <span className="balance__hero-value">{won(summary.net_asset)}</span>
             </div>
             <span className={`balance__hero-pnl ${flatDir(summary.pnl_amount)}`}>
-              <span aria-hidden="true">
-                {flatDir(summary.pnl_amount) === 'up' ? '▲' : flatDir(summary.pnl_amount) === 'down' ? '▼' : '─'}
-              </span>{' '}
+              {/* 글리프는 dirGlyph SSOT — 색만으로 방향을 구분하지 않는다(접근성·팔레트 규칙). */}
+              <span aria-hidden="true">{dirGlyph(flatDir(summary.pnl_amount))}</span>{' '}
               {signedWon(summary.pnl_amount)} 평가손익
             </span>
           </div>

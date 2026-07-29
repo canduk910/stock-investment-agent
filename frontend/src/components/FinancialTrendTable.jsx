@@ -1,4 +1,5 @@
 import { yoyChange } from '../lib/reportLogic.js'
+import { dirClass } from '../lib/format.js'
 
 // 재무 추이 테이블 — financials.income(손익) + financials.ratio(주당·수익성).
 // YoY 증감은 파랑(증가)/회색(감소)만 + ▲▼ 글리프 병기(색만으로 구분 금지, 디자인 시스템 §4).
@@ -39,8 +40,9 @@ function buildRows(income, ratio) {
 // YoY 셀 — 값 + 전기 대비 방향 칩. pct=null(전기 0/음수/결측)이면 칩 생략.
 function YoyValue({ value, prev, digits }) {
   const { pct, dir } = yoyChange(Number(value), Number(prev))
+  // 글리프는 여기만 결측(null) 시 ''(칩 자체 생략)로 dirGlyph('─')와 동작이 달라 로컬 유지(동작 보존).
   const glyph = dir === 'up' ? '▲' : dir === 'down' ? '▼' : dir === 'flat' ? '─' : ''
-  const cls = dir === 'up' ? 'up' : dir === 'down' ? 'down' : ''
+  const cls = dirClass(dir)
   return (
     <>
       <span className="ftable__val">{fmtNum(value, digits)}</span>

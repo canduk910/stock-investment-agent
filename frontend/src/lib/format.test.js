@@ -59,3 +59,21 @@ describe('changeDir(null) vs flatDir(flat) — 결측 처리 보존', () => {
     expect(flatDir(null)).toBe('flat')
   })
 })
+
+describe('dirGlyph / dirClass — 방향 글리프·클래스 SSOT', () => {
+  it('dirGlyph: up=▲ down=▼ 그 외(flat/null/undefined)=─', async () => {
+    const { dirGlyph } = await import('./format.js')
+    expect(dirGlyph('up')).toBe('▲')
+    expect(dirGlyph('down')).toBe('▼')
+    expect(dirGlyph('flat')).toBe('─')
+    expect(dirGlyph(null)).toBe('─')
+    expect(dirGlyph(undefined)).toBe('─')
+  })
+  it('dirClass: up/down 만 클래스, 그 외는 빈 문자열(기존 인라인 삼항과 동일)', async () => {
+    const { dirClass } = await import('./format.js')
+    expect(dirClass('up')).toBe('up')
+    expect(dirClass('down')).toBe('down')
+    expect(dirClass('flat')).toBe('')
+    expect(dirClass(null)).toBe('')
+  })
+})
