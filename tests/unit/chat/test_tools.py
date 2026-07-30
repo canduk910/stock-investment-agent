@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from chat.tools import CHAT_MODEL, CONTENT_TOOLS, TOOLS, run_content_tool
+from chat.tools import CHAT_MODEL, REPORT_MODEL, CONTENT_TOOLS, TOOLS, run_content_tool
 
 
 def _tool(name: str) -> dict:
@@ -23,9 +23,11 @@ def _enum(name: str, param: str) -> list:
     return _props(name)[param]["enum"]
 
 
-def test_chat_model_single_source():
-    # 사용자 결정: 모델은 gpt-5.6-luna. 이 상수가 모델 ID 단일 출처(문자열 산재 금지).
-    assert CHAT_MODEL == "gpt-5.6-luna"
+def test_hybrid_model_single_source():
+    # 하이브리드(사용자 결정): 일반 대화 = 상위 terra, 리포트·요약·분류·오프라인 = 하위 luna.
+    # 두 상수가 모델 ID 단일 출처(문자열 산재 금지). 어느 호출이 어느 상수인지는 chat/CLAUDE.md.
+    assert CHAT_MODEL == "gpt-5.6-terra"   # chat()/chat_stream() 일반 대화(사용자 대면)
+    assert REPORT_MODEL == "gpt-5.6-luna"  # structured_summary·_reclassify_risk·intent_gen
 
 
 def test_popup_tool_names__frontend_contract():

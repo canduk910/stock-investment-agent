@@ -381,6 +381,16 @@ def test_reclassify_risk_parses_verdict(monkeypatch):
     assert chatmod._reclassify_risk(_client(False), "q") is False
 
 
+def test_reclassify_risk_uses_report_model(monkeypatch):
+    # 하이브리드: 안전 재분류(JSON 분류)는 하위 luna(REPORT_MODEL) — 대화(terra)와 분리.
+    from chat.tools import REPORT_MODEL
+
+    client = _FakeClient([_resp(content=json.dumps({"block": True}))])
+    chatmod._reclassify_risk(client, "q")
+    assert client.calls[0]["model"] == REPORT_MODEL
+    assert client.calls[0]["reasoning_effort"] == "none"  # REPORT_MODEL_PARAMS 병합
+
+
 def test_reclassify_risk_defaults_block_on_error():
     # 재분류 LLM 전체 실패 → 보수적 차단(True).
     class _Boom:

@@ -77,12 +77,13 @@ def test_valid_json_passes_validation():
     assert len(client.calls) == 1  # 첫 시도에서 통과 → 재요청 없음
 
 
-def test_uses_chat_model_single_source():
-    from chat.tools import CHAT_MODEL
+def test_uses_report_model_single_source():
+    # 리포트 생성은 하위 luna(REPORT_MODEL) — 하이브리드. structured_summary 경유(단일 출처).
+    from chat.tools import REPORT_MODEL
 
     client = _FakeClient([json.dumps(_VALID_REPORT)])
     generate_stock_report(_BUNDLE, _JUDGE, client=client)
-    assert client.calls[0]["model"] == CHAT_MODEL
+    assert client.calls[0]["model"] == REPORT_MODEL
 
 
 def test_quant_summary_preserved_on_success():

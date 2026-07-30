@@ -23,9 +23,11 @@ from chat.intent_panel import merge_intent_panel, with_screener_panel
 from chat.market_outlook import build_recent_outlook_context
 from chat.session import Session
 from chat.tools import (
-    CHAT_MODEL,
+    CHAT_MODEL,          # 일반 대화(상위 terra) — chat()/chat_stream() 1차·2차
     CHAT_MODEL_PARAMS,
     CONTENT_TOOLS,
+    REPORT_MODEL,        # 정형 작업(하위 luna) — 안전 재분류 _reclassify_risk
+    REPORT_MODEL_PARAMS,
     TOOLS,
     run_content_tool,
     view_context_kind_args,
@@ -66,7 +68,7 @@ _RECLASSIFY_PROMPT = (
 
 
 def _reclassify_risk(client, user_query: str) -> bool:
-    """ML 이 risk 로 본 질의를 CHAT_MODEL 로 2차 판정 — 차단 대상이면 True, 오탐이면 False.
+    """ML 이 risk 로 본 질의를 REPORT_MODEL(luna) 로 2차 판정 — 차단 대상이면 True, 오탐이면 False.
 
     '차단 대상 여부'만 분류한다(자문·설명은 본 답변 LLM 담당). 전체 실패는 1회 재시도 후
     **보수적으로 차단(True)** — 안전 우선(재분류 실패는 드묾).
@@ -77,11 +79,12 @@ def _reclassify_risk(client, user_query: str) -> bool:
     ]
     for _ in range(2):
         try:
+            # 안전 재분류는 정형 JSON 분류 → 하위 luna(REPORT_MODEL). 대화(terra)와 분리.
             resp = client.chat.completions.create(
-                model=CHAT_MODEL,
+                model=REPORT_MODEL,
                 messages=messages,
                 response_format={"type": "json_object"},
-                **CHAT_MODEL_PARAMS,
+                **REPORT_MODEL_PARAMS,
             )
             data = json.loads(resp.choices[0].message.content or "{}")
             return bool(data.get("block", False))

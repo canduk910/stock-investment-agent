@@ -15,7 +15,8 @@ from typing import TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from chat.tools import CHAT_MODEL, CHAT_MODEL_PARAMS
+# 요약 코어는 하위 luna(REPORT_MODEL) — 하이브리드(정형 작업). 5개 summarizer 전부 이 경로.
+from chat.tools import REPORT_MODEL, REPORT_MODEL_PARAMS
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -30,12 +31,12 @@ def make_client():
 
 
 def request_json(client, prompt: str) -> str:
-    """CHAT_MODEL 에 JSON 1회 요청 → content 문자열(빈 응답은 ''). CHAT_MODEL_PARAMS 자동 병합."""
+    """REPORT_MODEL(luna) 에 JSON 1회 요청 → content 문자열(빈 응답은 ''). REPORT_MODEL_PARAMS 자동 병합."""
     resp = client.chat.completions.create(
-        model=CHAT_MODEL,
+        model=REPORT_MODEL,
         messages=[{"role": "system", "content": prompt}],
         response_format={"type": "json_object"},
-        **CHAT_MODEL_PARAMS,
+        **REPORT_MODEL_PARAMS,
     )
     return resp.choices[0].message.content or ""
 

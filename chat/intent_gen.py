@@ -1,6 +1,6 @@
 """인텐트 학습 데이터 생성 스크립트 — 계획 §4. (비결정적·유료, LLM 호출)
 
-OpenAI(CHAT_MODEL 상수)로 [질문→라벨] 쌍을 라벨별 균형 있게 다량 생성해
+OpenAI(REPORT_MODEL 상수 — 오프라인 정형 생성은 하위 luna)로 [질문→라벨] 쌍을 라벨별 균형 있게 다량 생성해
 data/intent_dataset.tsv(`질문<TAB>라벨`)로 저장한다. 산출 데이터셋은 커밋, 학습은
 intent_train.py 가 담당(생성/학습 분리 — 생성은 비결정적·유료라 CI 에서 제외).
 
@@ -18,7 +18,8 @@ from pathlib import Path
 from openai import OpenAI
 
 from chat.intent import LABELS
-from chat.tools import CHAT_MODEL
+# 오프라인 학습데이터 생성은 하위 luna(REPORT_MODEL) — 하이브리드(런타임 아님·정형 생성).
+from chat.tools import REPORT_MODEL, REPORT_MODEL_PARAMS
 from infra.config import openai_api_key
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -58,13 +59,13 @@ def _gen_for_label(client: OpenAI, label: str, n: int) -> list[str]:
         f"규칙: 실제 개인 투자자가 쓸 법한 구어체·다양한 표현. 서로 겹치지 않게. "
         f'JSON 객체 하나만 출력: {{"questions": ["...", "..."]}}'
     )
-    # response_format=json_object 로 파싱 안정성 확보. CHAT_MODEL_PARAMS 는 추론형 모델 필수
+    # response_format=json_object 로 파싱 안정성 확보. REPORT_MODEL_PARAMS 는 추론형 모델 필수
     # 파라미터(reasoning_effort='none' 등)를 매 create() 에 병합하는 단일 출처(chat 계층과 동일 규칙).
     resp = client.chat.completions.create(
-        model=CHAT_MODEL,
+        model=REPORT_MODEL,
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"},
-        **CHAT_MODEL_PARAMS,
+        **REPORT_MODEL_PARAMS,
     )
     data = json.loads(resp.choices[0].message.content)
     questions = data.get("questions", [])

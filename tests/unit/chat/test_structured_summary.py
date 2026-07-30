@@ -64,12 +64,16 @@ def test_parse_and_validate_schema_violation_is_none():
     assert parse_and_validate(json.dumps({"name": "", "n": 1}), _Schema) is None
 
 
-def test_request_json_includes_model_params():
+def test_request_json_uses_report_model_and_params():
+    from chat.tools import REPORT_MODEL
+
     client = _FakeClient([_VALID])
     request_json(client, "prompt")
     call = client.calls[0]
+    # 요약 코어는 하위 luna(REPORT_MODEL) — 하이브리드. 5개 summarizer 전부 이 경로.
+    assert call["model"] == REPORT_MODEL
     assert call["response_format"] == {"type": "json_object"}
-    assert call["reasoning_effort"] == "none"  # CHAT_MODEL_PARAMS 병합(추론형 필수)
+    assert call["reasoning_effort"] == "none"  # REPORT_MODEL_PARAMS 병합(추론형 필수)
     assert call["messages"][0]["role"] == "system"
 
 

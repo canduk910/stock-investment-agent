@@ -1,27 +1,37 @@
 """팝업/관리 도구 function calling 스키마 + 모델 상수 — llm-safety-guide §2.
 
 이 파일의 두 가지가 계약이다:
-1. CHAT_MODEL — 챗봇·데이터 생성 LLM 모델 ID 단일 출처(사용자 결정: gpt-5.6-luna).
-   코드 어디에도 모델 문자열을 다시 타이핑하지 않는다(문자열 산재 = 불일치의 씨앗).
-2. TOOLS — 팝업 3종 스키마. name·enum·required 는 frontend 팝업 라우팅과의 계약
-   (QA 경계면 #2·#3). LLM 은 "무엇을 띄울지"만 결정하고, 실데이터는 프론트가 API 로
-   직접 조회한다(환각 차단, 스킬 §2). 그래서 tool 은 표시 지시일 뿐 데이터를 만들지 않는다.
+1. 하이브리드 모델 상수(단일 출처) — 코드 어디에도 모델 문자열을 다시 타이핑하지 않는다
+   (문자열 산재 = 불일치의 씨앗). 용도별 2개 상수:
+     - CHAT_MODEL   = 상위 terra — **일반 대화(사용자 대면)**: chat()/chat_stream() 1차(tools)·
+                       2차(tool 결과 되먹임 후 최종 답변). 대화 품질 우선.
+     - REPORT_MODEL = 하위 luna — **정형 작업**: structured_summary(리포트·애널리스트·시황
+                       요약 5 summarizer)·_reclassify_risk(안전 재분류)·intent_gen(오프라인
+                       학습데이터 생성). 스키마/JSON 강제라 하위로 충분, 비용·지연 절감.
+   어느 호출이 어느 상수인지는 chat/CLAUDE.md 표가 SSOT.
+2. TOOLS — 팝업 스키마. name·enum·required 는 frontend 팝업 라우팅과의 계약(QA 경계면 #2·#3).
+   LLM 은 "무엇을 띄울지"만 결정하고, 실데이터는 프론트가 API 로 직접 조회한다(환각 차단, 스킬 §2).
 
 각 description 에 "언제 호출하는지"와 "언제 호출하지 않는지"를 모두 명시한다(오발동 방지).
 파라미터는 enum 으로 제한해 프론트가 분기할 값의 집합을 닫는다.
 """
 from __future__ import annotations
 
-# 챗봇·데이터 생성 LLM 모델 ID 단일 출처(사용자 결정 오버라이드: gpt-4o 아님).
-CHAT_MODEL = "gpt-5.6-luna"
+# ── 하이브리드 LLM 모델 ID 단일 출처(사용자 결정) ──────────────────────────────
+# 일반 대화(상위) — 사용자에게 보이는 대화 응답. chat()/chat_stream() 1차·2차가 참조.
+CHAT_MODEL = "gpt-5.6-terra"
+# 리포트·요약·분류·오프라인 생성(하위) — 정형 작업. structured_summary·_reclassify_risk·
+# intent_gen 이 참조. 스키마 강제라 하위 모델로 품질 충분하고 비용/지연을 아낀다.
+REPORT_MODEL = "gpt-5.6-luna"
 
 # 모델별 필수 create() 파라미터(단일 출처) — 매 chat.completions.create 호출에 병합한다.
-#   gpt-5.6-luna 는 추론형이라, chat/completions 에서 function tools 를 쓰려면
+#   terra·luna 는 둘 다 추론형이라, chat/completions 에서 function tools 를 쓰려면
 #   reasoning_effort='none' 이 필요하다(미지정 시 기본 추론 모드가 tools 와 비호환 → 400
 #   "Function tools with reasoning_effort are not supported ..."). 또 이 계열은 구형
 #   `max_tokens`/`temperature` 를 받지 않으므로 앱은 그 둘을 넘기지 않는다.
-#   모델을 비추론형(예: gpt-4o)으로 바꾸면 이 dict 를 비우면 된다({}).
-CHAT_MODEL_PARAMS = {"reasoning_effort": "none"}
+#   어느 한 모델을 비추론형(예: gpt-4o)으로 바꾸면 그 모델의 PARAMS 를 {} 로 비운다.
+CHAT_MODEL_PARAMS = {"reasoning_effort": "none"}    # terra(일반 대화)용
+REPORT_MODEL_PARAMS = {"reasoning_effort": "none"}  # luna(정형 작업)용
 
 TOOLS = [
     {
