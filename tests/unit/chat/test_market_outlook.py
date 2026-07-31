@@ -183,6 +183,113 @@ def test_build_recent_outlook_context_graceful_on_store_error():
     assert mo.build_recent_outlook_context(store=_BoomStore()) is None
 
 
+# ── 시황 stale 판정 + 동기 최신화(ensure_fresh_outlook) — macro_view 턴 훅 ──
+# 배경: intent=macro_view 챗 턴에서 저장 시황이 시스템일자(KST)보다 오래됐으면 그 턴에 동기 수집.
+# 하루 1회 서버 가드·타임아웃 상한·전면 graceful(예외로 챗이 깨지지 않음).
+def _dated_entry(date):
+    e = _outlook_entry("KB", "중립")
+    e["date"] = date
+    return e
+
+
+@pytest.fixture(autouse=True)
+def _reset_outlook_guard():
+    # 모듈 전역 하루 1회 가드를 테스트마다 리셋(테스트 간 오염 방지).
+    mo._reset_outlook_attempt()
+    yield
+    mo._reset_outlook_attempt()
+
+
+def test_today_stamp_kst_format():
+    import re
+
+    stamp = mo._today_stamp_kst()
+    # 저장 date 포맷("YY.MM.DD", zero-padded)과 일치해야 문자열 비교로 stale 판정 가능.
+    assert re.fullmatch(r"\d{2}\.\d{2}\.\d{2}", stamp)
+
+
+def test_outlook_is_stale_true_when_latest_older():
+    store = _StubStore([_dated_entry("26.07.19")])
+    assert mo.outlook_is_stale("26.07.20", store=store) is True
+
+
+def test_outlook_is_stale_false_when_latest_is_today():
+    store = _StubStore([_dated_entry("26.07.20")])
+    assert mo.outlook_is_stale("26.07.20", store=store) is False
+
+
+def test_outlook_is_stale_true_when_empty():
+    # 저장분 없음 → stale(수집 시도 대상).
+    assert mo.outlook_is_stale("26.07.20", store=_StubStore([])) is True
+
+
+def test_outlook_is_stale_false_on_store_error():
+    # 조회 실패는 크래시 없이 False(수집 시도 안 함 — 안전한 no-op).
+    class _BoomStore:
+        def list_reports(self):
+            raise RuntimeError("db down")
+
+    assert mo.outlook_is_stale("26.07.20", store=_BoomStore()) is False
+
+
+def test_ensure_fresh_outlook_fresh_is_noop(monkeypatch):
+    # 오늘자 저장분 있음 → 수집 미호출·"fresh".
+    called = {"n": 0}
+    monkeypatch.setattr(svc, "fetch_and_summarize", lambda **k: called.__setitem__("n", called["n"] + 1) or {})
+    status = mo.ensure_fresh_outlook(today_stamp="26.07.20", store=_StubStore([_dated_entry("26.07.20")]))
+    assert status == "fresh" and called["n"] == 0
+
+
+def test_ensure_fresh_outlook_collects_when_stale(monkeypatch):
+    called = {"n": 0}
+    monkeypatch.setattr(svc, "fetch_and_summarize", lambda **k: called.__setitem__("n", called["n"] + 1) or {"new": 1})
+    status = mo.ensure_fresh_outlook(today_stamp="26.07.20", store=_StubStore([_dated_entry("26.07.19")]))
+    assert status == "collected" and called["n"] == 1
+
+
+def test_ensure_fresh_outlook_daily_guard_skips_second(monkeypatch):
+    # 같은 날 두 번째 호출은 재수집 안 함(하루 1회 가드) — 주말/공휴일 무자료 폭주 방지.
+    called = {"n": 0}
+    monkeypatch.setattr(svc, "fetch_and_summarize", lambda **k: called.__setitem__("n", called["n"] + 1) or {})
+    store = _StubStore([_dated_entry("26.07.19")])
+    first = mo.ensure_fresh_outlook(today_stamp="26.07.20", store=store)
+    second = mo.ensure_fresh_outlook(today_stamp="26.07.20", store=store)
+    assert first == "collected" and second == "skipped_guard"
+    assert called["n"] == 1  # 수집 1회만
+
+
+def test_ensure_fresh_outlook_timeout_is_graceful(monkeypatch):
+    # 수집이 타임아웃을 넘기면 "attempted"(백그라운드 계속·그 턴은 기존 저장분 사용). 예외 없음.
+    import time
+
+    def _slow(**k):
+        time.sleep(0.3)
+        return {}
+
+    monkeypatch.setattr(svc, "fetch_and_summarize", _slow)
+    status = mo.ensure_fresh_outlook(today_stamp="26.07.20", store=_StubStore([_dated_entry("26.07.19")]), timeout=0.01)
+    assert status == "attempted"
+
+
+def test_ensure_fresh_outlook_error_is_graceful(monkeypatch):
+    # 수집 중 예외는 "error"(no raise) — 챗 흐름이 시황 수집으로 깨지지 않음.
+    def _boom(**k):
+        raise RuntimeError("naver down")
+
+    monkeypatch.setattr(svc, "fetch_and_summarize", _boom)
+    status = mo.ensure_fresh_outlook(today_stamp="26.07.20", store=_StubStore([_dated_entry("26.07.19")]))
+    assert status == "error"
+
+
+def test_ensure_fresh_outlook_never_raises(monkeypatch):
+    # stale 판정 단계부터 예외여도 "error" — 절대 예외를 밖으로 내지 않는다.
+    def _boom(*a, **k):
+        raise RuntimeError("x")
+
+    monkeypatch.setattr(mo, "outlook_is_stale", _boom)
+    assert mo.ensure_fresh_outlook(today_stamp="26.07.20") == "error"
+
+
 # ── 서비스 ──
 def test_service_fetch_and_summarize(monkeypatch, tmp_path):
     metas = [{"nid": "36722", "broker": "KB증권", "title": "t", "date": "26.07.10",

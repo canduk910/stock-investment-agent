@@ -70,8 +70,10 @@ def _stub_view_context(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _stub_outlook(monkeypatch):
-    # 최신 시황 컨텍스트 조회 기본값 = 없음(DB 미접촉).
+    # 최신 시황 컨텍스트 조회 기본값 = 없음(DB 미접촉) + 동기 수집(ensure_fresh_outlook) no-op stub
+    # (실 네이버/OpenAI 미호출·hermetic). macro_view 주입/스테이지 검증 테스트만 재설정.
     monkeypatch.setattr(chatmod, "build_recent_outlook_context", lambda **k: None)
+    monkeypatch.setattr(chatmod, "ensure_fresh_outlook", lambda **k: "fresh")
 
 
 def _collect(gen):
@@ -120,6 +122,44 @@ def test_macro_view_injects_outlook_context_in_stream(monkeypatch):
     _collect(chat_stream("지금 시장 어때?", _JUDGE, Session(), client=client))
     system_prompt = client.calls[0]["messages"][0]["content"]
     assert "최신 증권사 시황" in system_prompt and "KB증권" in system_prompt
+
+
+def test_macro_view_emits_outlook_stage_before_generate(monkeypatch):
+    # 시장 질문 스트림 → "최신 시황 확인 중" outlook stage 를 generate 앞에 낸다(수집 대기 표시).
+    monkeypatch.setattr(chatmod, "classify", lambda t: "macro_view")
+    monkeypatch.setattr(chatmod, "ensure_fresh_outlook", lambda **k: "collected")
+    monkeypatch.setattr(chatmod, "build_recent_outlook_context", lambda **k: "[시황] KB")
+    client = _FakeStreamClient([[_content_chunk("확장 국면입니다.")]])
+    events = _collect(chat_stream("지금 시장 어때?", _JUDGE, Session(), client=client))
+    stages = [e["stage"] for e in events if e["type"] == "stage"]
+    assert "outlook" in stages
+    outlook_idx = next(i for i, e in enumerate(events) if e.get("stage") == "outlook")
+    gen_idx = next(i for i, e in enumerate(events) if e.get("stage") == "generate")
+    assert outlook_idx < gen_idx  # outlook(수집 대기) → generate(답변)
+
+
+def test_non_market_stream_no_outlook_stage(monkeypatch):
+    # 비-시장 인텐트는 outlook stage 미방출(수집 훅 미호출).
+    monkeypatch.setattr(chatmod, "classify", lambda t: "stock_analysis")
+
+    def _boom(**k):
+        raise AssertionError("ensure_fresh_outlook must not run for non-market intent")
+
+    monkeypatch.setattr(chatmod, "ensure_fresh_outlook", _boom)
+    client = _FakeStreamClient([[_content_chunk("삼성전자 설명.")]])
+    events = _collect(chat_stream("삼성전자 어때", _JUDGE, Session(), client=client))
+    assert "outlook" not in [e["stage"] for e in events if e["type"] == "stage"]
+
+
+def test_guardrail_stream_skips_outlook_stage_and_collection(monkeypatch):
+    # 위험 하드블록 스트림 → outlook stage/수집 없음(선차단 불변, LLM 미호출).
+    def _boom(**k):
+        raise AssertionError("no collection on guardrail block")
+
+    monkeypatch.setattr(chatmod, "ensure_fresh_outlook", _boom)
+    events = _collect(chat_stream("빚내서 몰빵할까", _JUDGE, Session(), client=_FakeStreamClient([])))
+    assert "outlook" not in [e["stage"] for e in events if e["type"] == "stage"]
+    assert chatmod._GUARDRAIL_MESSAGE in "".join(e.get("text", "") for e in events)
 
 
 # --- 인텐트 → 우측 패널 결정적 라우팅(스트림) ---

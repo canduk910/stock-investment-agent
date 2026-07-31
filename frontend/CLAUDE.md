@@ -39,7 +39,7 @@
 - **목표가 능동 알림은 `App` 레벨로 이관**: WatchlistView가 이제 온디맨드(상시 마운트 아님)라, 60s 폴링을 `App`이 직접(`fetchWatchlist`+`detectTargetAlerts`) 수행 → 패널 내용과 **무관하게** 앱레벨 배너+`Notification` 동작.
 
 ## 챗봇 (W09)
-- **응답은 SSE 스트리밍**(`postChatStream`→`POST /api/chat/stream`)이 기본, `postChat`(논스트림)은 폴백. `lib/sseChat.js`의 `parseSSEBuffer`(순수함수)가 `\n\n` 경계로 이벤트를 재조립한다 — 청크가 경계를 가로질러/여러 이벤트가 한 청크로 오는 경우 방어(TextDecoder `stream:true`). 이벤트 `{type:stage|token|popups|done}`, stage enum은 `lib/chatStages.js`가 백엔드와 **SSOT로 공유**.
+- **응답은 SSE 스트리밍**(`postChatStream`→`POST /api/chat/stream`)이 기본, `postChat`(논스트림)은 폴백. `lib/sseChat.js`의 `parseSSEBuffer`(순수함수)가 `\n\n` 경계로 이벤트를 재조립한다 — 청크가 경계를 가로질러/여러 이벤트가 한 청크로 오는 경우 방어(TextDecoder `stream:true`). 이벤트 `{type:stage|token|popups|done}`, stage enum은 `lib/chatStages.js`가 백엔드와 **SSOT로 공유**. **stage 5단계** `analyze→regime→outlook→generate→summarize`(`STAGES` 배열) — `outlook`("최신 시황 확인 중")은 시장 질문(macro_view)이 stale 시황을 그 턴에 동기 수집하는 동안만 등장(regime 다음·generate 앞), 미등장 턴은 체크리스트에서 done 으로 스킵 표시(summarize 와 동형). `stageChecklist(current)`는 순수 로직(현재 stage 이전=done·현재=active·이후=pending).
 - `ChatPanel`은 스트리밍 상태기계: 봇 placeholder를 만들고 `onStage`(진행 체크리스트)·`onToken`(라이브 타이핑)·`onDone`(→`routePopups`→**`onShowPanel`로 우측 패널**) 갱신. 스트림 실패 시 `postChat` 폴백 1회. streaming 중 입력 비활성, 무한 스피너 금지(에러 배너+재시도). (모달·`popupQueue` 폐기 — 팝업은 우측 패널로만.)
 - **팝업 실데이터는 LLM 응답이 아니라 프론트가 직접 조회**(환각 차단): `popups[].name`→`lib/popupRouter.js`가 컴포넌트로 라우팅(`show_stock_report`→번들 API, `show_macro_dashboard`→regime API, `show_watchlist`→watchlist API, **`show_balance`→`/api/balance`**). `POPUP_KIND` 5종이 라우팅 SSOT. LLM은 "무엇을 띄울지"만 준다.
 - **ticker 유효성은 `lib/ticker.js` 단일 출처**(`/^[0-9A-Za-z]{6}$/`) — 직접입력(StockReport)과 팝업 라우팅이 공유. 불량 코드는 조회 없이 안내로 graceful 처리.

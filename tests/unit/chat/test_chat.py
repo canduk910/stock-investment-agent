@@ -59,8 +59,10 @@ def _stub_view_context(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _stub_outlook(monkeypatch):
-    # 최신 시황 컨텍스트 조회 기본값 = 없음(DB 미접촉). macro_view 주입 테스트만 재설정.
+    # 최신 시황 컨텍스트 조회 기본값 = 없음(DB 미접촉). + 동기 수집(ensure_fresh_outlook)도 no-op
+    # stub(실 네이버/OpenAI 미호출·hermetic). macro_view 주입/수집 검증 테스트만 재설정.
     monkeypatch.setattr(chatmod, "build_recent_outlook_context", lambda **k: None)
+    monkeypatch.setattr(chatmod, "ensure_fresh_outlook", lambda **k: "fresh")
 
 
 def test_tool_calls_response_splits_text_and_popups():
@@ -212,6 +214,43 @@ def test_non_market_intent_skips_outlook_context(monkeypatch):
     client = _FakeClient([_resp(content="삼성전자 설명.")])
     chat("삼성전자 어때", _JUDGE, Session(), client=client)  # _boom 안 나면 게이팅 정상
     assert "최신 증권사 시황" not in client.calls[0]["messages"][0]["content"]
+
+
+# ── macro_view 동기 시황 최신화(stale 시 그 턴에 수집) ──
+def test_macro_view_ensures_fresh_outlook(monkeypatch):
+    # 시장 질문이면 그 턴에 최신 시황 동기 수집 훅(ensure_fresh_outlook)을 호출한 뒤 컨텍스트 주입.
+    monkeypatch.setattr(chatmod, "classify", lambda t: "macro_view")
+    seen = {"n": 0}
+    monkeypatch.setattr(
+        chatmod, "ensure_fresh_outlook", lambda **k: seen.__setitem__("n", seen["n"] + 1) or "collected"
+    )
+    monkeypatch.setattr(chatmod, "build_recent_outlook_context", lambda **k: "[시황 리포트 1]\n- 증권사: KB증권")
+    client = _FakeClient([_resp(content="지금은 확장 국면입니다.")])
+    chat("지금 시장 어때?", _JUDGE, Session(), client=client)
+    assert seen["n"] == 1  # 동기 수집 훅 1회 호출
+    assert "KB증권" in client.calls[0]["messages"][0]["content"]  # 최신화 후 컨텍스트 주입
+
+
+def test_non_market_intent_skips_ensure_fresh_outlook(monkeypatch):
+    # 비-시장 인텐트면 수집 훅도 호출되지 않는다(게이팅·비용 0).
+    monkeypatch.setattr(chatmod, "classify", lambda t: "stock_analysis")
+
+    def _boom(**k):
+        raise AssertionError("ensure_fresh_outlook must not run for non-market intent")
+
+    monkeypatch.setattr(chatmod, "ensure_fresh_outlook", _boom)
+    client = _FakeClient([_resp(content="삼성전자 설명.")])
+    chat("삼성전자 어때", _JUDGE, Session(), client=client)  # _boom 안 나면 게이팅 정상
+
+
+def test_guardrail_block_skips_ensure_fresh_outlook(monkeypatch):
+    # 위험 하드블록이면 시황 수집·LLM 미호출(선차단 불변).
+    def _boom(**k):
+        raise AssertionError("no collection on guardrail block")
+
+    monkeypatch.setattr(chatmod, "ensure_fresh_outlook", _boom)
+    out = chat("빚내서 몰빵할까", _JUDGE, Session(), client=_FakeClient([]))
+    assert out["text"] == chatmod._GUARDRAIL_MESSAGE and out["popups"] == []
 
 
 # ── 인텐트 → 우측 패널 결정적 라우팅(원 설계 반영) ──

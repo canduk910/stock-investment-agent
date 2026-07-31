@@ -20,7 +20,7 @@ import json
 from chat.build_prompt import build_prompt
 from chat.intent import classify, guardrail_label
 from chat.intent_panel import merge_intent_panel, with_screener_panel
-from chat.market_outlook import build_recent_outlook_context
+from chat.market_outlook import build_recent_outlook_context, ensure_fresh_outlook
 from chat.session import Session
 from chat.tools import (
     CHAT_MODEL,          # 일반 대화(상위 terra) — chat()/chat_stream() 1차·2차
@@ -122,7 +122,9 @@ _OUTLOOK_CONTEXT_HEADER = (
     "아래는 최근 증권사 시황 리포트들의 요약이다. 시장 전반 질문에 이 내용을 근거로 답하되: "
     "(1) 반드시 '여러 시황 리포트에 따르면'처럼 **출처를 귀속**해 인용하고, (2) 위 국면 판정(코드가 "
     "결정한 결과)과 이 시황을 **함께** 설명하며, (3) 네 자신의 매수/매도·시장 방향 단정 판정은 하지 "
-    "말고(시황은 리포트의 인용일 뿐), (4) 리포트 작성일(최신성)과 면책을 유지하라.\n"
+    "말고(시황은 리포트의 인용일 뿐), (4) 각 시황은 **작성일** 기준이다 — 작성일이 오늘과 다르면 "
+    "답변에서 '○월 ○일 시황 기준'임을 밝히고 오래된 시황을 현재 상황으로 단정하지 마라, "
+    "(5) 리포트 작성일(최신성)과 면책을 유지하라.\n"
 )
 
 
@@ -189,29 +191,27 @@ def _create_with_retry(client, **kwargs):
         return client.chat.completions.create(**merged)
 
 
-def _prepare_turn(user_query: str, judgement: dict, session: Session, *, client):
-    """chat()·chat_stream() 공유 프리앰블 — 위험 2층 차단 + 인텐트 + 메시지 조립의 **단일 출처**.
-
-    과거 두 경로가 같은 ~25줄을 각자 들고 있어 "chat 만 고치고 stream 을 빠뜨리는" 회귀가
-    실제로 발생했다(P2 user/db 관통 누락 이력) → 안전 로직을 이 헬퍼 하나로 모은다.
+def _guard_and_classify(user_query: str, session: Session, *, client):
+    """위험 2층 차단(하드블록→ML→LLM 재분류) + 인텐트 분류 — chat()·chat_stream() 공유 단일 출처.
 
     수행 순서(안전 원칙 — 순서 자체가 계약):
       1a. `guardrail_label`(결정적 키워드 4유형) → **LLM 미호출 하드블록**(안전 하한선).
-      (client 지연 생성 — 하드블록이면 OpenAI 클라이언트도 만들지 않는다.)
-      2.  `classify` 1회 — risk 체크 + 네비게이션 패널 라우팅 공용(아래 merge 에서 재사용).
+          (client 지연 생성 — 하드블록이면 OpenAI 클라이언트도 만들지 않는다.)
+      2.  `classify` 1회 — risk 체크 + 네비게이션 패널 라우팅 공용(에필로그 merge 에서 재사용).
       1b. ML=risk 면 `_reclassify_risk`(LLM 2차) — 오탐 구제 / 위험 확정 차단.
-      3.  intent=macro_view 면 최신 시황 컨텍스트(per-turn·추가 LLM 0·graceful) 조회 후
-          system(build_prompt+핀 컨텍스트) + 세션 히스토리 + user 로 messages 조립.
 
-    반환: (blocked, client, intent, messages)
-      - blocked=True → 차단 확정. **세션 append 는 이미 완료** — 호출부는 _GUARDRAIL_MESSAGE 를
-        반환(chat)/yield(chat_stream)만 하면 된다. 이때 intent/messages 는 None.
-      - blocked=False → client 는 보장(None 이었으면 생성), messages 로 LLM 호출 진행.
+    반환: (blocked, client, intent)
+      - blocked=True → 차단 확정. **세션 append 는 이미 완료**(호출부는 _GUARDRAIL_MESSAGE 만
+        반환/yield). intent 는 하드블록이면 None·재분류 확정이면 "risk_guardrail".
+      - blocked=False → client 보장(None 이었으면 생성), intent 는 분류 결과.
+
+    분해 이유: chat_stream 이 **수집 전에** outlook stage 를 yield 하려면 차단 판정과 시황 수집이
+    분리돼야 한다. 안전 로직(차단 순서)은 여전히 이 헬퍼 하나가 단일 출처다("한쪽만 고치는" 회귀 방지).
     """
     # 1a. 결정적 키워드(4유형) → LLM 미호출 하드블록(안전 하한선, 재분류 없이).
     if guardrail_label(user_query):
         session.append(user_query, _GUARDRAIL_MESSAGE)
-        return True, client, None, None
+        return True, client, None
 
     if client is None:
         client = _make_client()
@@ -222,15 +222,51 @@ def _prepare_turn(user_query: str, judgement: dict, session: Session, *, client)
     # 1b. ML 이 risk 로 보면 LLM 2차 재분류 — 오탐이면 통과(구제), 위험 확정이면 차단.
     if intent == "risk_guardrail" and _reclassify_risk(client, user_query):
         session.append(user_query, _GUARDRAIL_MESSAGE)
-        return True, client, intent, None
+        return True, client, intent
 
-    # 시장 질문이면 최신 시황 요약을 국면 판정과 함께 컨텍스트로 주입(per-turn·추가 LLM 0·graceful).
-    outlook_context = build_recent_outlook_context() if intent == "macro_view" else None
+    return False, client, intent
+
+
+def _outlook_context_for(intent: str, *, client) -> str | None:
+    """시장 질문(macro_view)이면 최신 시황 컨텍스트(stale 시 동기 수집 후) 반환. 그 외 None.
+
+    저장 시황이 시스템일자(KST) 기준 stale 이면 `ensure_fresh_outlook`(동기·하루 1회 가드·타임아웃
+    상한·전면 graceful)가 그 턴에 최신화한 뒤, `build_recent_outlook_context`로 프롬프트 컨텍스트를
+    만든다(수집+빌드 단일 출처·추가 LLM 0·per-turn·핀 아님). guardrail 차단 뒤에만 호출된다.
+    """
+    if intent != "macro_view":
+        return None
+    ensure_fresh_outlook(client=client)  # stale 이면 동기 수집(no-op/collected/attempted/graceful)
+    return build_recent_outlook_context()
+
+
+def _build_turn_messages(
+    user_query: str, judgement: dict, session: Session, outlook_context: str | None
+):
+    """system(build_prompt+핀 컨텍스트) + 세션 히스토리 + user → LLM messages 조립(공유 단일 출처)."""
     messages = [
         {"role": "system", "content": _build_system_prompt(judgement, session, outlook_context)}
     ]
     messages += session.history()
     messages.append({"role": "user", "content": user_query})
+    return messages
+
+
+def _prepare_turn(user_query: str, judgement: dict, session: Session, *, client):
+    """chat() 하위호환 프리앰블 — 위험 2층 차단 + 인텐트 + (시장질문 시 동기 시황) + 메시지 조립.
+
+    내부는 분해된 헬퍼(`_guard_and_classify`→`_outlook_context_for`→`_build_turn_messages`)를
+    순서대로 호출해 기존 시그니처·반환을 보존한다(chat_stream 은 stage 를 끼우려 헬퍼를 직접 사용).
+
+    반환: (blocked, client, intent, messages)
+      - blocked=True → 세션 append 완료, intent/messages 는 None(하드블록)·intent 는 재분류 확정.
+      - blocked=False → client 보장, messages 로 LLM 호출 진행.
+    """
+    blocked, client, intent = _guard_and_classify(user_query, session, client=client)
+    if blocked:
+        return True, client, intent, None
+    outlook_context = _outlook_context_for(intent, client=client)
+    messages = _build_turn_messages(user_query, judgement, session, outlook_context)
     return False, client, intent, messages
 
 
@@ -367,24 +403,30 @@ def chat_stream(user_query: str, judgement: dict, session: Session, *, client=No
     - 최종 누적 text 로 session.append. 예외는 폴백 token 으로 크래시 없이 마무리.
 
     이벤트 shape(frontend·QA 계약):
-      {"type":"stage","stage": analyze|regime|generate|summarize}
+      {"type":"stage","stage": analyze|regime|outlook|generate|summarize}
       {"type":"token","text": <델타>}
       {"type":"popups","popups":[{"name","args"}]}
       {"type":"done","popups":[...]}
     (stage:analyze/regime 는 라우트가 주입하지만, guardrail 판정을 여기서 하므로
-     analyze 는 chat_stream 도 선두에 낸다 — 라우트가 중복 없이 흐름을 조립한다.)
+     analyze 는 chat_stream 도 선두에 낸다 — 라우트가 중복 없이 흐름을 조립한다. stage:outlook 은
+     시장 질문(macro_view)이 stale 시황을 동기 수집하는 동안 "최신 시황 확인 중"을 표시한다.)
     """
     yield {"type": "stage", "stage": "analyze"}
 
-    # 공유 프리앰블(위험 2층 차단·인텐트·메시지 조립) — chat() 과 단일 출처(_prepare_turn).
-    blocked, client, intent, messages = _prepare_turn(
-        user_query, judgement, session, client=client
-    )
+    # 위험 2층 차단 + 인텐트 — chat() 과 단일 출처(_guard_and_classify). 차단이면 여기서 종료.
+    blocked, client, intent = _guard_and_classify(user_query, session, client=client)
     if blocked:
-        # 차단 안내는 _prepare_turn 이 세션에 이미 남겼다 — 토큰+done 만 흘리고 종료(LLM 미호출).
+        # 차단 안내는 _guard_and_classify 가 세션에 이미 남겼다 — 토큰+done 만(수집·LLM 미호출).
         yield {"type": "token", "text": _GUARDRAIL_MESSAGE}
         yield {"type": "done", "popups": []}
         return
+
+    # 시장 질문이면 최신 시황을 동기 수집(stale 시)한다 — 수집 대기 전에 stage 를 먼저 낸다.
+    # (guardrail 차단이면 위에서 이미 종료 → 수집·stage 는 blocked=False & macro_view 에서만.)
+    if intent == "macro_view":
+        yield {"type": "stage", "stage": "outlook"}
+    outlook_context = _outlook_context_for(intent, client=client)  # 동기 수집(stale이면)·graceful
+    messages = _build_turn_messages(user_query, judgement, session, outlook_context)
 
     popups: list[dict] = []
     full_text = ""
