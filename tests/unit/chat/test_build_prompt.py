@@ -206,3 +206,25 @@ def test_prompt_analyst_fetch_channel_and_offer():
     assert "제안" in text or "수집해 올까요" in text  # 없으면 먼저 제안(자동수집 아님)
     # 네이버 리포트를 'PDF 폴더 재인덱스'로 오안내하지 않음(그건 업로드 PDF 경우에 한정).
     assert "직접 올린" in text or "한한다" in text
+
+
+# ── ⑩ 답변 서식 — 표·다이어그램 유도(수치 날조 금지·판정=코드 유지) ────────────────
+
+
+def test_prompt_encourages_table_and_diagram_formatting():
+    # ⑩ 서식 블록 — 비교·나열은 마크다운 표(GFM), 관계·흐름·구성비는 mermaid 다이어그램으로 유도.
+    text = build_prompt(_JUDGEMENT)
+    assert "답변 서식" in text  # ⑩ 블록 헤더
+    assert "마크다운 표" in text  # GFM 표로 정리 유도(프론트가 remark-gfm 렌더)
+    assert "mermaid" in text  # mermaid 코드블록 다이어그램 유도(프론트가 렌더)
+    assert "다이어그램" in text
+
+
+def test_prompt_format_block_reaffirms_no_fabrication_and_code_judgement():
+    # ⑩ 블록 내부(⑩ 이후 substring)에서 안전 불변식 재확인: 표·다이어그램 수치도 컨텍스트/판정/
+    # 스냅샷/리포트에 있는 값만(날조 금지), 판정 주체는 코드(에이전트 매수/매도 판정 아님), 면책 유지.
+    text = build_prompt(_JUDGEMENT)
+    block = text.split("⑩", 1)[1]  # ⑩ 은 마지막 블록 → 이후 전체가 서식 블록
+    assert "판정 주체는 코드" in block  # 다이어그램으로 표현해도 판정=코드
+    assert "지어내" in block  # 없는 수치를 지어내 표·도형을 채우지 마라
+    assert "면책" in block  # 단정 금지·면책 유지

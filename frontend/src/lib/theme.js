@@ -12,6 +12,8 @@ const FALLBACK = {
   '--c-text-muted': '#8a94a8',
   '--c-border': '#d8e0ea',
   '--c-border-strong': '#c2cdda',
+  '--c-blue-soft': '#e8f0fe', // mermaid primaryColor(노드 채움)
+  '--c-text': '#1e2a44', // mermaid textColor(본문·노드 텍스트)
   '--c-surface': '#ffffff',
   '--c-surface-2': '#eef2f8', // 스테이지 리본 뉴트럴 톤(상승 구간)
   '--c-surface-3': '#f8fafd', // 스테이지 리본 뉴트럴 톤(전환 구간, 가장 옅음)
@@ -56,5 +58,41 @@ export function readChartPalette() {
     flatSoft: t('--c-flat-soft'),
     emphSoft: t('--c-emph-soft'),
     emphStrong: t('--c-emph-strong'),
+  }
+}
+
+// mermaid(SVG 생성기)도 CSS var() 를 직접 못 읽으므로 theme.css 토큰 '값'을 읽어 initialize 에 넘긴다.
+// 팔레트 SSOT 는 theme.css — 여기선 읽기만(색 하드코딩 아님, 미조회 시 위 FALLBACK 미러값).
+// 팔레트 규칙 준수: 흰/회/파랑/남색/검정 + 강조 주황만. 가격 방향색(--c-up/down)·경보 빨강(--c-danger)은 쓰지 않는다.
+export function readMermaidTheme() {
+  const cs =
+    typeof window !== 'undefined' && typeof getComputedStyle === 'function'
+      ? getComputedStyle(document.documentElement)
+      : null
+  const t = (name) => readToken(cs, name)
+  return {
+    theme: 'base', // base 테마 위에 themeVariables 로 팔레트 주입
+    themeVariables: {
+      fontFamily:
+        'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
+      background: t('--c-surface'), // 다이어그램 배경 = 흰 표면
+      primaryColor: t('--c-blue-soft'), // 노드 채움 = 옅은 파랑
+      primaryBorderColor: t('--c-navy'), // 노드 테두리 = 남색
+      primaryTextColor: t('--c-text'), // 노드 텍스트 = 본문색
+      titleColor: t('--c-navy'),
+      nodeBorder: t('--c-navy'),
+      textColor: t('--c-text'),
+      lineColor: t('--c-border-strong'), // 엣지 선 = 강한 회색
+      secondaryColor: t('--c-surface-3'), // 보조 노드·클러스터 = 밝은 표면
+      clusterBkg: t('--c-surface-3'),
+      noteBkgColor: t('--c-emph-soft'), // 노트 = 강조 주황 계열
+      noteTextColor: t('--c-emph-strong'),
+      noteBorderColor: t('--c-emph'),
+      pie1: t('--c-navy'), // 파이 조각 = 남색/파랑 계열(초록·황색 없음)
+      pie2: t('--c-blue'),
+      pie3: t('--c-blue-strong'),
+      pie4: t('--c-text-secondary'),
+      pieStrokeColor: t('--c-surface'),
+    },
   }
 }

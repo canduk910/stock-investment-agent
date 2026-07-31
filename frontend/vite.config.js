@@ -7,6 +7,10 @@ const proxyTarget = process.env.VITE_PROXY_TARGET || 'http://127.0.0.1:8000'
 
 export default defineConfig({
   plugins: [react()],
+  // mermaid 는 동적 import 로 별도 청크로 분리(lazy) — 그 청크 크기 경고만 상향(에러 아님).
+  build: {
+    chunkSizeWarningLimit: 900,
+  },
   // 테스트: 컴포넌트 렌더 테스트를 위해 jsdom 환경(IMP-17). 순수 lib 테스트도 jsdom 에서 그대로 통과.
   test: {
     environment: 'jsdom',

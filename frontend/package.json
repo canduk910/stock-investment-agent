@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "klinecharts": "^9.8.12",
+    "mermaid": "^11.16.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^9.1.0",

@@ -1,12 +1,23 @@
+import { useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { routePopups } from '../lib/popupRouter.js'
 import { stageChecklist } from '../lib/chatStages.js'
+import MermaidDiagram from './MermaidDiagram.jsx'
 
-// 마크다운 링크는 새 탭 + rel(보안). react-markdown 기본은 원문 HTML을 렌더하지 않으므로
-// LLM 출력의 <script> 등은 문자로 이스케이프된다(XSS 불가) — 별도 sanitize 불필요.
-const MD_COMPONENTS = {
-  a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+// 코드블록 렌더러 — react-markdown v9 는 펜스 코드를 <pre><code class="language-xxx"> 로 낸다.
+// pre 만 오버라이드하면 인라인 code 경로는 안 건드려 기존 .chat__md code(인라인) 계약이 그대로 보존된다.
+// language-mermaid 펜스만 MermaidDiagram 으로, 나머지 코드블록은 기본 <pre> 로 렌더.
+// (node 는 DOM 속성이 아니라 destructure 로 제거 — <pre> 에 새지 않게.)
+function MarkdownPre({ node, children, streaming, ...props }) {
+  const codeNode = node?.children?.[0]
+  const className = codeNode?.properties?.className
+  const isMermaid = Array.isArray(className) && className.includes('language-mermaid')
+  if (isMermaid) {
+    const raw = codeNode?.children?.[0]?.value ?? ''
+    return <MermaidDiagram chart={raw} streaming={streaming} />
+  }
+  return <pre {...props}>{children}</pre>
 }
 
 // 팝업 kind → 재열기 칩 라벨(닫은 팝업을 다시 열 수 있게).
@@ -45,6 +56,16 @@ export default function ChatMessage({ role, text, popups, streaming, stage, onOp
   const isUser = role === 'user'
   const specs = !isUser ? routePopups(popups) : []
   const showStages = streaming && !text // 토큰 도착 전: 단계 체크리스트
+  // 마크다운 컴포넌트 매핑 — pre 렌더러가 streaming 을 클로저로 잡아야 해 컴포넌트 내부에서 memo.
+  // 스트리밍 중엔 streaming=true 로 고정(토큰 누적)이라 재생성 없음, 완료 시 false 로 1회만 재생성.
+  const mdComponents = useMemo(
+    () => ({
+      // 링크는 새 탭 + 보안 rel. react-markdown 기본이 원문 HTML 미렌더 → <script> 등 문자 이스케이프(XSS 불가).
+      a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+      pre: (props) => <MarkdownPre {...props} streaming={streaming} />,
+    }),
+    [streaming],
+  )
   return (
     <div className={`chat__row ${isUser ? 'chat__row--user' : 'chat__row--bot'}`}>
       <div className={`chat__bubble ${isUser ? 'chat__bubble--user' : 'chat__bubble--bot'}`}>
@@ -57,7 +78,7 @@ export default function ChatMessage({ role, text, popups, streaming, stage, onOp
             // 봇(LLM) 응답은 마크다운 렌더 — 굵게/목록/코드/제목/링크 등. 스트리밍 중엔 커서 병기
             // (미완성 문법은 닫힐 때까지 평문으로 보이다가 완성되면 렌더). 원문 HTML은 미렌더(XSS 불가).
             <div className="chat__md">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
                 {text}
               </ReactMarkdown>
               {streaming && <span className="chat__cursor" aria-hidden="true" />}

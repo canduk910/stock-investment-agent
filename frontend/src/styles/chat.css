@@ -237,10 +237,11 @@
 }
 .chat__md strong {
   font-weight: 700;
-  color: var(--c-navy);
+  color: var(--c-emph); /* 굵게 = 강조 주황 */
 }
 .chat__md em {
   font-style: italic;
+  color: var(--c-blue); /* 기울임 = 파랑 액센트 */
 }
 .chat__md a {
   color: var(--c-blue-strong);
@@ -253,6 +254,9 @@
 }
 .chat__md li {
   margin: 2px 0;
+}
+.chat__md li::marker {
+  color: var(--c-emph); /* 목록 마커 = 강조 주황 */
 }
 .chat__md li > p {
   margin: 0;
@@ -268,19 +272,23 @@
 }
 .chat__md h1 {
   font-size: 17px;
+  color: var(--c-black); /* 제목1 = 검정(최고 위계) */
 }
 .chat__md h2 {
   font-size: 15px;
+  /* 제목2 = 남색(공용 규칙 유지) */
 }
 .chat__md h3,
 .chat__md h4 {
   font-size: 14px;
+  color: var(--c-blue-strong); /* 제목3·4 = 파랑 */
 }
 /* 인라인 코드 */
 .chat__md code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.88em;
-  background: var(--c-surface-2);
+  color: var(--c-blue-strong); /* 인라인 코드 = 파랑 틴트 */
+  background: var(--c-blue-soft);
   border: 1px solid var(--c-border);
   border-radius: var(--radius-sm);
   padding: 1px 5px;
@@ -295,6 +303,7 @@
   overflow-x: auto;
 }
 .chat__md pre code {
+  color: var(--c-text); /* 블록 코드는 중립(파랑 아님) — 인라인만 파랑 틴트 */
   background: none;
   border: none;
   padding: 0;
@@ -326,8 +335,34 @@
   text-align: left;
 }
 .chat__md th {
+  color: var(--c-navy); /* 표 헤더 = 남색 */
   background: var(--c-surface-3);
   font-weight: 700;
+}
+
+/* ── mermaid 다이어그램(완료 시) + 폴백(스트리밍/실패/로딩) — 색은 theme.css 토큰만 ── */
+.chat__mermaid {
+  margin: 0 0 8px;
+  max-width: 100%;
+  overflow-x: auto; /* 넓은 다이어그램은 내부 가로 스크롤(본문은 넘치지 않게) */
+  text-align: center;
+}
+.chat__mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* 폴백 = 코드블록 톤 재사용(원본 텍스트 그대로 보존) */
+.chat__mermaid-fallback {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  color: var(--c-text);
+  background: var(--c-surface-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  white-space: pre;
+  overflow-x: auto;
 }
 
 /* ── 진행 단계 체크리스트(SSE stage, 토큰 도착 전) ── */
