@@ -228,3 +228,12 @@ def test_prompt_format_block_reaffirms_no_fabrication_and_code_judgement():
     assert "판정 주체는 코드" in block  # 다이어그램으로 표현해도 판정=코드
     assert "지어내" in block  # 없는 수치를 지어내 표·도형을 채우지 마라
     assert "면책" in block  # 단정 금지·면책 유지
+
+
+def test_prompt_makes_visuals_default_when_fitting():
+    # ⑩ 서식 블록 — 표·다이어그램을 "요청 시에만"이 아니라 **적합하면 기본으로 곁들이도록** 유도.
+    # (사용자가 "그림 곁들여" 라고 하지 않아도 시각 자료를 먼저 제시) + 부적합한 답변엔 억지로 넣지 않기.
+    block = build_prompt(_JUDGEMENT).split("⑩", 1)[1]
+    assert "기본" in block  # 기본적으로 곁들임(선택적 "~해도 된다" 표현 탈피)
+    assert "요청" in block  # "요청을 하지 않아도" — 프로액티브(요청 의존 아님)
+    assert "억지로" in block  # 단순 답변엔 억지로 넣지 않음(도형을 위한 도형 금지·남용 방지)
