@@ -189,6 +189,215 @@ notebooks/    과제 실행 노트북(5요소 데모 + 결정적 엔진 재사�
 
 ---
 
+## 🎤 발표 자료 (Presentation Base)
+
+> 발표 슬라이드 제작용 기초자료. 원본 계획 `invest_develop_PLAN.md`를 기준으로, 실제 구현 현황과 기술 구조·흐름을 정리한다. mermaid 다이어그램은 GitHub·앱 챗봇 양쪽에서 렌더된다.
+
+### 1) 프로젝트 취지
+
+**한 줄 정의** (PLAN §0): 개인 투자자를 위한 **금융 분석 어시스턴트**. 거시 시장 국면(매크로)을 **규칙 기반으로 판정**해 권장 현금비중을 산출하고, 보유·관심 종목을 기본적/기술적으로 분석하며, 챗봇이 이 정보를 종합해 자연어로 상담한다. 대화 중 필요할 때 매크로/종목 화면을 실시간 패널로 띄운다. **매매 주문은 실행하지 않고 "제안"까지만 한다.**
+
+**문제의식 — 불변 3원칙** (PLAN §1, "변경 금지"):
+1. **판단 보조자, 자동 매매자 아님** — 매수/매도 주문은 절대 실행하지 않는다(책임 소재 리스크 회피).
+2. **환각 차단** — 시세·재무 등 모든 구체적 숫자는 조회한 실제 데이터에서만 인용. LLM이 숫자를 지어내지 않는다.
+3. **규칙과 LLM의 역할 분리** — 국면 판정·정량 계산은 결정적 코드가 수행, LLM은 그 결과를 "설명"만 한다(재판정 금지).
+
+**과제 성격**: 연세대학교 정보대학원 · AI핀테크 *[AI핀테크 Agent 분석과 설계]* — 5주(WEEK 06~10) "Small Scope" 금융 AI Agent.
+
+**계획 → 실제 구현 (진화 스토리)** — 5주 로드맵을 완주한 뒤 확장하며 스택이 진화했다. 단, 핵심 안전 원칙은 처음부터 끝까지 불변이다.
+
+| 항목 | 원본 계획 (PLAN) | 실제 구현 |
+|---|---|---|
+| 인프라 | AWS (Lambda·DynamoDB·ElastiCache) | **GCP** Cloud Run + Cloud SQL(Postgres) + Secret Manager |
+| LLM 모델 | gpt-4o 단일 | **gpt-5.6 하이브리드** (terra 대화 · luna 요약) + text-embedding-3-small |
+| 국면 판정 | 7지표 가중 투표 (4단계) | **경기×심리 2축 매트릭스** (4국면) + 국면 이동 궤적 |
+| 인텐트 분류 | 6분류 (few-shot) | **ML 7분류** (TF-IDF + LogisticRegression) + 2층 위험 가드레일 |
+| 데이터 저장 | DynamoDB | **SQLAlchemy** (SQLite ↔ Postgres 스왑) |
+| **불변 유지** | — | 매매 API 0 · 판정=코드 · 3중 일관성(SSOT) · 현재가 무캐시 · TDD |
+
+---
+
+### 2) 주로 사용한 기술
+
+**아키텍처 개요** — 프론트(React) ↔ FastAPI ↔ 4계층(챗·LLM / 판정 엔진(LLM 미개입) / 외부 수집 / RAG). 판정은 코드가, 설명은 LLM이 담당한다.
+
+```mermaid
+flowchart TB
+  U["사용자 브라우저"] --> FE["React + Vite SPA<br/>(좌: 상시 채팅 · 우: 동적 패널)"]
+  FE -->|"/api"| API["FastAPI (api/)"]
+  API --> CHAT["chat/ — LLM 계층<br/>프롬프트 · function calling · 인텐트"]
+  API --> ENG["판정 엔진 (LLM 미개입)<br/>macro/ 국면 · stock/ 정량요약 · 대순환"]
+  API --> COL["collectors/ — 외부 수집<br/>KIS · FRED · CNN · 네이버 · YouTube"]
+  API --> RAG["rag/ — 임베딩 RAG"]
+  CHAT --> OAI["OpenAI<br/>terra(대화) · luna(요약)"]
+  RAG --> OAI
+  ENG --> COL
+  CHAT --> STORE["세션(인메모리) · DB(SQLite/Postgres) · .cache"]
+```
+
+**① 하이브리드 AI 모델** (`chat/tools.py` — 2상수 SSOT, 하드코딩 0):
+
+| 모델 상수 | 값 | 용도 |
+|---|---|---|
+| `CHAT_MODEL` | **gpt-5.6-terra** (상위) | 사용자 대면 대화 — `chat`/`chat_stream` 1차(tools)·2차(되먹임 답변) |
+| `REPORT_MODEL` | **gpt-5.6-luna** (하위) | 리포트·애널리스트·시황 구조화 요약 · 위험 재분류 · 학습데이터 생성 |
+| `EMBED_MODEL` | text-embedding-3-small | RAG 청크·쿼리 임베딩 |
+
+> 대화 품질은 상위 terra, 스키마 강제 정형 작업은 하위 luna로 비용·지연 절감. 둘 다 추론형이라 function tools 사용 시 `reasoning_effort: none` 필수.
+
+**② 툴 콜링 (Function Calling)** — 두 계열의 되먹임 방식이 다르다.
+- **표시 툴** (`show_stock_report`·`show_macro_dashboard`·`show_watchlist`·`show_balance`·`show_screener`·`manage_watchlist`): `{ok:True}` 확인만 되먹이고 **실데이터는 프론트가 직접 조회**(환각 차단). LLM은 "무엇을 띄울지"만 결정.
+- **콘텐츠 툴** (`summarize_youtube`·`search_report`·`fetch_analyst_reports`·`screen_stocks`): **서버가 실행해 실제 텍스트를 되먹여** LLM이 출처 귀속 요약. `chat.py`는 tool_call을 **범용 포워딩**(새 표시 툴 추가 시 무변경).
+
+**③ 인텐트 분류 + 2층 위험 가드레일** — 사용자 질문을 7라벨로 분류해 우측 패널을 결정적으로 라우팅하고, 위험 질의는 2층으로 차단한다.
+
+```mermaid
+flowchart TD
+  Q["사용자 질문"] --> G{"결정적 정규식 가드레일<br/>단정예측·내부정보·과도위험·시세조종"}
+  G -->|"매치"| BLK["하드블록: 위험 환기·분산 안내<br/>(LLM 미호출)"]
+  G -->|"미매치"| ML["ML 분류<br/>TF-IDF char_wb + LogisticRegression"]
+  ML --> GAZ{"macro_view 예측 &<br/>종목명 gazetteer 매치?"}
+  GAZ -->|"예"| SA["stock_analysis 로 재분류"]
+  GAZ -->|"아니오"| LAB["7개 라벨 확정"]
+  SA --> LAB
+  LAB -->|"risk_guardrail"| RC{"LLM 2차 재분류<br/>luna: block?"}
+  RC -->|"위험 확정"| BLK
+  RC -->|"오탐 구제"| ANS["정상 답변 진행"]
+  LAB -->|"macro / watchlist / portfolio"| PANEL["INTENT_PANEL<br/>결정적 패널 라우팅"]
+  LAB -->|"stock / analyst_report"| FC["LLM function calling<br/>(ticker 필요)"]
+```
+
+> 7라벨: `macro_view`·`stock_analysis`·`portfolio_advice`·`watchlist_mgmt`·`general_qa`·`analyst_report`·`risk_guardrail`. Layer 1 = 결정적 정규식(LLM 0), Layer 2 = ML→LLM 재분류(오탐 구제/위험 확정).
+
+**④ RAG (검색증강생성)** — 두 갈래. (i) 업로드 PDF는 임베딩 RAG, (ii) 소량·실시간 데이터는 "콘텐츠 툴이 곧 검색증강생성".
+
+```mermaid
+flowchart LR
+  subgraph EMB["① 임베딩 RAG (업로드 PDF)"]
+    PDF["reports/ PDF"] --> ING["ingest<br/>pdfplumber · 표보존 청킹"]
+    ING --> EM["embed<br/>text-embedding-3-small"]
+    EM --> ST["store<br/>numpy 코사인 top-k"]
+  end
+  subgraph CT["② 콘텐츠 툴 = 검색증강생성"]
+    T1["summarize_youtube"]
+    T2["fetch_analyst_reports<br/>(네이버 수집)"]
+    T3["screen_stocks<br/>(대순환 스크리너)"]
+  end
+  ST --> T0["search_report"]
+  T0 --> FB["서버 실행 → 실텍스트 되먹임"]
+  T1 --> FB
+  T2 --> FB
+  T3 --> FB
+  FB --> LLM["LLM 출처귀속 요약<br/>(매수/매도 판정 금지 · 면책)"]
+```
+
+**⑤ 판정 엔진 (LLM 미개입, 결정적)**:
+- `macro/engine.py` — 4지표를 **경기×심리 2축**으로 점수화 → 2×2 매트릭스 국면 판정 → **역발상 현금비중**(회복 40% · 확장 60% · 과열 80% · 수축 20%) + VIX 패닉 표시 + 신뢰도. 임계값은 `THRESHOLDS` 상수 하나가 원본(프롬프트 기준표·스키마 범위가 이를 공유 = 3중 일관성).
+- `stock/summary.py` — CAGR · **자기 과거평균 대비 PER**(저평가/적정/고평가) · RSI · MA · 52주 위치 · **이동평균선 대순환(고지로 6단계)**. `stock/screener.py` — 시총상위 유니버스를 대순환 단계로 스캔.
+
+**⑥ 요청 → 응답 흐름 (SSE 스트리밍)** — 한 턴이 흐르는 전 과정. 위험 하드블록은 LLM을 아예 부르지 않는다.
+
+```mermaid
+sequenceDiagram
+  actor U as 사용자
+  participant FE as React SPA
+  participant R as FastAPI 라우트
+  participant C as chat_stream
+  participant AI as OpenAI-terra
+  U->>FE: 질문 입력
+  FE->>R: POST /api/chat/stream (SSE)
+  R->>R: 토큰 한도 · guardrail 하드블록 체크
+  alt 위험 정규식 매치
+    R-->>FE: 위험 환기·분산 안내 (LLM 미호출)
+  else 통과
+    R->>R: live_judgement (국면·현금비중)
+    R->>C: chat_stream(judgement)
+    C->>C: 인텐트 분류 (+ risk 재분류 luna)
+    opt macro_view & 시황 stale
+      C->>C: 시황 동기 최신화 (stage: outlook)
+    end
+    C->>AI: 1차 호출 (tools, tool_choice=auto)
+    alt 표시 툴 (show_*)
+      C-->>FE: popups → 프론트가 실데이터 자체조회
+    else 콘텐츠 툴
+      C->>C: 서버 실행(RAG·네이버·스크리너) 되먹임
+    end
+    C->>AI: 2차 호출 (되먹임 답변)
+    AI-->>FE: SSE 토큰 스트림 + popups
+    FE->>FE: 마크다운 + 표(GFM) + mermaid 렌더
+  end
+```
+
+---
+
+### 3) 구축 환경
+
+**기술 스택 / 버전**:
+
+| 구분 | 스택 |
+|---|---|
+| 백엔드 | Python 3.13 · **uv** · FastAPI · SQLAlchemy 2 · scikit-learn · pdfplumber · psycopg · bcrypt · PyJWT · cryptography(Fernet) · openai |
+| 프론트 | React 18 · **Vite 6** · vitest · react-markdown · remark-gfm · **mermaid** · klinecharts |
+| AI | OpenAI **gpt-5.6-terra / gpt-5.6-luna** · text-embedding-3-small |
+| 외부 데이터 | KIS Open API · FRED · CNN 공포탐욕 · DART(선택) · 네이버 리서치 · YouTube |
+| 인프라 | GCP Cloud Run · Cloud SQL(Postgres) · Secret Manager · GitHub Actions(WIF) |
+
+**로컬 실행**:
+```bash
+# 네이티브
+uv run uvicorn api.main:app --port 8000        # 백엔드
+cd frontend && npm run dev                       # 프론트 → http://localhost:5173 (Vite가 /api 프록시)
+# 도커
+docker compose up --build                         # 백엔드+프론트 2컨테이너
+```
+
+**프로덕션 배포 (GCP) & CI/CD**:
+- **단일 Cloud Run 서비스**(`dk-invest-agent`, `asia-northeast3`)가 FastAPI `/api`와 빌드된 React `dist`를 **같은 오리진**에서 서빙(멀티스테이지 `Dockerfile`) → CORS·프론트 코드 변경 0, SSE 그대로.
+- **Cloud SQL Postgres** — `DATABASE_URL` 스왑(로컬 SQLite ↔ 프로덕션 Postgres). 시크릿은 **Secret Manager** 주입.
+- **CI/CD** — GitHub Actions(`main` push·PR): 백엔드 pytest · 프론트 vitest+build → 통과 시 **Cloud Run 자동 배포**(WIF 키리스 인증, 워크플로에 시크릿 값 0).
+
+```mermaid
+flowchart LR
+  subgraph LOCAL["로컬 개발"]
+    B1["브라우저"] --> V["Vite :5173 (HMR)"]
+    V -->|"proxy /api"| UV["uvicorn :8000"]
+    UV --> SQ["SQLite (.cache/app.db)"]
+  end
+  subgraph PROD["GCP 프로덕션"]
+    B2["브라우저"] -->|"HTTPS"| CR["Cloud Run: dk-invest-agent<br/>FastAPI /api + React dist (같은 오리진)"]
+    CR -->|"unix socket"| PG["Cloud SQL (Postgres 15)"]
+    CR --> SM["Secret Manager"]
+    CR --> EXT["외부 API<br/>KIS · FRED · OpenAI"]
+  end
+  GH["GitHub main push"] -->|"Actions + WIF (키리스)"| CR
+```
+
+**테스트 규모**: 백엔드 pytest **1,004** · 프론트 vitest **472** (hermetic 기본 — 실 외부 API 호출은 `-m live` 마커로 격리).
+
+**인증 / 보안**: bcrypt + JWT(`get_current_user` 게이트) · **KIS 자격증명 Fernet 암호화 DB 저장**(복호화는 사용 직전, 로깅·응답 금지) · RBAC(관리자) · 질문 사용량 한도(KST 매일 리셋·관리자 무제한).
+
+---
+
+### 4) 향후 개선안
+
+**인프라 / 운영**
+- 세션 인메모리 → **Redis/DynamoDB** 이전 (서버 재시작 시 세션 손실 해소).
+- DB 스키마 **Alembic 마이그레이션** 도입 (현재 `create_all` + 경량 `ADD COLUMN`).
+- **시황 프리웜 스케줄러** (매일 자정 미리 수집·캐시 → 챗 첫 stale 질문의 ~45초 지연 제거, PLAN §7 P2).
+
+**기능**
+- RAG **스캔/이미지 PDF vision-OCR 폴백** (현재 텍스트 PDF만) · 벡터스토어 **pgvector/FAISS** 확장.
+- **실시간 시세 WebSocket 스트리밍** (PLAN의 API Gateway/WebSocket 취지).
+- 프로덕션 **YouTube 자막** — 데이터센터 IP 차단 → residential 프록시 도입.
+- 스크리너 **이중 실행 통합** (백엔드 되먹임 + 프론트 자체조회).
+
+**품질 / 관측성**
+- **E2E 테스트**(Playwright) · live 테스트 CI 게이팅.
+- **Cloud Logging/모니터링 대시보드** · 에러 추적.
+- 인텐트 **외국주·2글자 종목 gazetteer 확장** (현재 best-effort) · JWT 리프레시 토큰 · rate limiting.
+
+---
+
 ## 면책
 
 이 프로젝트는 **교육용 과제**이며 투자 자문·매매 권유가 아니다. 모든 판정·요약은 참고용이고, 투자 판단과
