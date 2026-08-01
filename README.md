@@ -185,7 +185,7 @@ frontend/     React + Vite(좌 채팅 + 우 동적 패널)
 notebooks/    과제 실행 노트북(5요소 데모 + 결정적 엔진 재사용 보너스)
 ```
 
-- **루트 문서**: `CLAUDE.md`(설계 원칙·변경 이력) · `DOCKER.md`(로컬 도커) · `DEPLOY_GCP.md`(GCP 배포·CI/CD) · `invest_develop_PLAN.md`(원본 스펙)
+- **루트 문서**: `CLAUDE.md`(설계 원칙·변경 이력) · `DOCKER.md`(로컬 도커) · `DEPLOY_GCP.md`(GCP 배포·CI/CD) · `invest_develop_PLAN.md`(원본 스펙) · `DEMO.md`(발표 데모 시나리오)
 
 ---
 
