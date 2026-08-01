@@ -98,36 +98,43 @@ describe('공개 POST(fetch) 계열', () => {
       expect(gfetch).toHaveBeenCalledWith(url, { method: 'POST' })
     })
   }
+})
 
-  it('setReportContext — JSON 바디(미지정은 null 로 정규화)', async () => {
-    gfetch.mockResolvedValue(res({ ok: true }))
+// ── 패턴 D2: 인증 컨텍스트 핀(authFetch POST) — 보안 수정으로 fetch→authFetch 전환 ──
+// 백엔드가 /api/chat/context·report-context·market-outlook-context 에 인증(Bearer)을 필수로
+// 요구하므로(크로스-유저 컨텍스트 오염 차단), 이 3개는 반드시 authFetch(Authorization 헤더)로 나가야 한다.
+describe('인증 컨텍스트 핀(authFetch) 계열 — Authorization 헤더로 호출', () => {
+  it('setReportContext — authFetch JSON 바디(미지정은 null 로 정규화)', async () => {
+    authFetch.mockResolvedValue(res({ ok: true }))
     await api.setReportContext('s1', '005930', 'r9')
-    expect(gfetch).toHaveBeenCalledWith('/api/chat/report-context', {
+    expect(authFetch).toHaveBeenCalledWith('/api/chat/report-context', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: 's1', ticker: '005930', report_id: 'r9' }),
     })
     await api.setReportContext('s1') // 해제 경로 — ticker/report_id null
-    expect(gfetch).toHaveBeenLastCalledWith('/api/chat/report-context', expect.objectContaining({
+    expect(authFetch).toHaveBeenLastCalledWith('/api/chat/report-context', expect.objectContaining({
       body: JSON.stringify({ session_id: 's1', ticker: null, report_id: null }),
     }))
+    expect(gfetch).not.toHaveBeenCalled() // 공개 fetch 로 새면 안 됨(인증 유출/401)
   })
 
-  it('setMarketOutlookContext / setViewContext — JSON 바디 계약', async () => {
-    gfetch.mockResolvedValue(res({ ok: true }))
+  it('setMarketOutlookContext / setViewContext — authFetch JSON 바디', async () => {
+    authFetch.mockResolvedValue(res({ ok: true }))
     await api.setMarketOutlookContext('s1', 'r2')
-    expect(gfetch).toHaveBeenLastCalledWith('/api/chat/market-outlook-context', expect.objectContaining({
+    expect(authFetch).toHaveBeenLastCalledWith('/api/chat/market-outlook-context', expect.objectContaining({
       method: 'POST',
       body: JSON.stringify({ session_id: 's1', report_id: 'r2' }),
     }))
     await api.setViewContext('s1', 'balance', { a: 1 })
-    expect(gfetch).toHaveBeenLastCalledWith('/api/chat/context', expect.objectContaining({
+    expect(authFetch).toHaveBeenLastCalledWith('/api/chat/context', expect.objectContaining({
       body: JSON.stringify({ session_id: 's1', kind: 'balance', args: { a: 1 } }),
     }))
     await api.setViewContext('s1') // 핀 해제 — kind null·args {}
-    expect(gfetch).toHaveBeenLastCalledWith('/api/chat/context', expect.objectContaining({
+    expect(authFetch).toHaveBeenLastCalledWith('/api/chat/context', expect.objectContaining({
       body: JSON.stringify({ session_id: 's1', kind: null, args: {} }),
     }))
+    expect(gfetch).not.toHaveBeenCalled() // 공개 fetch 로 새면 안 됨
   })
 })
 

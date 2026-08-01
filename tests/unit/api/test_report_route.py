@@ -11,11 +11,17 @@ api/main.py 는 편집 금지(라우터 wiring 은 리더 전담)라 로컬 Fast
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import api.report as report_mod
+from auth.deps import get_current_user
+from infra.db import get_db
+
+_UID = "1"  # 인증 오버라이드 유저 id(리포트 히스토리 유저 스코프 키)
 
 
 @pytest.fixture
@@ -38,6 +44,9 @@ def client(monkeypatch):
     )
     app = FastAPI()
     app.include_router(report_mod.router)
+    # 리포트 생성·히스토리는 인증 필수(유저 스코프 저장) — 고정 유저로 오버라이드, db 는 더미.
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=int(_UID))
+    app.dependency_overrides[get_db] = lambda: SimpleNamespace()
     return TestClient(app)
 
 
@@ -61,22 +70,23 @@ def _stub_generate(result):
 class _SpyStore:
     def __init__(self):
         self.appended = []
-        self._history = {}
+        self._history = {}  # (user_id, ticker) → [entry] — 유저 스코프 저장 흉내
 
-    def append(self, ticker, report_json, *, regime_at_creation, created_at=None):
+    def append(self, ticker, report_json, *, regime_at_creation, created_at=None, user_id):
         entry = {
             "created_at": created_at or "2026-07-09T00:00:00+00:00",
             "regime_at_creation": regime_at_creation,
             "report_json": report_json,
         }
-        self.appended.append((ticker, entry))
-        self._history.setdefault(ticker, []).append(entry)
+        self.appended.append((ticker, entry, str(user_id)))
+        self._history.setdefault((str(user_id), ticker), []).append(entry)
         return entry
 
-    def list_history(self, ticker):
-        # 실 store 계약과 동일하게 created_at 내림차순(최신 우선) — 중복 게이트가 최신을 [0]으로 본다.
+    def list_history(self, ticker, *, user_id):
+        # 실 store 계약과 동일하게 (user_id, ticker) 스코프 + created_at 내림차순(최신 우선).
         return sorted(
-            self._history.get(ticker, []), key=lambda e: e.get("created_at", ""), reverse=True
+            self._history.get((str(user_id), ticker), []),
+            key=lambda e: e.get("created_at", ""), reverse=True,
         )
 
 
@@ -206,7 +216,7 @@ def test_post_report_survives_judgement_failure(client, monkeypatch):
 
 def test_get_history_returns_stored(client, monkeypatch):
     store = _SpyStore()
-    store.append("005930", _VALID, regime_at_creation="과열", created_at="2026-01-01T00:00:00+00:00")
+    store.append("005930", _VALID, regime_at_creation="과열", created_at="2026-01-01T00:00:00+00:00", user_id=_UID)
     monkeypatch.setattr(report_mod, "_STORE", store)
 
     r = client.get("/api/detail/005930/report/history")
@@ -243,3 +253,38 @@ def test_get_history_rejects_invalid_ticker(client, monkeypatch):
     monkeypatch.setattr(report_mod, "_STORE", _SpyStore())
     r = client.get("/api/detail/abc_de/report/history")
     assert r.status_code == 400
+
+
+# ── 보안: 인증 필수 + 유저 스코프 히스토리 격리(#5) ───────────────────────────────
+
+
+def _app_as(user_id):
+    app = FastAPI()
+    app.include_router(report_mod.router)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=user_id)
+    app.dependency_overrides[get_db] = lambda: SimpleNamespace()
+    return TestClient(app)
+
+
+def test_report_history_isolated_per_user(client, monkeypatch):
+    # 유저 A(=client, id=1) 가 생성한 리포트가 유저 B(id=2) 의 히스토리 조회에 안 나온다.
+    store = _SpyStore()
+    monkeypatch.setattr(report_mod, "_STORE", store)
+    monkeypatch.setattr(
+        report_mod, "generate_stock_report",
+        _stub_generate({"report": _VALID, "validation_failed": False, "quant_summary": {}}),
+    )
+    client.post("/api/detail/005930/report")
+    assert len(client.get("/api/detail/005930/report/history").json()["history"]) == 1  # A 엔 보임
+    b_hist = _app_as(2).get("/api/detail/005930/report/history").json()["history"]
+    assert b_hist == []  # B 엔 안 보임(유저 스코프 격리)
+
+
+def test_report_endpoints_require_auth():
+    # 토큰 없으면 401 — create/history 모두 옵션→필수 승격(회귀 잠금).
+    app = FastAPI()
+    app.include_router(report_mod.router)
+    app.dependency_overrides[get_db] = lambda: SimpleNamespace()  # 실 DB 미접촉(get_current_user 는 실제)
+    c = TestClient(app)
+    assert c.post("/api/detail/005930/report").status_code == 401
+    assert c.get("/api/detail/005930/report/history").status_code == 401

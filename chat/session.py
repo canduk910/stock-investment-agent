@@ -62,14 +62,26 @@ class Session:
         self.view_context = None
 
 
-# 서버 세션 스토어(인메모리) — session_id → Session.
+# 서버 세션 스토어(인메모리) — "{owner}:{session_id}" → Session.
+# 키를 owner(=인증 유저 id) 로 스코프해 크로스유저 재사용을 원천 차단한다(아래 get_session 참고).
 SESSIONS: dict[str, Session] = {}
 
 
-def get_session(session_id: str) -> Session:
-    """session_id 로 세션 조회, 없으면 생성해 등록."""
-    session = SESSIONS.get(session_id)
+def get_session(session_id: str, *, owner: str) -> Session:
+    """(owner, session_id) 로 세션 조회, 없으면 생성해 등록. **owner 필수(safe-by-construction)**.
+
+    보안(크로스유저/IDOR 차단): session_id 는 conversation.id(순차 정수)라 유저 B 가 body 에
+    유저 A 의 session_id 를 실어 보내면 A 의 핀(잔고·보유종목·상담 리포트 스냅샷·히스토리)이 B 의
+    답변에 새어나갈 수 있었다. 내부 키를 f"{owner}:{session_id}" 로 구성하면 B 의 요청은 키가
+    "B:{id}" 가 되어 A 의 세션("A:{id}")에 **절대 도달하지 못한다**. owner 없이는 호출 불가
+    (keyword-only·기본값 없음) — 소유권 게이트를 잊고 세션을 꺼낼 수 없게 강제한다.
+
+    같은 유저의 핀 엔드포인트(report-context·context)와 챗 턴은 같은 (owner, session_id) 라
+    동일 scoped 세션을 공유 → 정상 기능(상담하기·현재화면 컨텍스트·P2 되먹임)은 그대로 동작한다.
+    """
+    key = f"{owner}:{session_id}"
+    session = SESSIONS.get(key)
     if session is None:
         session = Session()
-        SESSIONS[session_id] = session
+        SESSIONS[key] = session
     return session

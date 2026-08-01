@@ -9,10 +9,12 @@ import App from './App.jsx'
 //   (4) 목표가 60s 폴링이 App 레벨로 이관돼 패널 내용과 무관하게 알림이 뜬다(IMP-11 보존).
 // 자식(RightPanel·ChatPanel)은 테스트 더블로 대체해 App 의 상태 리프팅·배선만 좁게 확인한다.
 
-// ChatPanel: onShowPanel 을 노출하는 버튼만 가진 더블(스트리밍 상태기계는 자체 테스트 영역).
+// ChatPanel: onShowPanel 을 노출하는 버튼 + consult 배너(증권사명)를 렌더하는 더블.
+//   consult 는 유저-스코프 상태라 크로스-유저 리셋 검증에 필요(App→ChatPanel prop).
 vi.mock('./components/ChatPanel.jsx', () => ({
-  default: ({ onShowPanel }) => (
+  default: ({ onShowPanel, consult }) => (
     <div data-testid="chat-panel">
+      {consult ? <span data-testid="consult-banner">{consult.broker} 리포트로 상담 중</span> : null}
       <button
         type="button"
         onClick={() => onShowPanel({ kind: 'macro_dashboard', args: {}, valid: true })}
@@ -23,9 +25,9 @@ vi.mock('./components/ChatPanel.jsx', () => ({
   ),
 }))
 
-// RightPanel: 받은 spec.kind 와 퀵버튼(onSelect)만 노출하는 더블(본문 라우팅은 RightPanel 자체 테스트).
+// RightPanel: 받은 spec.kind + 퀵버튼(onSelect) + 상담 시작(onConsult)을 노출하는 더블.
 vi.mock('./components/RightPanel.jsx', () => ({
-  default: ({ spec, onSelect }) => (
+  default: ({ spec, onSelect, onConsult }) => (
     <div data-testid="right-panel">
       <span data-testid="right-kind">{spec ? spec.kind : 'empty'}</span>
       <button
@@ -33,6 +35,24 @@ vi.mock('./components/RightPanel.jsx', () => ({
         onClick={() => onSelect({ kind: 'balance', args: {}, valid: true })}
       >
         quick-balance
+      </button>
+      <button type="button" onClick={() => onConsult('삼성증권')}>
+        set-consult
+      </button>
+    </div>
+  ),
+}))
+
+// LoginScreen: 비로그인 게이트 + onAuthed(재로그인) 버튼을 노출하는 더블.
+//   같은 탭에서 로그아웃→다른 유저 로그인 시 이전 유저 상태 잔존을 검증하려면 in-place 재로그인 경로가 필요하다
+//   (App 은 user 없을 때 조건부 렌더만 하고 remount 되지 않으므로 상태가 잔존한다 — 이 버그의 핵심).
+vi.mock('./components/LoginScreen.jsx', () => ({
+  default: ({ onAuthed }) => (
+    <div data-testid="login-screen">
+      <span>디케이 투자에이전트</span>
+      <span>회원가입</span>
+      <button type="button" onClick={() => onAuthed({ id: 2, email: 'b@b.com' })}>
+        login-as-b
       </button>
     </div>
   ),
@@ -57,6 +77,7 @@ import {
   fetchWatchlist,
   fetchMacroRegime,
   setViewContext,
+  setReportContext,
   fetchConversations,
   createConversation,
   recordVisit,
@@ -102,6 +123,8 @@ beforeEach(() => {
   fetchMacroRegime.mockResolvedValue(regimeView())
   setViewContext.mockReset()
   setViewContext.mockResolvedValue({ ok: true, set: true })
+  setReportContext.mockReset()
+  setReportContext.mockResolvedValue({ ok: true, set: false }) // endConsult(로그아웃 전 서버 해제) 경로
   fetchMe.mockReset()
   fetchMe.mockResolvedValue({ id: 1, email: 'a@b.com' }) // 기본: 로그인됨
   logout.mockReset()
@@ -175,6 +198,48 @@ describe('인증 게이트', () => {
     expect(logout).toHaveBeenCalled()
     // user null → LoginScreen(메인 앱 미노출).
     expect(screen.queryByTestId('right-panel')).not.toBeInTheDocument()
+  })
+})
+
+describe('크로스-유저 상태 리셋(보안) — 로그아웃/재로그인 시 App 유저-스코프 상태 초기화', () => {
+  it('로그아웃→다른 유저 로그인 시 이전 유저 consult/alertBanner/rightPanelSpec 미표시', async () => {
+    // A: 마운트 첫 조회 far(스냅샷 확보) → 이후 reached(전이 유발)
+    fetchWatchlist.mockReset()
+    fetchWatchlist.mockResolvedValueOnce(wlView('far')).mockResolvedValue(wlView('reached'))
+    render(<App />)
+    await act(async () => {}) // fetchMe(A) + 대화 로드 + 첫 폴링(far)
+
+    // A 화면에 유저-스코프 상태를 구성한다: 상담(삼성증권) + 우측 잔고 패널 + 목표가 알림 전이
+    fireEvent.click(screen.getByText('set-consult')) // onConsult('삼성증권') → consult 배너
+    fireEvent.click(screen.getByText('quick-balance')) // rightPanelSpec = balance
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000) // 2차 폴링(reached) → far→reached 전이 → alertBanner
+    })
+    expect(screen.getByTestId('consult-banner')).toHaveTextContent('삼성증권') // consult(증권사명)
+    expect(screen.getByText(/목표가/)).toBeInTheDocument() // alertBanner(관심종목명 포함)
+    expect(screen.getByTestId('right-kind')).toHaveTextContent('balance')
+
+    // 로그아웃 — endConsult(서버 컨텍스트 해제)가 token 클리어 전에 호출되어야 한다.
+    fireEvent.click(screen.getByText('로그아웃'))
+    expect(logout).toHaveBeenCalled()
+    expect(setReportContext).toHaveBeenCalled() // 상담 활성 → 서버 report_context 해제 호출
+
+    // 유저 B 로그인(LoginScreen 더블의 onAuthed) — App 은 remount 되지 않는다(잔존 검증의 핵심).
+    fireEvent.click(screen.getByText('login-as-b'))
+    await act(async () => {}) // B 대화 로드 등 이펙트 flush
+
+    // B 화면엔 A 의 유저-스코프 상태가 남지 않는다.
+    expect(screen.queryByTestId('consult-banner')).not.toBeInTheDocument() // consult 리셋
+    expect(screen.queryByText(/목표가/)).not.toBeInTheDocument() // alertBanner 리셋
+    expect(screen.getByTestId('right-kind')).toHaveTextContent('watchlist') // 랜딩(관심종목) 복귀
+  })
+
+  it('상담이 없으면 로그아웃 시 서버 해제(setReportContext) 호출하지 않음', async () => {
+    await renderLoggedIn()
+    setReportContext.mockClear()
+    fireEvent.click(screen.getByText('로그아웃'))
+    expect(logout).toHaveBeenCalled()
+    expect(setReportContext).not.toHaveBeenCalled() // consult 비활성 → 불필요 서버 호출 없음
   })
 })
 

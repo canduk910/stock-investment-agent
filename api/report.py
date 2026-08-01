@@ -24,7 +24,7 @@ from api.detail import (
     _resolve_client,
     collect_stock_bundle,
 )
-from auth.deps import get_current_user_optional
+from auth.deps import get_current_user
 from auth.models import User
 from chat.report import generate_stock_report
 from chat.report_store import JsonFileReportStore
@@ -43,13 +43,13 @@ def _get_store():
     return _STORE
 
 
-def _same_as_latest(store, ticker: str, opinion, regime) -> bool:
+def _same_as_latest(store, ticker: str, opinion, regime, *, user_id: str) -> bool:
     """직전 저장과 종합의견·국면이 모두 같으면 중복(반복 클릭 노이즈) → 저장 생략(IMP-16).
 
     주의: 리포트 자체는 사용자에게 항상 반환된다 — 비교 히스토리 저장만 생략한다(데모 품질 우선).
     같은 종합의견·국면이면 정당한 재평가도 걸러질 수 있다(허용 가능한 트레이드오프).
     """
-    history = store.list_history(ticker)  # 최신 우선(내림차순)
+    history = store.list_history(ticker, user_id=user_id)  # 유저 스코프·최신 우선(내림차순)
     if not history:
         return False
     latest = history[0]
@@ -62,12 +62,13 @@ def _same_as_latest(store, ticker: str, opinion, regime) -> bool:
 @router.post("/api/detail/{ticker}/report")
 def create_report(
     ticker: str,
-    user: User | None = Depends(get_current_user_optional),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
     """리포트 생성·검증·저장·반환(§6.5b). 국면 수집 실패는 regime_at_creation=None(항상 200).
 
-    공개 유지(옵션 인증) — 로그인+등록 시 본인 KIS 키, 아니면 공유 fallback.
+    **인증 필수**(리포트 히스토리는 유저 스코프 저장이라 소유자 id 필요·크로스유저 차단). 본인
+    KIS 키로 번들 조회(미등록 시 공유 fallback). 프론트는 이미 authFetch 로 호출한다.
     """
     assert_valid_ticker(ticker)  # 불량 코드가 KIS·OpenAI·저장을 트리거하기 전에 400(IMP-02)
     try:
@@ -84,15 +85,18 @@ def create_report(
     created_at = _now_iso()
 
     # 검증 통과분만 히스토리에 저장(폴백 미저장). 직전과 동일 평가(종합의견·국면)면 중복 저장 생략(IMP-16).
+    #   유저 스코프 저장(user_id) — 요청 유저 본인 히스토리에만 append/조회(크로스유저 차단).
+    uid = str(user.id)
     report = result.get("report")
     if not result.get("validation_failed") and report is not None:
         store = _get_store()
-        if not _same_as_latest(store, ticker, report.get("종합의견"), regime_at_creation):
+        if not _same_as_latest(store, ticker, report.get("종합의견"), regime_at_creation, user_id=uid):
             store.append(
                 ticker,
                 report,
                 regime_at_creation=regime_at_creation,
                 created_at=created_at,
+                user_id=uid,
             )
 
     return {
@@ -107,7 +111,13 @@ def create_report(
 
 
 @router.get("/api/detail/{ticker}/report/history")
-def report_history(ticker: str) -> dict:
-    """과거 평가 히스토리(created_at 내림차순 — 최신 우선). 과거 대비 비교 데모."""
+def report_history(
+    ticker: str,
+    user: User = Depends(get_current_user),
+) -> dict:
+    """과거 평가 히스토리(created_at 내림차순 — 최신 우선). 과거 대비 비교 데모.
+
+    **인증 필수** + 유저 스코프 조회 — 요청 유저 본인 히스토리만 반환(다른 유저 리포트 미노출).
+    """
     assert_valid_ticker(ticker)  # IMP-02
-    return {"ticker": ticker, "history": _get_store().list_history(ticker)}
+    return {"ticker": ticker, "history": _get_store().list_history(ticker, user_id=str(user.id))}

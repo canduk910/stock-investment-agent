@@ -17,7 +17,7 @@ from watchlist.store import InMemoryWatchlistStore
 
 
 class _EmptyHistoryStore:
-    def list_history(self, ticker):
+    def list_history(self, ticker, *, user_id=None):
         return []
 
 
@@ -38,9 +38,18 @@ def test_watchlist_router_mounted(client):
 
 
 def test_report_history_router_mounted(client):
-    r = client.get("/api/detail/005930/report/history")
-    assert r.status_code == 200
-    assert r.json()["history"] == []
+    # report_history 는 이제 인증 필수(유저 스코프) → 고정 유저로 오버라이드해 마운트(200)만 확인.
+    from types import SimpleNamespace
+
+    from auth.deps import get_current_user
+
+    main.app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
+    try:
+        r = client.get("/api/detail/005930/report/history")
+        assert r.status_code == 200
+        assert r.json()["history"] == []
+    finally:
+        main.app.dependency_overrides.pop(get_current_user, None)
 
 
 @pytest.mark.parametrize("method", ["DELETE", "PATCH"])

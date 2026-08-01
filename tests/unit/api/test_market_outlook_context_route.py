@@ -1,21 +1,30 @@
 """POST /api/chat/market-outlook-context — 시황 요약을 세션 핀 컨텍스트로 세팅/해제/404(store mock).
 
 애널리스트 report-context 와 동일 메커니즘(같은 세션 핀 슬롯)이되 시황은 시장 전체라 ticker 없음.
+보안(추가): **인증 필수** + 세션 owner 스코프(토큰 없으면 401·크로스유저 격리).
 """
 from __future__ import annotations
+
+from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import api.chat as chat_route
 import chat.market_outlook_store as outlook_store_mod
+from auth.deps import get_current_user
 from chat.market_outlook import format_market_outlook_context
 from chat.session import SESSIONS, get_session
+from infra.db import get_db
 
 
-def _app() -> FastAPI:
+def _app(user_id="u1") -> FastAPI:
     app = FastAPI()
     app.include_router(chat_route.router)
+    if user_id is not None:
+        app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=user_id)
+    else:
+        app.dependency_overrides[get_db] = lambda: SimpleNamespace()
     return app
 
 
@@ -54,16 +63,16 @@ def test_set_market_outlook_context_pins(monkeypatch):
     assert r.status_code == 200
     body = r.json()
     assert body["set"] is True and body["broker"] == "미래에셋"
-    ctx = get_session("m1").report_context  # 세션에 실제로 핀(서버가 store 조회해 세팅)
+    ctx = get_session("m1", owner="u1").report_context  # 세션에 실제로 핀(서버가 store 조회해 세팅)
     assert ctx and "미래에셋" in ctx and "박스권" in ctx
 
 
 def test_clear_market_outlook_context_when_no_report_id():
     SESSIONS.clear()
-    get_session("m2").set_report_context("기존")
+    get_session("m2", owner="u1").set_report_context("기존")
     r = TestClient(_app()).post("/api/chat/market-outlook-context", json={"session_id": "m2"})
     assert r.status_code == 200 and r.json()["set"] is False
-    assert get_session("m2").report_context is None  # 해제
+    assert get_session("m2", owner="u1").report_context is None  # 해제
 
 
 def test_unknown_market_outlook_returns_404(monkeypatch):
@@ -73,3 +82,25 @@ def test_unknown_market_outlook_returns_404(monkeypatch):
         "/api/chat/market-outlook-context", json={"session_id": "m3", "report_id": "nope"}
     )
     assert r.status_code == 404
+
+
+# ── 보안: 인증 필수 + 크로스유저(IDOR) 격리 ─────────────────────────────────────
+
+
+def test_market_outlook_context_requires_auth():
+    SESSIONS.clear()
+    r = TestClient(_app(user_id=None)).post(
+        "/api/chat/market-outlook-context", json={"session_id": "m1", "report_id": "77001"}
+    )
+    assert r.status_code == 401
+
+
+def test_market_outlook_pin_scoped_per_owner(monkeypatch):
+    SESSIONS.clear()
+    monkeypatch.setattr(outlook_store_mod, "default_store", lambda: _Store(_ENTRY))
+    ra = TestClient(_app(user_id="A")).post(
+        "/api/chat/market-outlook-context", json={"session_id": "88", "report_id": "77001"}
+    )
+    assert ra.status_code == 200 and ra.json()["set"] is True
+    assert get_session("88", owner="A").report_context is not None
+    assert get_session("88", owner="B").report_context is None  # B 세션엔 안 새어감

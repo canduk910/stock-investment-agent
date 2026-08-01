@@ -371,28 +371,34 @@ export async function fetchNaverStockReports(ticker, limit = 10) {
 // POST /api/chat/report-context {session_id, ticker, report_id} → {ok, set, broker?}.
 // 저장된 리포트 요약을 세션 상담 컨텍스트로 핀 고정(이후 후속 질문이 그 리포트 근거로 답변).
 // **요약 본문은 보내지 않는다** — 서버가 store 에서 조회(환각·조작 차단). ticker/reportId 가 없으면 해제.
+// authFetch 필수 — 백엔드가 인증(Bearer)을 요구한다(세션 컨텍스트 핀 = 유저 스코프, 크로스-유저 오염 차단).
 export async function setReportContext(sessionId, ticker, reportId) {
   return _request('/api/chat/report-context', {
     method: 'POST',
     json: { session_id: sessionId, ticker: ticker ?? null, report_id: reportId ?? null },
+    auth: true,
   })
 }
 
 // 시황(매크로) 리포트로 상담 — 애널리스트와 동일 세션 핀 슬롯. 시황은 시장 전체라 ticker 없음.
+// authFetch 필수(위와 동일 — 백엔드 인증 요구).
 export async function setMarketOutlookContext(sessionId, reportId) {
   return _request('/api/chat/market-outlook-context', {
     method: 'POST',
     json: { session_id: sessionId, report_id: reportId ?? null },
+    auth: true,
   })
 }
 
 // POST /api/chat/context {session_id, kind, args} → {ok, set, kind?}. 사용자가 현재 보고 있는 화면
 // (잔고·관심종목·종목상세)을 세션 핀 컨텍스트로 고정 → 이후 챗 질문이 그 데이터를 근거로 답변.
 // **화면 데이터는 보내지 않는다** — 서버가 kind/args 로 재조회(환각·조작 차단). 비데이터 kind/조회불가는 해제.
+// authFetch 필수(위와 동일 — 백엔드 인증 요구·유저 스코프).
 export async function setViewContext(sessionId, kind, args = {}) {
   return _request('/api/chat/context', {
     method: 'POST',
     json: { session_id: sessionId, kind: kind ?? null, args: args ?? {} },
+    auth: true,
   })
 }
 

@@ -73,17 +73,22 @@ def _stamp(body: str) -> str:
     return f"기준시각: {_now_iso()}\n{body}"[:_MAX_CHARS]
 
 
-def _latest_ai_report(ticker: str) -> dict | None:
+def _latest_ai_report(ticker: str, user_id: str | None) -> dict | None:
     """저장된 최신 AI 구조화 리포트 entry({created_at, regime_at_creation, report_json}) 또는 None.
 
     사용자가 종목 상세에서 'AI 리포트 생성'을 눌러 저장해 둔 리포트를 그 종목 문의 시 챗이 참조하도록
     view_context 에 실어 준다(생성 안 했으면 None → 컨텍스트 미포함). report_store 는 LLM 미호출 JSON 읽기·
     순수·예외 없음(어떤 실패도 None → 기존 동작 유지).
+
+    **user_id 로 스코프**(크로스유저 차단): 리포트 히스토리는 유저별로 격리돼 있어, 요청 유저의
+    리포트만 실린다. user_id 가 None(비로그인/미해석)이면 스코프할 수 없으므로 None(미포함).
     """
+    if user_id is None:
+        return None
     try:
         from chat.report_store import JsonFileReportStore
 
-        history = JsonFileReportStore().list_history(ticker)
+        history = JsonFileReportStore().list_history(ticker, user_id=user_id)
     except Exception:
         return None
     return history[0] if history else None
@@ -226,7 +231,9 @@ def _stock_context(args: dict, user, db) -> str | None:
     # 저장된 AI 구조화 리포트(사용자가 종목 상세에서 '생성'해 둔 것) — 그 종목 문의 시 챗이 자동 참조.
     #   report_json = StockReport.model_dump()(한글 키). 종합의견은 Literal 긍정/중립/신중(매수·매도 아님).
     #   없으면(미생성) 블록 생략 → '생성하고 나면' 시나리오와 정합. LLM 미호출·순수 JSON 읽기.
-    entry = _latest_ai_report(ticker)
+    #   **user_id 로 스코프** — 요청 유저 본인의 리포트만(크로스유저 노출 차단). user 없으면 None.
+    uid = str(user.id) if user is not None and getattr(user, "id", None) is not None else None
+    entry = _latest_ai_report(ticker, uid)
     rj = (entry or {}).get("report_json") or {}
     if rj:
         created = (entry.get("created_at") or "")[:10]

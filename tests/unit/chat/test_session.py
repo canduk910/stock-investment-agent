@@ -140,22 +140,61 @@ def test_reset_clears_view_context():
 
 def test_get_session_creates_new_for_unknown_id():
     SESSIONS.clear()
-    s = get_session("sid-1")
+    s = get_session("sid-1", owner="u1")
     assert isinstance(s, Session)
     assert s.history() == []
 
 
-def test_get_session_returns_same_instance_for_same_id():
+def test_get_session_returns_same_instance_for_same_owner_and_id():
     SESSIONS.clear()
-    s1 = get_session("sid-2")
+    s1 = get_session("sid-2", owner="u1")
     s1.append("q", "a")
-    s2 = get_session("sid-2")
+    s2 = get_session("sid-2", owner="u1")
     assert s1 is s2
-    assert len(s2.history()) == 2  # 같은 id 재사용 시 히스토리 누적
+    assert len(s2.history()) == 2  # 같은 (owner,id) 재사용 시 히스토리 누적
 
 
 def test_get_session_isolates_different_ids():
     SESSIONS.clear()
-    get_session("a").append("qa", "aa")
-    b = get_session("b")
+    get_session("a", owner="u1").append("qa", "aa")
+    b = get_session("b", owner="u1")
     assert b.history() == []  # 신규 id 는 빈 히스토리(격리)
+
+
+def test_get_session_requires_owner_keyword():
+    # owner 는 keyword-only·기본값 없음 — 소유권 없이 세션을 꺼낼 수 없다(safe-by-construction).
+    import pytest
+
+    with pytest.raises(TypeError):
+        get_session("sid")  # type: ignore[call-arg]
+
+
+# ── 크로스유저(IDOR) 격리 — 같은 session_id 라도 owner 가 다르면 완전 격리 ──────────
+# session_id 는 conversation.id(순차 정수)라 유저 B 가 유저 A 의 id 를 보낼 수 있다. owner 스코프가
+# 없으면 B 가 A 의 핀(잔고·상담 리포트 스냅샷)·히스토리에 접근한다(취약점). 아래가 그 회귀 잠금.
+
+
+def test_same_session_id_different_owners_are_isolated():
+    SESSIONS.clear()
+    a = get_session("42", owner="A")
+    a.set_report_context("A 의 애널리스트 리포트 상담 컨텍스트")
+    a.set_view_context("A 의 잔고 스냅샷")
+    a.append("A 질문", "A 답변")
+
+    # 유저 B 가 같은 session_id("42")로 세션을 꺼내도 A 의 세션이 아닌 새 세션을 받는다.
+    b = get_session("42", owner="B")
+    assert b is not a
+    assert b.report_context is None  # A 의 상담 컨텍스트가 새지 않음
+    assert b.view_context is None    # A 의 화면 스냅샷이 새지 않음
+    assert b.history() == []         # A 의 대화 히스토리가 새지 않음
+
+
+def test_same_owner_and_id_shares_session_across_pin_and_turn():
+    # 정상 기능 보존: 같은 유저가 핀 엔드포인트와 챗 턴에서 같은 session_id 를 쓰면 같은 세션을 공유.
+    SESSIONS.clear()
+    pinned = get_session("7", owner="A")
+    pinned.set_report_context("A 리포트")
+    # 이후 챗 턴이 같은 (owner, id) 로 세션을 꺼내면 방금 건 핀이 살아 있어야 한다.
+    turn = get_session("7", owner="A")
+    assert turn is pinned
+    assert turn.report_context == "A 리포트"

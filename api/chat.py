@@ -29,7 +29,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from auth.deps import get_current_user, get_current_user_optional
+from auth.deps import get_current_user
 from auth.models import User
 from auth.usage import consume, is_over_limit, quota_snapshot
 from chat.chat import chat, chat_stream
@@ -120,7 +120,7 @@ def post_chat(
     if is_over_limit(user):
         return {"text": _limit_message(user), "popups": []}
 
-    session = get_session(body.session_id)
+    session = get_session(body.session_id, owner=str(user.id))
     _hydrate_session(session, user, db, body.session_id)
     judgement, _indicators_used, _partial_failure = live_judgement()
     result = chat(body.message, judgement, session, user=user, db=db)
@@ -130,12 +130,18 @@ def post_chat(
 
 
 @router.post("/api/chat/report-context")
-def post_report_context(body: ReportContextRequest) -> dict:
+def post_report_context(
+    body: ReportContextRequest,
+    user: User = Depends(get_current_user),
+) -> dict:
     """저장된 애널리스트 리포트 요약을 세션 상담 컨텍스트로 핀 고정(또는 해제).
 
     body {session_id, ticker, report_id}. report_id/ticker 가 없으면 컨텍스트 해제.
     **요약 본문은 프론트가 보내지 않는다** — 서버가 store 에서 조회한 entry 로 컨텍스트를
     만든다(환각·조작 차단). 없는 리포트면 404. 데이터 자체는 반환하지 않고 세팅 결과만.
+
+    **인증 필수**(get_current_user) + 세션은 owner 스코프 — 유저 B 가 유저 A 의 session_id 로
+    핀을 걸어도 자기(B) 세션에만 걸려 A 의 상담 컨텍스트에 접근/오염할 수 없다(IDOR 차단).
     """
     from fastapi import HTTPException
 
@@ -143,7 +149,7 @@ def post_report_context(body: ReportContextRequest) -> dict:
     from chat.analyst_store import default_store
     from api.deps import assert_valid_ticker
 
-    session = get_session(body.session_id)
+    session = get_session(body.session_id, owner=str(user.id))
 
     if not body.ticker or not body.report_id:
         session.clear_report_context()  # 상담 종료(해제)
@@ -162,19 +168,24 @@ def post_report_context(body: ReportContextRequest) -> dict:
 
 
 @router.post("/api/chat/market-outlook-context")
-def post_market_outlook_context(body: MarketOutlookContextRequest) -> dict:
+def post_market_outlook_context(
+    body: MarketOutlookContextRequest,
+    user: User = Depends(get_current_user),
+) -> dict:
     """저장된 **시황(매크로) 리포트** 요약을 세션 상담 컨텍스트로 핀(또는 해제).
 
     애널리스트 report-context 와 동일 메커니즘(같은 세션 핀 슬롯) — 시황은 **시장 전체**라 ticker 가
     없고 report_id 만 받는다. report_id 없으면 해제. **요약 본문은 프론트가 안 보낸다** — 서버가
     store 에서 조회한 entry 로 컨텍스트를 만든다(환각·조작 차단). 없는 리포트면 404.
+
+    **인증 필수** + 세션 owner 스코프(report-context 와 동일 — IDOR 차단).
     """
     from fastapi import HTTPException
 
     from chat.market_outlook import format_market_outlook_context
     from chat.market_outlook_store import default_store as outlook_store
 
-    session = get_session(body.session_id)
+    session = get_session(body.session_id, owner=str(user.id))
 
     if not body.report_id:
         session.clear_report_context()  # 상담 종료(해제)
@@ -194,7 +205,7 @@ def post_market_outlook_context(body: MarketOutlookContextRequest) -> dict:
 @router.post("/api/chat/context")
 def post_view_context(
     body: ViewContextRequest,
-    user: User | None = Depends(get_current_user_optional),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
     """사용자가 현재 보고 있는 화면(잔고·관심종목·종목상세)을 세션 핀 컨텍스트로 고정(또는 해제).
@@ -202,10 +213,14 @@ def post_view_context(
     body {session_id, kind, args}. 데이터 보유 kind 만 서버가 재조회해 스냅샷을 세팅한다
     (**요약 본문은 프론트가 보내지 않음** — 서버가 조회, 환각/조작 차단). 비데이터 kind·조회 불가는
     이전 핀을 해제. **항상 200**(백그라운드 핀은 게이트키핑 아님, graceful).
+
+    **인증 필수**(옵션→필수 승격, 앱은 로그인 게이트 뒤라 안전) + 세션 owner 스코프 — 유저 B 가
+    유저 A 의 session_id 로 자기 화면 스냅샷을 걸어도 A 의 세션엔 닿지 않는다(IDOR 차단). user 는
+    항상 존재하므로 build_view_context 가 본인 KIS 키/계좌로 조회한다.
     """
     from chat.view_context import DATA_BEARING_KINDS, build_view_context
 
-    session = get_session(body.session_id)
+    session = get_session(body.session_id, owner=str(user.id))
 
     if not body.kind or body.kind not in DATA_BEARING_KINDS:
         session.clear_view_context()  # 비데이터 화면(국면·관리)으로 전환 → 이전 스냅샷 제거
@@ -236,7 +251,7 @@ def _sse(body: ChatRequest, user: User, db: Session):
     def frame(ev: dict) -> str:
         return f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
 
-    session = get_session(body.session_id)
+    session = get_session(body.session_id, owner=str(user.id))
     _hydrate_session(session, user, db, body.session_id)
 
     yield frame({"type": "stage", "stage": "analyze"})

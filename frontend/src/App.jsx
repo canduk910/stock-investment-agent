@@ -167,12 +167,8 @@ export default function App() {
   // 챗·컨텍스트 공유 session_id = 현재 대화 id(문자열). 대화 로드 전엔 null(가드).
   const sessionId = { current: conversationId != null ? String(conversationId) : null }
 
-  const handleLogout = useCallback(() => {
-    logout()
-    setUser(null)
-    setConversations([])
-    setConversationId(null)
-  }, [])
+  // handleLogout 은 유저-스코프 상태(consult·alertBanner·prevStatusRef·rightPanelSpec·lastViewCtxRef)를
+  //   전부 리셋해야 하므로, 그 상태/ref 선언 뒤(아래)에서 정의한다(크로스-유저 잔존 차단).
 
   // 우측 동적 패널 spec — 챗봇(onShowPanel)·퀵버튼(onSelect)이 리프팅. 닫으면 null(빈 상태).
   const [rightPanelSpec, setRightPanelSpec] = useState(LANDING_SPEC)
@@ -340,6 +336,43 @@ export default function App() {
     }, VIEW_CONTEXT_DEBOUNCE_MS)
     return () => clearTimeout(id)
   }, [rightPanelSpec, conversationId])
+
+  // ── 크로스-유저 상태 리셋(보안) ──────────────────────────────────────────────
+  //   App 루트는 user 가 없을 때 LoginScreen 을 조건부 렌더할 뿐 **remount 되지 않는다** →
+  //   유저-스코프 App 상태를 명시적으로 비우지 않으면 다음 유저 화면에 이전 유저 정보가 남는다
+  //   (consult=증권사명·alertBanner=관심종목명·rightPanelSpec=이전 뷰·핀 스냅샷). 로그아웃/재로그인에서 전면 리셋.
+  const resetUserScopedState = useCallback(() => {
+    setConsult(null) // 상담 배너(증권사명)
+    setAlertBanner(null) // 목표가 알림 배너(관심종목명 포함)
+    prevStatusRef.current = null // 목표가 전이 스냅샷 → 다음 유저는 first-observation(스팸 억제)
+    setRightPanelSpec(LANDING_SPEC) // 우측 패널을 랜딩(관심종목)으로
+    lastViewCtxRef.current = null // 뷰 컨텍스트 핀 마지막 키(무관 재핀 스킵 캐시)
+  }, [])
+
+  const handleLogout = useCallback(() => {
+    // ① 서버 상담 컨텍스트 해제는 token 클리어 **전에**(로그인 상태에서 authFetch 로 나가야 401 아님).
+    if (consult) endConsult()
+    // ② 유저-스코프 App 상태 전면 리셋(잔존 차단). ③ 토큰/대화 클리어 → LoginScreen 게이트.
+    resetUserScopedState()
+    logout()
+    setUser(null)
+    setConversations([])
+    setConversationId(null)
+  }, [consult, endConsult, resetUserScopedState])
+
+  // 방어심화 — 같은 탭에서 다른 유저로 전환(재로그인)되면 유저-스코프 상태를 리셋한다.
+  //   handleLogout 이 이미 리셋하지만, LoginScreen onAuthed 로 곧장 새 유저가 들어오는 경로도 방어한다.
+  //   첫 마운트(초기 로그인)는 prev=null 이라 무발화, 로그아웃(uid=null)은 이전 id 를 보존한 채 스킵,
+  //   '다른 non-null 유저 id 로 전환'에만 리셋(값이 기본이면 무해한 중복).
+  const prevUserIdRef = useRef(null)
+  useEffect(() => {
+    const uid = user?.id ?? null
+    if (uid == null) return // 로그아웃은 handleLogout 이 리셋 — 여기선 직전 유저 id 보존
+    if (prevUserIdRef.current != null && prevUserIdRef.current !== uid) {
+      resetUserScopedState()
+    }
+    prevUserIdRef.current = uid
+  }, [user, resetUserScopedState])
 
   // 톱바 상태 칩용 국면 — 마운트 1회 자체 조회(RegimeGauge 와 동일 패턴). 실패는 조용히 무시(칩만 생략).
   useEffect(() => {

@@ -115,7 +115,7 @@ def test_stock_context(monkeypatch):
                                  "목표주가": "9만원", "요약": "실적 개선 기대"}}]
 
     monkeypatch.setattr("chat.analyst_store.default_store", lambda: _Store())
-    monkeypatch.setattr(vc, "_latest_ai_report", lambda t: None)  # 실 report_store 읽기 차단(hermetic)
+    monkeypatch.setattr(vc, "_latest_ai_report", lambda t, uid: None)  # 실 report_store 읽기 차단(hermetic)
     out = vc.build_view_context("stock_report", {"ticker": "005930", "stock_name": "삼성전자"})
     assert out is not None
     # 52주 고/저 원값 + 위치 — 에이전트 목표가 추천 근거(범위 앵커). 원값을 직접 핀(죽은 단정 방지).
@@ -163,7 +163,7 @@ def test_stock_context_includes_stored_ai_report(monkeypatch):
             "면책고지": "투자 판단 책임은 본인.",
         },
     }
-    monkeypatch.setattr(vc, "_latest_ai_report", lambda t: entry)
+    monkeypatch.setattr(vc, "_latest_ai_report", lambda t, uid: entry)
     out = vc.build_view_context("stock_report", {"ticker": "005930", "stock_name": "삼성전자"})
     assert out is not None
     assert "AI 종합리포트" in out and "매수·매도 판정 아님" in out  # 출처·안전 문구
@@ -178,7 +178,7 @@ def test_stock_context_ai_report_partial_graceful(monkeypatch):
     _stock_common(monkeypatch)
     monkeypatch.setattr(
         vc, "_latest_ai_report",
-        lambda t: {"created_at": "2026-07-24T00:00:00+00:00", "report_json": {"종합의견": "긍정적"}},
+        lambda t, uid: {"created_at": "2026-07-24T00:00:00+00:00", "report_json": {"종합의견": "긍정적"}},
     )
     out = vc.build_view_context("stock_report", {"ticker": "005930", "stock_name": "삼성전자"})
     assert out is not None and "종합의견 긍정적" in out
@@ -187,9 +187,32 @@ def test_stock_context_ai_report_partial_graceful(monkeypatch):
 def test_stock_context_no_ai_report_when_store_empty(monkeypatch):
     # 미생성(None) → AI 리포트 블록 없음(그대로 기존 스냅샷).
     _stock_common(monkeypatch)
-    monkeypatch.setattr(vc, "_latest_ai_report", lambda t: None)
+    monkeypatch.setattr(vc, "_latest_ai_report", lambda t, uid: None)
     out = vc.build_view_context("stock_report", {"ticker": "005930", "stock_name": "삼성전자"})
     assert out is not None and "AI 종합리포트" not in out
+
+
+def test_ai_report_scoped_to_requesting_user(monkeypatch):
+    # 보안: build_view_context 가 요청 유저의 id 를 _latest_ai_report 로 넘겨 유저 스코프 조회한다
+    # (다른 유저 리포트 노출 차단). user 있으면 str(user.id), 없으면 None.
+    from types import SimpleNamespace
+
+    _stock_common(monkeypatch)
+    seen = {}
+
+    def _capture(t, uid):
+        seen["uid"] = uid
+        return None
+
+    monkeypatch.setattr(vc, "_latest_ai_report", _capture)
+    vc.build_view_context(
+        "stock_report", {"ticker": "005930"}, user=SimpleNamespace(id=7), db=None
+    )
+    assert seen["uid"] == "7"  # 요청 유저 id 로 스코프
+
+    seen.clear()
+    vc.build_view_context("stock_report", {"ticker": "005930"}, user=None, db=None)
+    assert seen["uid"] is None  # user 없으면 스코프 불가 → None(미포함)
 
 
 def test_stock_kis_fail_graceful(monkeypatch):

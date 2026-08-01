@@ -5,8 +5,13 @@ watchlist/store.py 와 동일 JSON-파일 패턴(원자적 write=temp+os.replace
 여러 번 평가하고 과거 평가와 비교하는 데모(§6.5b). 캐시가 아니라 durable 산출물이므로
 캐시 3원칙과 무관하지만 파일은 .cache/ 관례에 둔다(kis_token·stock_master 와 나란히).
 
-디스크 구조: {ticker: [ {created_at, regime_at_creation, report_json}, ... ]}.
+디스크 구조(유저 스코프): {user_id: {ticker: [ {created_at, regime_at_creation, report_json}, ... ]}}.
 list_history 는 created_at 내림차순(최신 우선)으로 반환한다.
+
+보안(크로스유저 차단): 과거엔 {ticker: [...]} 전역 구조라 유저 A 가 생성한 AI 리포트가
+view_context 를 통해 유저 B 에게 노출됐다. 이제 user_id 로 한 단계 감싸 유저별로 격리한다.
+**구 전역 포맷 레코드는 graceful 무시**(읽을 때 유저 버킷[dict]만 인식 — 구 데이터는 ticker
+키 아래 list 로 남아 어느 user_id 버킷에도 안 잡힘). .cache 파일이라 재생성 가능(손실 허용).
 """
 from __future__ import annotations
 
@@ -38,9 +43,11 @@ class JsonFileReportStore:
         *,
         regime_at_creation: str | None,
         created_at: str | None = None,
+        user_id: str,
     ) -> dict:
-        """평가 1건을 ticker 히스토리에 추가하고 저장된 entry 를 반환.
+        """평가 1건을 (user_id, ticker) 히스토리에 추가하고 저장된 entry 를 반환.
 
+        user_id 로 유저별 버킷을 나눠 저장(크로스유저 차단·safe-by-construction — keyword-only).
         created_at 미전달 시 현재 UTC 로 자동 생성. report_json 은 StockReport.model_dump()
         결과(한글 키). regime_at_creation 은 생성 시점 국면(과거 평가 비교의 맥락).
         """
@@ -51,18 +58,29 @@ class JsonFileReportStore:
         }
         with self._file.lock():
             raw = self._file.read()
-            lst = raw.setdefault(ticker, [])
+            bucket = raw.get(str(user_id))
+            if not isinstance(bucket, dict):
+                # 신규 유저 버킷(또는 user_id 키와 우연히 충돌한 구 전역 레코드를 새 구조로 대체).
+                bucket = {}
+                raw[str(user_id)] = bucket
+            lst = bucket.setdefault(ticker, [])
             lst.append(entry)
             if len(lst) > REPORT_HISTORY_CAP:
                 # created_at 정렬 후 최신 CAP 개만 보존(오래된 평가부터 제거).
                 lst.sort(key=lambda e: e.get("created_at", ""))
-                raw[ticker] = lst[-REPORT_HISTORY_CAP:]
+                bucket[ticker] = lst[-REPORT_HISTORY_CAP:]
             self._file.write(raw)
         return entry
 
-    def list_history(self, ticker: str) -> list[dict]:
-        """ticker 의 평가 히스토리(created_at 내림차순 — 최신 우선). 없으면 빈 리스트."""
+    def list_history(self, ticker: str, *, user_id: str) -> list[dict]:
+        """(user_id, ticker) 평가 히스토리(created_at 내림차순 — 최신 우선). 없으면 빈 리스트.
+
+        유저 버킷(dict)만 인식 — 다른 유저 버킷·구 전역 포맷(ticker→list)은 잡히지 않아 격리된다.
+        """
         with self._file.lock():
             raw = self._file.read()
-        entries = list(raw.get(ticker, []))
+        bucket = raw.get(str(user_id))
+        if not isinstance(bucket, dict):
+            return []  # 미존재 유저 또는 구 전역 포맷 → graceful 빈 결과
+        entries = list(bucket.get(ticker, []))
         return sorted(entries, key=lambda e: e.get("created_at", ""), reverse=True)
