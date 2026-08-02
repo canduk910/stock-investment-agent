@@ -65,6 +65,11 @@ def test_balance_kis_fail_graceful(monkeypatch):
 
 
 # ── watchlist ──
+import types as _types
+
+_WL_USER = _types.SimpleNamespace(id=7)
+
+
 def test_watchlist_context(monkeypatch):
     _no_kis(monkeypatch)
     monkeypatch.setattr(
@@ -80,7 +85,7 @@ def test_watchlist_context(monkeypatch):
             "partial_failure": [],
         },
     )
-    out = vc.build_view_context("watchlist", {})
+    out = vc.build_view_context("watchlist", {}, user=_WL_USER, db=object())
     assert "관심종목" in out and "삼성전자" in out
     # 매수·매도 목표가를 모두 인용(분리 저장).
     assert "국면 확장" in out and "매수목표" in out and "매도목표" in out
@@ -92,8 +97,34 @@ def test_watchlist_empty_note(monkeypatch):
         "watchlist.service.build_watchlist_view",
         lambda *a, **k: {"items": [], "regime": None, "partial_failure": []},
     )
-    out = vc.build_view_context("watchlist", {})
+    out = vc.build_view_context("watchlist", {}, user=_WL_USER, db=object())
     assert "비어 있음" in out
+
+
+def test_watchlist_context_is_user_scoped(monkeypatch):
+    # ★크로스유저 차단(라이브 e2e 로 포착한 6번째 누수): _watchlist_context 는 전역 JSON
+    # (DEFAULT_USER_ID) 이 아니라 **요청 유저** 스코프(SqlWatchlistStore + str(user.id)) 로 조회해야 한다.
+    from watchlist.sql_store import SqlWatchlistStore
+
+    _stub_resolve(monkeypatch)
+    monkeypatch.setattr(vc, "_safe_judgement", lambda: None)
+    captured = {}
+
+    def _spy(store, uid, client, judgement):
+        captured["store"] = store
+        captured["uid"] = uid
+        return {"items": [], "regime": None, "partial_failure": []}
+
+    monkeypatch.setattr("watchlist.service.build_watchlist_view", _spy)
+    vc.build_view_context("watchlist", {}, user=_types.SimpleNamespace(id=42), db=object())
+    assert isinstance(captured["store"], SqlWatchlistStore)  # 전역 JsonFileWatchlistStore 아님
+    assert captured["uid"] == "42"  # DEFAULT_USER_ID 아님 — 요청 유저 id
+
+
+def test_watchlist_context_no_user_is_unavailable():
+    # user/db 없으면 유저 스코프 불가 → 전역 조회하지 않고 "일시 조회 불가"(누수 원천 차단).
+    out = vc.build_view_context("watchlist", {})
+    assert "일시 조회 불가" in out
 
 
 # ── stock_report ──

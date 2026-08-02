@@ -156,14 +156,19 @@ def _balance_context(user, db) -> str:
 
 
 def _watchlist_context(user, db) -> str:
-    from watchlist.constants import DEFAULT_USER_ID, WATCHLIST_STORE_PATH
     from watchlist.service import build_watchlist_view
-    from watchlist.store import JsonFileWatchlistStore
+    from watchlist.sql_store import SqlWatchlistStore
 
+    # ★유저 스코프 필수(크로스유저 차단): api/watchlist 와 동일하게 SqlWatchlistStore(db)+str(user.id) 로
+    # 요청 유저 본인 관심종목만 조회한다. 과거엔 전역 JsonFileWatchlistStore(DEFAULT_USER_ID)를 써서
+    # 어느 유저가 물어도 전역 JSON 관심종목이 그대로 실리는 크로스유저 누수가 있었다(라이브 e2e 로 포착).
+    # user/db 없으면(비로그인/미해석) 유저 스코프 불가 → 조회하지 않는다.
+    if user is None or db is None:
+        return _stamp("[관심종목] 일시 조회 불가")
     try:
-        store = JsonFileWatchlistStore(WATCHLIST_STORE_PATH)
+        store = SqlWatchlistStore(db)
         client = _resolve(user, db).client
-        view = build_watchlist_view(store, DEFAULT_USER_ID, client, _safe_judgement())
+        view = build_watchlist_view(store, str(user.id), client, _safe_judgement())
     except Exception:
         return _stamp("[관심종목] 관심종목 일시 조회 불가")
 
