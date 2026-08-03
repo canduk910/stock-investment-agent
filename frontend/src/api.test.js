@@ -173,12 +173,12 @@ describe('인증 GET(authFetch) 계열 — URL·성공 반환·실패 throw', ()
     expect(authFetch).toHaveBeenCalledWith('/api/watchlist?sort_by=near_target')
   })
 
-  it('fetchScreener — market/size 쿼리(기본 all/30)', async () => {
+  it('fetchScreener — market/scope 쿼리(기본 all/cached)', async () => {
     authFetch.mockResolvedValue(res({}))
     await api.fetchScreener()
-    expect(authFetch).toHaveBeenCalledWith('/api/screener?market=all&size=30')
-    await api.fetchScreener('kospi200', 40)
-    expect(authFetch).toHaveBeenCalledWith('/api/screener?market=kospi200&size=40')
+    expect(authFetch).toHaveBeenCalledWith('/api/screener?market=all&scope=cached')
+    await api.fetchScreener('kosdaq', 'live')
+    expect(authFetch).toHaveBeenCalledWith('/api/screener?market=kosdaq&scope=live')
   })
 
   it('실패는 `API {status}` Error(status 프로퍼티 없음)', async () => {

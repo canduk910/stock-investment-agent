@@ -110,6 +110,7 @@ def import_models() -> None:
     from chat import history_models as _hist_models  # noqa: F401  (Conversation, ChatMessage)
     from chat import report_models as _report_models  # noqa: F401  (AnalystReportRow, 공동)
     from infra import site_stats as _site_stats  # noqa: F401  (SiteStat, 가입자·방문 집계)
+    from stock import screener_models as _screener_models  # noqa: F401  (ScreenerResultRow, 전체 유니버스 스캔)
 
 
 def get_db():

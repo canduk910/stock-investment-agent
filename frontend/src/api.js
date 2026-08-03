@@ -256,9 +256,15 @@ export async function fetchBalance() {
   return _request('/api/balance', { auth: true })
 }
 
-// 대순환 후보 스크리너 — 시총상위 유니버스를 대순환 단계로 스캔. market: all/kospi/kosdaq/kospi200.
-export async function fetchScreener(market = 'all', size = 30) {
-  return _request(`/api/screener?market=${encodeURIComponent(market)}&size=${size}`, { auth: true })
+// 대순환 후보 스크리너 — 한국시장 전체 보통주(DB 캐시) 스캔 결과를 대순환 단계별로 서빙.
+//   market: all/kospi/kosdaq. scope: cached(전체 보통주 스캔 결과·기본) | live(시총 top-30 임시 폴백).
+//   응답: {candidates(현재가/등락/시총 없음 — 무캐시), catalog, market, scope, as_of, total,
+//         universe_size, partial_failure}. 표시 상한은 프론트가 클라이언트에서 처리(size 파라미터 폐기).
+export async function fetchScreener(market = 'all', scope = 'cached') {
+  return _request(
+    `/api/screener?market=${encodeURIComponent(market)}&scope=${encodeURIComponent(scope)}`,
+    { auth: true },
+  )
 }
 
 // ── 유저별 KIS 자격증명(설정) ────────────────────────────────────────────────

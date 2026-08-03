@@ -85,6 +85,61 @@ gcloud run deploy dk-invest-agent \
 - 시크릿 값 변경 시: `printf '%s' "$NEW" | gcloud secrets versions add <NAME> --data-file=-` 후 재배포(`:latest` 자동 반영).
 - 스키마는 `create_all` 로만 관리(신규 테이블 추가). 컬럼 변경(alter)이 생기면 Alembic 도입 필요.
 
+## 전체 유니버스 스크리너 배치 (Cloud Run Job + Cloud Scheduler)
+
+전체 보통주(~2,500종목)를 대순환 단계로 스캔하는 것은 종목당 일봉 1콜이 강제라 단일 요청(300s)으로
+불가능하다. 대신 **장수명 배치**(`python -m stock.screener_scan`)가 스캔→`screener_results` 테이블
+저장하고, 서빙(`GET /api/screener?scope=cached`)이 최신 스캔일 결과를 읽는다(대순환 stage 는 확정
+과거 40봉 기반 파생값이라 DB 저장·서빙 가능 — 시황 궤적 캐시 선례). Cloud Run **Job**(300s 제약
+없음)으로 실행하고 **Cloud Scheduler**로 매일 장마감 후(KST) 트리거한다.
+
+- **로컬 수동 실행**: `uv run python -m stock.screener_scan`(env/`.env` 또는 `__shared__` KIS 자격증명
+  사용, 진행률 로깅). 첫 스캔 전에는 서빙이 자동으로 live top-N 폴백(화면이 빈손 아님).
+
+- **Cloud Run Job 생성(같은 이미지·엔트리포인트만 교체)** — **★ 사용자가 직접 실행**(리소스 생성):
+
+```bash
+# 1) 배치 Job 생성/갱신 — 웹 서비스와 같은 소스에서 빌드, 커맨드만 스캐너로 교체
+gcloud run jobs deploy dk-invest-screener-scan \
+  --source=. \
+  --project=dk-invest-agent-2607122107 \
+  --region=asia-northeast3 \
+  --command=python --args=-m,stock.screener_scan \
+  --add-cloudsql-instances=dk-invest-agent-2607122107:asia-northeast3:dk-invest-db \
+  --set-env-vars=KIS_ENV=real,KIS_ACNT_PRDT_CD_STK=01 \
+  --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest,FRED_API_KEY=FRED_API_KEY:latest,JWT_SECRET=JWT_SECRET:latest,KIS_ENC_KEY=KIS_ENC_KEY:latest,DATABASE_URL=DATABASE_URL:latest \
+  --memory=1Gi --cpu=1 --task-timeout=3600 --max-retries=1 --quiet
+
+# 2) 수동 1회 실행(첫 스캔 채우기·검증)
+gcloud run jobs execute dk-invest-screener-scan \
+  --project=dk-invest-agent-2607122107 --region=asia-northeast3 --wait
+```
+
+- **Cloud Scheduler 로 매일 자동 트리거(KST 16:00, 장마감 후)** — **★ 사용자가 직접 실행**:
+
+```bash
+PROJECT=dk-invest-agent-2607122107
+REGION=asia-northeast3
+# 스케줄러가 Job 을 호출할 SA(run.invoker 필요). 배포 SA 재사용 또는 신규.
+INVOKER_SA=816686454504-compute@developer.gserviceaccount.com
+
+gcloud scheduler jobs create http dk-invest-screener-daily \
+  --project=$PROJECT --location=$REGION \
+  --schedule="0 16 * * 1-5" --time-zone="Asia/Seoul" \
+  --uri="https://$REGION-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/$PROJECT/jobs/dk-invest-screener-scan:run" \
+  --http-method=POST \
+  --oauth-service-account-email=$INVOKER_SA
+# (INVOKER_SA 에 roles/run.invoker 가 없으면:)
+#   gcloud run jobs add-iam-policy-binding dk-invest-screener-scan \
+#     --member=serviceAccount:$INVOKER_SA --role=roles/run.invoker --region=$REGION --project=$PROJECT
+```
+
+- KIS 순위/일봉은 조회 전용(매매 API 0). Job 은 KIS 자격증명을 `__shared__` 암호화 DB(또는 env)에서
+  읽는다 — 웹 서비스와 동일 경로(`resolve_kis_client(None, db)`). 배치는 사용자 대면이 아니라 느려도
+  되고, 동시성 상한(`DEFAULT_CONCURRENCY=8`)+KIS backoff 로 유량초과(EGW00201)를 흡수한다.
+- `screener_results` 테이블은 `create_all`(startup·Job 의 `init_db()`)로 자동 생성(신규 테이블 추가라
+  마이그레이션 불요). 같은 날 재실행은 그 날짜 행을 전량 교체(idempotent).
+
 ## 비용 / 정리
 
 - **Cloud SQL(db-f1-micro)는 스케일-투-제로 불가 → 상시 과금**(무료 체험 크레딧 소진 후 월 ~$8-10). Cloud Run 은

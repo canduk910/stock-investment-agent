@@ -55,3 +55,56 @@ def test_live_screen_grand_cycle_produces_stages():
         assert c["stage"] in (1, 2, 3, 4, 5, 6)
         assert c["stage_name"]  # 6단계 라벨 SSOT
     assert out["catalog"] and len(out["catalog"]["stages"]) == 6
+
+
+def test_live_scan_all_end_to_end_small_universe():
+    """배치 스캐너(scan_all)가 실 KIS 로 소수 종목 대순환 단계를 산출·저장하는지(end-to-end).
+
+    전체 유니버스(~2.5천 종목·수 분)는 라이브에서 돌리지 않고 대표 4종목만(레이트리밋 보호).
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from infra.db import Base, import_models
+    from stock.screener_scan import scan_all
+    from stock.screener_store import ScreenerResultStore
+
+    client = _client_or_skip()
+    import_models()
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    store = ScreenerResultStore(session_factory=sessionmaker(bind=engine, expire_on_commit=False))
+
+    universe = [
+        {"ticker": "005930", "name": "삼성전자", "market": "KOSPI"},
+        {"ticker": "000660", "name": "SK하이닉스", "market": "KOSPI"},
+        {"ticker": "035720", "name": "카카오", "market": "KOSPI"},
+        {"ticker": "247540", "name": "에코프로비엠", "market": "KOSDAQ"},
+    ]
+    counts = scan_all(client, store, universe=universe, as_of_date="2099-01-01", concurrency=3)
+    assert counts["total"] == 4 and counts["scanned"] == 4
+    assert counts["with_stage"] >= 3, f"단계 산출 종목 부족: {counts}"
+    assert counts["failed"] == 0
+
+    rows = store.list_results()
+    assert store.latest_as_of() == "2099-01-01"
+    by = {r["ticker"]: r for r in rows}
+    assert set(by) == {"005930", "000660", "035720", "247540"}
+    for r in rows:
+        if r["stage"] is not None:
+            assert r["stage"] in (1, 2, 3, 4, 5, 6) and r["stage_name"]
+        assert "price" not in r and "change_rate" not in r  # 무캐시(현재가 미저장)
+
+
+def test_live_common_stocks_universe_scale():
+    """보통주 유니버스가 현실적 규모(~2천대 종목)이고 우선주/ETF 브랜드가 새지 않는지."""
+    from collectors.stock_master import load_stock_master
+    from stock.universe import common_stocks
+
+    common = common_stocks(load_stock_master())
+    assert 1800 <= len(common) <= 3000, f"유니버스 규모 이상: {len(common)}"
+    names = [s["name"] for s in common]
+    for junk in ("KODEX", "TIGER", "KIWOOM"):  # 대표 ETF 브랜드 접두는 없어야
+        assert not any(n.upper().startswith(junk) for n in names), f"{junk} ETF 누수"
+    assert not any(s["ticker"][-1] != "0" for s in common), "우선주(끝자리≠0) 누수"

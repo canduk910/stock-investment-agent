@@ -61,6 +61,12 @@
   border-color: var(--c-emph);
   color: var(--c-emph-strong);
 }
+/* 스캔 기준 표기 — 스캔일 + 전체 보통주 유니버스 크기(cached), live 폴백 임시 안내. 회색 메타(주황/경보 아님). */
+.screener__scanmeta {
+  font-size: 12px;
+  color: var(--c-text-muted);
+  font-variant-numeric: tabular-nums;
+}
 .screener__count {
   font-size: 12px;
   color: var(--c-text-muted);

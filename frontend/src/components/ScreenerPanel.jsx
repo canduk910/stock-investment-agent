@@ -3,23 +3,33 @@ import { fetchScreener } from '../api.js'
 import { useFetch } from '../lib/useFetch.js'
 import { stageGlyph } from '../lib/grandCycle.js'
 import { num, signedNum } from '../lib/format.js'
-import ChangeChip from './ChangeChip.jsx'
 import SegmentedControl from './SegmentedControl.jsx'
 
-// 대순환(고지로) 단계 기반 후보 종목 스크리너 — 시총상위 유니버스를 대순환 단계로 스캔.
-//   판정(단계)은 백엔드 엔진(코드)이 확정, 여기선 표시·필터만. 실데이터는 프론트가 직접 조회(환각 차단).
-//   색: 단계 배지=주황 강조(--c-emph)+방향 글리프, 등락=방향색(--c-up/down). 경보색·hex 금지.
+// 대순환(고지로) 단계 기반 후보 종목 스크리너 — 한국시장 전체 보통주(DB 캐시)를 대순환 단계로 스캔한
+//   결과를 서빙한다. 판정(단계)은 백엔드 엔진(코드)이 확정, 여기선 표시·필터·정렬만.
+//   ★캐시 모드엔 현재가/등락률/시총이 없다(무캐시·확정 stage/band만) — 시세는 카드 클릭 시 종목 상세가
+//    라이브 조회한다. 따라서 카드는 stage 중심(종목명·코드·시장·단계 배지·밴드)이고 등락 칩·시총은 없다.
+//   색: 단계 배지=주황 강조(--c-emph)+방향 글리프. 경보색·hex 금지.
 //
 // props: onOpenStock(ticker, name) — 후보 카드 클릭 시 종목 상세로 전환(RightPanel openStock SSOT). 옵셔널.
-// 조회: useFetch(fetchScreener(market,30)) 자체 조회 — market 변경 시만 재조회. 단계 필터는 클라이언트(재조회 0).
+// 조회: useFetch(fetchScreener(market,'cached')) 자체 조회 — market 변경 시만 재조회. 단계 필터·표시
+//       상한은 클라이언트(재조회 0). 전체 유니버스라 필터 후에도 많을 수 있어 표시 상한(60)+"외 N종목".
 // 안전: 매매 API 없음(조회·표시만). 단계는 규칙 엔진 결과이고 매수·매도 판정이 아니다(하단 면책 고정).
 
+// 시장 선택기 — kospi200 은 cached(전체 보통주 스캔) 미지원이라 제외(전체/코스피/코스닥).
 const MARKETS = [
   { key: 'all', label: '전체' },
   { key: 'kospi', label: '코스피' },
   { key: 'kosdaq', label: '코스닥' },
-  { key: 'kospi200', label: '코스피200' },
 ]
+
+// candidate.market → 표시 라벨. cached 는 대문자 "KOSPI"/"KOSDAQ"(stock_master 원값·screener-be 확정).
+//   대소문자 무관 조회(방어)·미지의 값은 원문 그대로. live 폴백엔 per-item market 이 없어(undefined) 생략.
+const MARKET_LABEL = { KOSPI: '코스피', KOSDAQ: '코스닥' }
+function marketLabel(m) {
+  if (!m) return ''
+  return MARKET_LABEL[String(m).toUpperCase()] ?? m
+}
 
 // 단계 필터(클라이언트·재조회 없음). 기본 상승국면(1 안정상승 · 6 상승진입). stages=null 이면 전체.
 const STAGE_FILTERS = [
@@ -33,16 +43,28 @@ const STAGE_FILTERS = [
   { key: 's6', label: '6단계', stages: [6] },
 ]
 
-function marketCapJo(v) {
-  // KIS stck_avls 는 억원 단위 → 조원(1조 = 10,000억)으로 표시(라이브 확인: 삼성 14,586,465억 = 1,459조).
-  if (v == null) return '—'
-  return `${num(v / 10000)}조`
+// 전체 유니버스라 필터 후 후보가 수백일 수 있어 상위 N개만 카드로 렌더(나머지는 "외 N종목"으로 요약).
+const DISPLAY_CAP = 60
+
+// 정렬: 단계 오름차순 → 같은 단계는 밴드폭(band_width_pct) 내림차순(추세 강도). 결측 밴드·판정보류(stage
+//   null)는 뒤로. 판정=백엔드, 여기선 표시 순서만(원값 불변).
+function cmpCandidate(a, b) {
+  const sa = a.stage ?? 99
+  const sb = b.stage ?? 99
+  if (sa !== sb) return sa - sb
+  const na = a.band_width_pct == null
+  const nb = b.band_width_pct == null
+  if (na && nb) return 0
+  if (na) return 1
+  if (nb) return -1
+  return b.band_width_pct - a.band_width_pct
 }
 
 export default function ScreenerPanel({ onOpenStock }) {
   const [market, setMarket] = useState('all') // 시장 선택 — 변경 시 재조회(useFetch deps)
   const [filter, setFilter] = useState('rising') // 단계 필터(클라이언트) — 기본 상승국면(1·6)
-  const { data, loading, error, reload } = useFetch(() => fetchScreener(market, 30), [market])
+  // scope=cached 고정(전체 보통주 스캔 결과). DB 비었으면 백엔드가 scope:'live' 로 자동 폴백해 내려준다.
+  const { data, loading, error, reload } = useFetch(() => fetchScreener(market, 'cached'), [market])
 
   // catalog(6단계 라벨 SSOT — 백엔드가 내려줌) → stage → {name, phase} 조회 맵.
   // 프론트가 단계 이름을 복제하지 않도록 백엔드 카탈로그로 라벨/방향을 조회(useMemo 로 data 변경 시만 재구성).
@@ -52,13 +74,22 @@ export default function ScreenerPanel({ onOpenStock }) {
     return m
   }, [data])
 
-  const candidates = data?.candidates || [] // 서버가 스캔한 전체 후보(단계 판정 포함)
+  const candidates = data?.candidates || [] // 서버가 스캔한 전체 후보(단계 판정 포함, 전 단계)
   const active = STAGE_FILTERS.find((f) => f.key === filter) || STAGE_FILTERS[0] // 현재 필터 정의
   // 필터에 stages 목록이 있으면 그 단계만, null('전체 단계')이면 전부(클라이언트 필터 — 재조회 없음).
-  const filtered = active.stages
-    ? candidates.filter((c) => active.stages.includes(c.stage))
-    : candidates
-  const partial = data?.partial_failure || [] // 일봉 조회 실패로 단계가 빈 종목 목록(부분 실패 보존)
+  const sorted = useMemo(() => {
+    const base = active.stages
+      ? candidates.filter((c) => active.stages.includes(c.stage))
+      : candidates
+    return [...base].sort(cmpCandidate)
+  }, [candidates, active])
+  const shown = sorted.slice(0, DISPLAY_CAP) // 상위 N개만 카드로
+  const hidden = sorted.length - shown.length // 상한 초과분("외 N종목")
+  const partial = data?.partial_failure || [] // 스캔 중 일봉 조회 실패로 단계가 빈 종목 목록(부분 실패 보존)
+
+  const scope = data?.scope // 'cached' | 'live'
+  const asOf = data?.as_of // 스캔 기준일(YYYY-MM-DD)
+  const universe = data?.universe_size // 스캔한 전체 보통주 수
 
   return (
     <div className="screener">
@@ -74,10 +105,10 @@ export default function ScreenerPanel({ onOpenStock }) {
         </div>
       </div>
 
-      {/* 상태 분기: 최초 스캔 중 / 최초 조회 실패(재시도) / 결과(부분실패·개수·목록). 재조회 중엔
-          이전 data 를 유지하므로 `&& !data` 로 최초 로딩·에러만 전면 표시(스왑 깜빡임 방지). */}
+      {/* 상태 분기: 최초 스캔 조회 중 / 최초 조회 실패(재시도) / 결과(스캔기준·부분실패·개수·목록). 재조회
+          중엔 이전 data 를 유지하므로 `&& !data` 로 최초 로딩·에러만 전면 표시(스왑 깜빡임 방지). */}
       {loading && !data ? (
-        <div className="popup__state">후보 종목을 스캔하는 중… (시총상위 일봉 조회)</div>
+        <div className="popup__state">저장된 후보 종목을 불러오는 중…</div>
       ) : error && !data ? (
         <div className="banner banner--warn">
           후보 조회에 실패했어요.{' '}
@@ -87,21 +118,33 @@ export default function ScreenerPanel({ onOpenStock }) {
         </div>
       ) : (
         <>
+          {/* 스캔 기준 표기: cached 는 스캔일 + 전체 보통주 유니버스, live 폴백은 회색 임시 안내(주황 아님). */}
+          <div className="screener__scanmeta">
+            {scope === 'live' ? (
+              <>⚠ 전체 스캔 전 — 시총 상위 임시 표시</>
+            ) : (
+              <>
+                {asOf ? `${asOf} 스캔 기준` : '전체 보통주 스캔 기준'}
+                {universe != null && ` · 전체 보통주 ${num(universe)}종목`}
+              </>
+            )}
+          </div>
           {partial.length > 0 && (
             <div className="screener__note">
-              일부 종목은 일시 조회 실패로 단계가 비어 있어요({partial.length}종목).
+              일부 종목은 스캔 중 일시 조회 실패로 단계가 비어 있어요({partial.length}종목).
             </div>
           )}
           <div className="screener__count">
-            {filtered.length}종목 · {active.label}
+            {sorted.length}종목 · {active.label}
+            {hidden > 0 && ` · 상위 ${DISPLAY_CAP} 표시 (외 ${hidden}종목)`}
           </div>
-          {filtered.length === 0 ? (
+          {sorted.length === 0 ? (
             <div className="popup__state">
               해당 단계의 후보가 없어요. 다른 단계나 시장을 선택해 보세요.
             </div>
           ) : (
             <ul className="wl__list">
-              {filtered.map((c) => (
+              {shown.map((c) => (
                 <ScreenerRow
                   key={c.ticker}
                   c={c}
@@ -123,12 +166,14 @@ export default function ScreenerPanel({ onOpenStock }) {
 }
 
 // 후보 종목 한 줄 — 관심종목(.wl__*) 카드 스타일 재사용. 정보 영역만 클릭 가능(상세 이동).
+//   ★캐시 모드라 현재가/등락 칩/시총이 없다 — stage 중심(종목명·코드·시장·단계 배지·밴드).
 function ScreenerRow({ c, meta, onOpenStock }) {
   const clickable = !!onOpenStock // onOpenStock 없으면 순수 표시(클릭 비활성·옵셔널)
   const openDetail = () => onOpenStock?.(c.ticker, c.name ?? c.ticker) // 상세 전환(종목명 전달)
   const hasStage = c.stage != null // 단계 판정 성공 여부(봉 부족·조회 실패 시 null)
   // 배지 라벨 — 백엔드 카탈로그(meta) 이름 우선, 없으면 서버가 준 stage_name 폴백.
   const stageLabel = hasStage ? `${c.stage}단계 · ${meta?.name ?? c.stage_name ?? ''}` : ''
+  const mkt = marketLabel(c.market)
 
   return (
     <li className="wl__row">
@@ -151,14 +196,7 @@ function ScreenerRow({ c, meta, onOpenStock }) {
       >
         <div className="wl__row-id">
           <span className="wl__name">{c.name ?? c.ticker}</span>
-          <span className="wl__meta">
-            {c.ticker} · 시총 {marketCapJo(c.market_cap)}
-          </span>
-        </div>
-        <div className="wl__row-price">
-          <span className="wl__price">{num(c.price)}원</span>
-          {/* 등락 칩은 ChangeChip SSOT(방향색 클래스+글리프+부호 규칙 공용). */}
-          <ChangeChip value={c.change_rate} />
+          <span className="wl__meta">{mkt ? `${c.ticker} · ${mkt}` : c.ticker}</span>
         </div>
       </div>
       <div className="wl__row-bottom">
