@@ -105,7 +105,7 @@ gcloud run jobs deploy dk-invest-screener-scan \
   --project=dk-invest-agent-2607122107 \
   --region=asia-northeast3 \
   --command=python --args=-m,stock.screener_scan \
-  --add-cloudsql-instances=dk-invest-agent-2607122107:asia-northeast3:dk-invest-db \
+  --set-cloudsql-instances=dk-invest-agent-2607122107:asia-northeast3:dk-invest-db \  # ★jobs 는 --set-(서비스 run deploy 의 --add- 아님)
   --set-env-vars=KIS_ENV=real,KIS_ACNT_PRDT_CD_STK=01 \
   --set-secrets=OPENAI_API_KEY=OPENAI_API_KEY:latest,FRED_API_KEY=FRED_API_KEY:latest,JWT_SECRET=JWT_SECRET:latest,KIS_ENC_KEY=KIS_ENC_KEY:latest,DATABASE_URL=DATABASE_URL:latest \
   --memory=1Gi --cpu=1 --task-timeout=3600 --max-retries=1 --quiet
