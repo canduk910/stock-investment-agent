@@ -22,6 +22,7 @@
 ## 종목 마스터 (stock_master.py) — 자동완성용
 - KIS 는 **종목명 검색 API 가 없다**(확인). 대신 공개 마스터 파일을 파싱해 전 종목 목록을 만든다: `https://new.real.download.dws.co.kr/common/master/{kospi,kosdaq}_code.mst.zip`.
 - **고정폭 EUC-KR(cp949) 포맷**(라이브 검증): `row[0:9].strip()`=6자리 종목코드, `row[9:21]`=ISIN, `row[21:len-TAIL].strip()`=한글명. **TAIL: KOSPI=228 / KOSDAQ=222**(시장별 다름). 6자리 코드 + 이름 있는 행만(선물 등 제외).
+- **`sec_group`(증권그룹구분코드) — additive**: `parse_master` 가 part2(TAIL 블록)에서 `row[len-TAIL+1 : len-TAIL+3]`(2글자)를 뽑아 반환 dict 에 추가(기존 ticker/name/market 불변). ★**오프셋 라이브 실측**(추측 금지): part2 **맨앞은 공백 1칸**이라 그룹코드는 선두가 아니라 **+1** 위치다(005930=ST·069500=EF·330590=RT·005935=ST[우선주도 주권]). KOSPI(228)·KOSDAQ(222) 동일 +1(둘 다 splitlines 프레임). 값: ST=주권·EF=ETF·EN=ETN·RT=리츠·BC=수익증권·FS=외국주권·DR=예탁증서·MF/IF/PF/SW/SR 등. 2글자 알파 아니면 None(graceful). 소비: `stock.universe.common_stocks`(결정적 보통주 필터). **구 캐시엔 없음** → 코드 변경 후 캐시 재수집돼야 채워짐(common_stocks 는 그동안 None 폴백). 라이브 게이트: `test_live_master_sec_group_matches_known_tickers`.
 - 시세 아님(정적 참조) → `.cache/stock_master.json`로 **하루 캐시**(신규상장 때만 변동). 캐시 정책(현재가 금지)과 무관.
 - `search_stocks`: 숫자=코드 prefix, 문자=이름 prefix 우선+부분일치. **랭킹은 이름 길이순** — 정식 종목("SK하이닉스")이 파생상품("KODEX SK하이닉스레버리지")보다 먼저. 소비: `GET /api/stocks/search?q=&limit=`(api/stocks.py, 프로세스 메모리 1회 로드).
 

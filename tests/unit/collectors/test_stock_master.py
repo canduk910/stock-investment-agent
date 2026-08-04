@@ -6,25 +6,65 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from collectors.stock_master import load_stock_master, parse_master, search_stocks
 
 TAIL = 228  # KOSPI
 
 
-def _mst_line(ticker: str, name: str, tail: int = TAIL) -> str:
-    """.mst 한 행 합성: ticker(9) + ISIN(12) + name(가변, 공백패딩) + tail 고정필드."""
-    return f"{ticker:<9}" + "KR7000000000" + f"{name:<30}" + ("T" * tail)
+def _mst_line(ticker: str, name: str, sec: str = "ST", tail: int = TAIL) -> str:
+    """.mst 한 행 합성: ticker(9) + ISIN(12) + name(가변, 공백패딩) + tail 고정필드.
+
+    tail(part2) 고정필드는 **선두 패딩 1칸 + 증권그룹구분코드(2) + 나머지**로 채운다 —
+    라이브 검증된 실제 오프셋(그룹코드는 part2 선두 1칸 뒤 2글자)을 합성 데이터에 반영.
+    """
+    part2 = " " + f"{sec:<2}"[:2] + ("T" * (tail - 3))
+    return f"{ticker:<9}" + "KR7000000000" + f"{name:<30}" + part2
 
 
 # ── 파싱 ─────────────────────────────────────────────────────────────────────
 
 def test_parse_extracts_ticker_name_market():
-    text = _mst_line("005930", "삼성전자") + "\n" + _mst_line("000660", "SK하이닉스")
+    # additive: 기존 ticker/name/market 계약 불변 + sec_group 추가.
+    text = _mst_line("005930", "삼성전자", sec="ST") + "\n" + _mst_line("000660", "SK하이닉스", sec="ST")
     rows = parse_master(text, TAIL, "KOSPI")
     assert rows == [
-        {"ticker": "005930", "name": "삼성전자", "market": "KOSPI"},
-        {"ticker": "000660", "name": "SK하이닉스", "market": "KOSPI"},
+        {"ticker": "005930", "name": "삼성전자", "market": "KOSPI", "sec_group": "ST"},
+        {"ticker": "000660", "name": "SK하이닉스", "market": "KOSPI", "sec_group": "ST"},
     ]
+
+
+def test_parse_preserves_core_fields_additive():
+    # sec_group 추가가 core 3필드(ticker/name/market) 값을 건드리지 않음을 명시.
+    (row,) = parse_master(_mst_line("069500", "KODEX 200", sec="EF"), TAIL, "KOSPI")
+    assert row["ticker"] == "069500"
+    assert row["name"] == "KODEX 200"
+    assert row["market"] == "KOSPI"
+    assert row["sec_group"] == "EF"
+
+
+def test_parse_extracts_sec_group_offset_kospi_and_kosdaq():
+    # 그룹코드 오프셋은 시장별 tail(KOSPI 228·KOSDAQ 222)이 달라도 동일 규칙(part2 선두+1).
+    (kospi,) = parse_master(_mst_line("005930", "삼성전자", sec="ST", tail=228), 228, "KOSPI")
+    (kosdaq,) = parse_master(_mst_line("247540", "에코프로비엠", sec="ST", tail=222), 222, "KOSDAQ")
+    assert kospi["sec_group"] == "ST"
+    assert kosdaq["sec_group"] == "ST"
+    # ETF/ETN/리츠 코드도 각각 추출.
+    (etf,) = parse_master(_mst_line("069500", "KODEX 200", sec="EF"), 228, "KOSPI")
+    (etn,) = parse_master(_mst_line("530031", "삼성 레버리지 WTI원유 선물 ETN", sec="EN"), 228, "KOSPI")
+    (reit,) = parse_master(_mst_line("330590", "롯데리츠", sec="RT"), 228, "KOSPI")
+    assert (etf["sec_group"], etn["sec_group"], reit["sec_group"]) == ("EF", "EN", "RT")
+
+
+def test_parse_sec_group_none_when_malformed():
+    # 그룹코드 자리가 2글자 알파가 아니면(구 포맷·손상) None graceful — core 필드는 유지.
+    part2 = "  99" + ("T" * (TAIL - 4))  # 선두+1 위치가 "99"(비알파)
+    row = f"{'005930':<9}" + "KR7000000000" + f"{'삼성전자':<30}" + part2
+    (parsed,) = parse_master(row, TAIL, "KOSPI")
+    assert parsed["ticker"] == "005930"
+    assert parsed["name"] == "삼성전자"
+    assert parsed["sec_group"] is None
 
 
 def test_parse_skips_non_6char_ticker():
@@ -36,6 +76,21 @@ def test_parse_skips_non_6char_ticker():
 
 def test_parse_skips_short_rows():
     assert parse_master("짧은행\n", TAIL, "KOSPI") == []
+
+
+# ── 라이브(실 마스터 다운로드) 그룹코드 대조 ──────────────────────────────────
+
+@pytest.mark.live
+def test_live_master_sec_group_matches_known_tickers():
+    """실 마스터를 내려받아 대표 티커의 증권그룹구분코드를 대조(추측 아님·오프셋 회귀 방지)."""
+    from collectors.stock_master import _fetch_all  # 네트워크(라이브 전용)
+
+    master = _fetch_all()
+    by_ticker = {r["ticker"]: r for r in master}
+    assert by_ticker["005930"]["sec_group"] == "ST"   # 삼성전자 = 주권
+    assert by_ticker["069500"]["sec_group"] == "EF"   # KODEX 200 = ETF
+    assert by_ticker["330590"]["sec_group"] == "RT"   # 롯데리츠 = 리츠
+    assert by_ticker["005935"]["sec_group"] == "ST"   # 삼성전자우 = 주권(우선주도 ST)
 
 
 # ── 검색 ─────────────────────────────────────────────────────────────────────

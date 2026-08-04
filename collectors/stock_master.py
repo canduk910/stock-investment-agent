@@ -7,8 +7,14 @@ kosdaq_code.mst)을 내려받아 파싱해 전 종목(코드·이름·시장) �
 고정폭 EUC-KR(cp949). 한 행:
 - `row[0:9].strip()` = 단축코드(6자리 종목코드)
 - `row[9:21]`        = 표준코드(ISIN)
-- `row[21:len-TAIL].strip()` = 한글 종목명 (뒤 TAIL 바이트는 고정 필드 묶음)
+- `row[21:len-TAIL].strip()` = 한글 종목명 (뒤 TAIL 바이트는 고정 필드 묶음=part2)
   - **KOSPI TAIL=228, KOSDAQ TAIL=222** (시장별로 다름 — 라이브 검증값).
+- **증권그룹구분코드(sec_group)** = part2(TAIL 블록) **선두 패딩 1칸 뒤 2글자** =
+  `row[len-TAIL+1 : len-TAIL+3]`. ★라이브 실측 오프셋(추측 아님): 005930=ST(주권)·
+  069500=EF(ETF)·330590=RT(리츠)·005935=ST(우선주도 주권). part2 맨앞은 공백 1칸이라
+  선두가 아니라 **+1** 위치다(오프셋 오독 방지). 값: ST=주권·EF=ETF·EN=ETN·RT=리츠·
+  BC=수익증권·FS=외국주권·DR=예탁증서·MF=투자회사·IF=인프라·PF·SW·SR 등. KOSPI(228)·
+  KOSDAQ(222) 동일 +1 규칙(둘 다 splitlines 프레임). 2글자 알파 아니면 None(graceful).
 
 시세·현재가가 아니므로 캐시 금지 원칙과 무관(정적 참조 데이터). 로컬 JSON 으로 하루 캐시.
 """
@@ -30,8 +36,22 @@ DEFAULT_CACHE_PATH = ".cache/stock_master.json"
 DEFAULT_TTL_SECONDS = 24 * 3600  # 마스터는 신규상장 때만 바뀜 → 하루 캐시
 
 
+def _parse_sec_group(row: str, tail: int) -> str | None:
+    """증권그룹구분코드(2글자·ST/EF/EN/RT/…) 추출 — part2 선두 패딩 1칸 뒤(라이브 검증 오프셋).
+
+    2글자 알파가 아니면(구 포맷·손상 행) None(graceful). 순수·네트워크 없음.
+    """
+    start = len(row) - tail + 1
+    code = row[start : start + 2]
+    return code if len(code) == 2 and code.isalpha() else None
+
+
 def parse_master(text: str, tail: int, market: str) -> list[dict]:
-    """.mst 텍스트 → [{ticker, name, market}]. 6자리 종목코드 + 이름 있는 행만(선물 등 제외)."""
+    """.mst 텍스트 → [{ticker, name, market, sec_group}]. 6자리 코드+이름 있는 행만(선물 등 제외).
+
+    `sec_group`(증권그룹구분코드)은 **additive** — 기존 ticker/name/market 계약 불변.
+    소비자(자동완성·gazetteer·유니버스)는 이 필드를 있으면 쓰고 없으면 무시(하위호환).
+    """
     out = []
     for row in text.splitlines():
         if len(row) < 21 + tail:
@@ -39,7 +59,14 @@ def parse_master(text: str, tail: int, market: str) -> list[dict]:
         ticker = row[0:9].strip()
         name = row[21 : len(row) - tail].strip()
         if len(ticker) == 6 and ticker.isalnum() and name:
-            out.append({"ticker": ticker, "name": name, "market": market})
+            out.append(
+                {
+                    "ticker": ticker,
+                    "name": name,
+                    "market": market,
+                    "sec_group": _parse_sec_group(row, tail),
+                }
+            )
     return out
 
 
