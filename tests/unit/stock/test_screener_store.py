@@ -24,12 +24,16 @@ def store():
     return ScreenerResultStore(session_factory=sf)
 
 
-def _row(ticker, name, market="KOSPI", stage=1):
-    return {
+def _row(ticker, name, market="KOSPI", stage=1, **extras):
+    row = {
         "ticker": ticker, "name": name, "market": market,
         "stage": stage, "stage_name": "안정 상승기", "arrangement": "단 > 중 > 장",
         "band_width_pct": 12.3, "band_direction": "확대", "bars_in_stage": 7,
+        "market_cap": 4_500_000.0, "roe": 10.85, "net_income_growth": 15.0,
+        "debt_ratio": 40.0, "avg_per": 17.0, "spark": [100.0, 105.5, 110.0],
     }
+    row.update(extras)
+    return row
 
 
 def test_upsert_and_list_latest(store):
@@ -39,8 +43,22 @@ def test_upsert_and_list_latest(store):
     by = {r["ticker"]: r for r in rows}
     assert by["005930"]["name"] == "삼성전자" and by["005930"]["stage"] == 1
     assert by["005930"]["stage_name"] == "안정 상승기" and by["005930"]["band_width_pct"] == 12.3
-    # 현재가·등락률은 저장·반환하지 않는다(무캐시 원칙1)
-    assert "price" not in by["005930"] and "change_rate" not in by["005930"]
+    # 후보 강화 스냅샷(시총 정렬키·재무 원천·avg_per)이 왕복
+    assert by["005930"]["market_cap"] == 4_500_000.0 and by["005930"]["roe"] == 10.85
+    assert by["005930"]["avg_per"] == 17.0
+    # 현재가·현재 PER 은 저장·반환하지 않는다(무캐시 원칙1 — 서빙이 라이브)
+    assert "price" not in by["005930"] and "per" not in by["005930"]
+
+
+def test_spark_round_trips(store):
+    store.upsert_scan("2026-08-03", [_row("005930", "삼성전자", spark=[100.0, 110.25, 121.5])])
+    r = store.list_results()[0]
+    assert r["spark"] == [100.0, 110.25, 121.5]  # 콤마 조인 저장 → 리스트 복원
+
+
+def test_spark_empty_is_none(store):
+    store.upsert_scan("2026-08-03", [_row("005930", "삼성전자", spark=None)])
+    assert store.list_results()[0]["spark"] is None
 
 
 def test_upsert_same_day_replaces(store):

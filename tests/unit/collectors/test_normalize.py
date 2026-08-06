@@ -189,19 +189,44 @@ def test_normalize_income_statement_single_dict_output_coerced_to_list():
 # --- financial ratio (재무비율 — FHKST66430300) -----------------------------
 
 def test_normalize_financial_ratio_shape(load_fixture):
-    """output 리스트 → 연도별 [{period, eps, bps, roe}]. roe 는 roe_val 에서."""
+    """output 리스트 → 연도별 재무비율. roe=roe_val. 성장성·안정성 필드는 additive(clean snake).
+
+    재무 100점(stock/financial_score) 이 소비: roe(수익성)·net_income_growth(성장성)·
+    debt_ratio(안정성). 같은 FHKST66430300 응답에 이미 있는 필드라 추가 API 콜 0.
+    """
     body = load_fixture("kis_financial_ratio")
     result = normalize.normalize_financial_ratio(body)
 
     assert isinstance(result, list)
     assert len(result) == 3
     r0 = result[0]
-    assert set(r0.keys()) == {"period", "eps", "bps", "roe"}
+    assert set(r0.keys()) == {
+        "period", "eps", "bps", "roe",
+        "revenue_growth", "op_income_growth", "net_income_growth",
+        "debt_ratio", "reserve_ratio",
+    }
     assert r0["period"] == "202312"
     assert r0["eps"] == 2131.0
     assert r0["bps"] == 52068.0
     assert r0["roe"] == 4.14
     assert result[2]["roe"] == 13.92
+    # additive 성장성/안정성(raw grs/bsop_prfi_inrt/ntin_inrt/lblt_rate/rsrv_rate → clean snake)
+    assert r0["revenue_growth"] == -14.33      # grs 매출액증가율
+    assert r0["op_income_growth"] == -84.86    # bsop_prfi_inrt 영업이익증가율
+    assert r0["net_income_growth"] == -72.17   # ntin_inrt 순이익증가율
+    assert r0["debt_ratio"] == 25.36           # lblt_rate 부채비율(낮을수록 우량)
+    assert r0["reserve_ratio"] == 38144.29     # rsrv_rate 유보비율
+    assert result[1]["net_income_growth"] == 39.46
+
+
+def test_normalize_financial_ratio_missing_growth_fields_are_graceful():
+    """성장성/안정성 필드가 없는 구·부분 응답도 None (KeyError 금지)."""
+    body = {"output": [{"stac_yymm": "202312", "eps": "100", "roe_val": "10"}]}
+    r0 = normalize.normalize_financial_ratio(body)[0]
+    assert r0["eps"] == 100.0
+    assert r0["roe"] == 10.0
+    assert r0["revenue_growth"] is None
+    assert r0["debt_ratio"] is None
 
 
 def test_normalize_financial_ratio_empty_output_is_empty_list():

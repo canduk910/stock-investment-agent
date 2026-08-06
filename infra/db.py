@@ -78,6 +78,13 @@ _ADDITIVE_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("users", "used_today", "INTEGER DEFAULT 0"),
     ("users", "usage_date", "VARCHAR(10)"),
     ("users", "total_questions", "INTEGER DEFAULT 0"),
+    # 스크리너 후보 강화(시총 정렬·재무점수·미니차트) — screener_results 확정/파생 스냅샷 컬럼.
+    ("screener_results", "market_cap", "FLOAT"),
+    ("screener_results", "roe", "FLOAT"),
+    ("screener_results", "net_income_growth", "FLOAT"),
+    ("screener_results", "debt_ratio", "FLOAT"),
+    ("screener_results", "avg_per", "FLOAT"),
+    ("screener_results", "spark", "VARCHAR(512)"),
 )
 
 

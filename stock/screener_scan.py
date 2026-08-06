@@ -1,13 +1,16 @@
 """전체 유니버스 대순환 배치 스캐너 — 보통주 전종목 스캔 → DB 저장(조회 전용·판정=코드).
 
-파이프라인: 보통주 유니버스(`stock.universe.common_stocks(load_stock_master())`) → 종목별 일봉
-1콜(`stock.screener._fetch_cycle`, 90일창≈60봉) 병렬 → `grand_cycle_for_chart` 로 현재 단계 →
-`ScreenerResultStore.upsert_scan(as_of_date, rows)` 저장. **사용자 대면 아님(배치)이라 느려도 됨** —
-동시성 상한(레이트리밋 보호) + per-item graceful(한 종목 실패가 전체 안 죽임).
+파이프라인: 보통주 유니버스(`stock.universe.common_stocks(load_stock_master())`) → 종목별
+`stock.screener.fetch_scan_metrics`(**종목당 4콜**: 일봉[대순환+스파크]·현재가[시총]·재무비율
+[3축]·월봉[avg_per]) 병렬 → `ScreenerResultStore.upsert_scan(as_of_date, rows)` 저장.
+**사용자 대면 아님(배치)이라 느려도 됨** — 동시성 상한(레이트리밋 보호) + per-item graceful.
+
+⚠ 종목당 콜이 1→4 로 늘어(≈2,500종목 → ~1만 콜/스캔) KIS 유량·Job 시간이 커진다 — 필요 시
+DEFAULT_CONCURRENCY·Job task-timeout 상향(client backoff 가 EGW00201 흡수).
 
 실행: 로컬 `uv run python -m stock.screener_scan` / Cloud Run Job(같은 이미지·300s 제약 없음).
-안전: 매매 API 0(랭킹·일봉 조회만)·단계 판정=순수코드(LLM/랜덤 0)·**일봉 무캐시**(stage 확정
-파생값만 DB 저장)·시크릿 노출 0.
+안전: 매매 API 0(조회만)·판정=순수코드(LLM/랜덤 0)·**현재가/일봉 무캐시**(원칙1 — 확정/파생
+스냅샷[stage·market_cap·재무3축·avg_per·spark]만 DB 저장, 현재가·현재 PER 은 서빙이 라이브)·시크릿 0.
 """
 from __future__ import annotations
 
@@ -17,7 +20,7 @@ from datetime import datetime
 
 from collectors.stock_master import load_stock_master
 from infra.timeutil import KST
-from stock.screener import _fetch_cycle  # 종목 1개 일봉→대순환 판정(90일창·단일 콜) 재사용
+from stock.screener import fetch_scan_metrics  # 종목당 4콜(대순환+스파크+시총+재무3축+avg_per)
 from stock.universe import common_stocks
 
 logger = logging.getLogger(__name__)
@@ -30,19 +33,29 @@ def _today_kst() -> str:
     return datetime.now(KST).strftime("%Y-%m-%d")
 
 
-def _row_from(stock: dict, cycle: dict | None) -> dict:
-    """유니버스 종목 + 대순환 판정 → 저장 행(현재가·등락률 없음, 무캐시 원칙1)."""
-    gc = cycle or {}  # None: 봉<40·조회실패 → stage 판정 보류
+def _row_from(stock: dict, metrics: dict | None) -> dict:
+    """유니버스 종목 + 스캔 지표(대순환·스파크·시총·재무3축·avg_per) → 저장 행.
+
+    현재가·현재 PER 은 담지 않는다(무캐시 원칙1 — 서빙이 표시 top-N 만 라이브 조회).
+    metrics None(fetch 예외) → stage 등 전부 판정 보류.
+    """
+    m = metrics or {}
     return {
         "ticker": stock.get("ticker"),
         "name": stock.get("name"),
         "market": stock.get("market"),
-        "stage": gc.get("stage"),
-        "stage_name": gc.get("stage_name"),
-        "arrangement": gc.get("arrangement"),
-        "band_width_pct": gc.get("band_width_pct"),
-        "band_direction": gc.get("band_direction"),
-        "bars_in_stage": gc.get("bars_in_stage"),
+        "stage": m.get("stage"),
+        "stage_name": m.get("stage_name"),
+        "arrangement": m.get("arrangement"),
+        "band_width_pct": m.get("band_width_pct"),
+        "band_direction": m.get("band_direction"),
+        "bars_in_stage": m.get("bars_in_stage"),
+        "market_cap": m.get("market_cap"),
+        "roe": m.get("roe"),
+        "net_income_growth": m.get("net_income_growth"),
+        "debt_ratio": m.get("debt_ratio"),
+        "avg_per": m.get("avg_per"),
+        "spark": m.get("spark"),
     }
 
 
@@ -62,16 +75,16 @@ def scan_all(client, store, *, universe=None, on_progress=None,
 
     if universe:
         with ThreadPoolExecutor(max_workers=max(1, concurrency)) as ex:
-            futures = {ex.submit(_fetch_cycle, client, u.get("ticker")): u for u in universe}
+            futures = {ex.submit(fetch_scan_metrics, client, u.get("ticker")): u for u in universe}
             for fut in as_completed(futures):
                 stock = futures[fut]
                 done += 1
                 try:
-                    cycle = fut.result()  # dict | None(봉<40·빈 차트)
+                    metrics = fut.result()  # dict(부분 graceful) — 일봉 실패 시만 예외
                 except Exception:  # noqa: BLE001 — 종목별 KIS 실패는 삼키지 않되 graceful(그 종목만 None)
-                    cycle = None
+                    metrics = None
                     counts["failed"] += 1
-                row = _row_from(stock, cycle)
+                row = _row_from(stock, metrics)
                 rows.append(row)
                 counts["scanned"] += 1
                 if row["stage"] is not None:

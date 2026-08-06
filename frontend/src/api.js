@@ -257,12 +257,19 @@ export async function fetchBalance() {
 }
 
 // 대순환 후보 스크리너 — 한국시장 전체 보통주(DB 캐시) 스캔 결과를 대순환 단계별로 서빙.
-//   market: all/kospi/kosdaq. scope: cached(전체 보통주 스캔 결과·기본) | live(시총 top-30 임시 폴백).
-//   응답: {candidates(현재가/등락/시총 없음 — 무캐시), catalog, market, scope, as_of, total,
-//         universe_size, partial_failure}. 표시 상한은 프론트가 클라이언트에서 처리(size 파라미터 폐기).
-export async function fetchScreener(market = 'all', scope = 'cached') {
+//   market: all/kospi/kosdaq. stage: all | rising | 1..6(서버 파라미터 — 백엔드가 stage 필터 + 시총
+//     역순 정렬 + 표시 top-N enrich[가격·등락·PER·재무점수·스파크]를 수행). scope 는 cached 고정(전체
+//     보통주 스캔 결과) — DB 비면 백엔드가 scope:'live'(시총 top-N 임시) 로 자동 폴백해 내려준다.
+//   응답: {candidates:[{ticker,name,market,stage,stage_name,arrangement,band_width_pct,band_direction,
+//         bars_in_stage, market_cap, spark|null, price|null, change_rate|null, per|null, per_vs_avg|null,
+//         fin_score|null, fin_axes:[{key,axis,label,value,points,max}], roe,net_income_growth,debt_ratio,
+//         avg_per}], catalog, score_config:{max_score,axis_max,axes:[{key,axis,label,unit,direction,max}]},
+//         market, market_iscd, scope, as_of, stage, total, displayed, universe_size, partial_failure}.
+//   ★가격·PER·재무점수 등 실데이터는 백엔드가 라이브 조회(프론트 재조회 아님 — 응답 그대로 표시).
+//   표시 상한은 백엔드가 처리(displayed=candidates.length, hidden=total-displayed).
+export async function fetchScreener(market = 'all', stage = 'rising') {
   return _request(
-    `/api/screener?market=${encodeURIComponent(market)}&scope=${encodeURIComponent(scope)}`,
+    `/api/screener?market=${encodeURIComponent(market)}&scope=cached&stage=${encodeURIComponent(stage)}`,
     { auth: true },
   )
 }

@@ -38,4 +38,16 @@ class ScreenerResultRow(Base):
     band_width_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     band_direction: Mapped[str | None] = mapped_column(String(16), nullable=True)
     bars_in_stage: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # ── 후보 강화(정렬·재무점수·미니차트) — 스캔 시점 확정/파생 스냅샷 ──────────────
+    # market_cap: 시총 역순 정렬키(억원·스캔일 스냅샷 — 표시 '현재가' 아님·순위는 일별 안정적).
+    # roe/net_income_growth/debt_ratio: 최신 연간 재무비율(재무 100점 3축 원천·연간 확정값).
+    # avg_per: 자기5년평균 PER(밸류 축 — 서빙이 라이브 PER 과 비교). 표본<3·미검증 종목은 None.
+    # spark: 미니차트용 최근 종가 시계열(스캔 일봉에서 파생, 콤마 조인 — 무캐시 일봉의 부산물).
+    # ★현재가·현재 PER 은 저장하지 않는다(무캐시 원칙1 — 서빙이 표시 top-N 만 라이브 조회).
+    market_cap: Mapped[float | None] = mapped_column(Float, nullable=True)
+    roe: Mapped[float | None] = mapped_column(Float, nullable=True)
+    net_income_growth: Mapped[float | None] = mapped_column(Float, nullable=True)
+    debt_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    avg_per: Mapped[float | None] = mapped_column(Float, nullable=True)
+    spark: Mapped[str | None] = mapped_column(String(512), nullable=True)  # "c1,c2,..." 종가
     scanned_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)

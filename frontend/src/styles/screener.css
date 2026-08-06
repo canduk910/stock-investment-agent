@@ -85,6 +85,55 @@
   color: var(--c-text-muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* ── PER + 재무 100점 점수 행(단계 배지/밴드 아래) ────────────────────────────
+   ★색 규칙: PER·재무점수에는 가격 방향색(--c-up/--c-down)·경보색(--c-danger)·초록/황색을
+   절대 쓰지 않는다. 점수 게이지 채움은 주황 강조(--c-emph)뿐 — 우열은 색이 아니라 폭으로 표현. */
+.screener__metrics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+.screener__per {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+/* 재무점수 = 라벨 + 게이지(wl__gauge 재사용) + 숫자. PER 오른편(사용자 요구). */
+.screener__score {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.screener__score-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--c-text-secondary);
+}
+/* wl__gauge 트랙(회색·4px)을 재사용하되 metrics 행에서 세로 여백을 없애고 남는 폭을 채운다. */
+.screener__score-track {
+  flex: 1 1 auto;
+  min-width: 40px;
+  margin-top: 0;
+}
+/* 게이지 채움 = 주황 강조(--c-emph) — 방향색/경보색 아님(재무점수 우열은 폭으로). */
+.screener__score-fill {
+  background: var(--c-emph);
+}
+.screener__score-num {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-navy);
+  font-variant-numeric: tabular-nums;
+}
+
 .screener__disclaimer {
   margin: 4px 0 0;
   font-size: 11px;

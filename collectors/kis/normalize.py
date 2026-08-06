@@ -239,9 +239,12 @@ def normalize_income_statement(body: dict) -> list[dict]:
 
 
 def normalize_financial_ratio(body: dict) -> list[dict]:
-    """국내주식 재무비율(FHKST66430300) → 연도별 [{period, eps, bps, roe}].
+    """국내주식 재무비율(FHKST66430300) → 연도별 재무비율(clean snake).
 
-    roe 는 roe_val 필드에서 취득. 빈 output → [].
+    같은 응답이 수익성(roe_val)·성장성(grs/bsop_prfi_inrt/ntin_inrt)·안정성(lblt_rate/rsrv_rate)을
+    전부 담아준다 → 재무 100점(stock/financial_score)의 4축을 추가 API 콜 없이 확보한다.
+    raw KIS 명(grs 등)은 노출 금지 — clean snake 로 정규화(엔진이 이 이름만 소비).
+    부재 필드는 None(구·부분 응답 graceful). roe 는 roe_val 에서. 빈 output → [].
     """
     rows = []
     for row in _output_rows(body):
@@ -249,7 +252,12 @@ def normalize_financial_ratio(body: dict) -> list[dict]:
             "period": pick(row, "stac_yymm"),
             "eps": to_float(pick(row, "eps")),
             "bps": to_float(pick(row, "bps")),
-            "roe": to_float(pick(row, "roe_val")),
+            "roe": to_float(pick(row, "roe_val")),               # 수익성(%)
+            "revenue_growth": to_float(pick(row, "grs")),        # 성장성 — 매출액증가율(%)
+            "op_income_growth": to_float(pick(row, "bsop_prfi_inrt")),  # 영업이익증가율(%)
+            "net_income_growth": to_float(pick(row, "ntin_inrt")),      # 순이익증가율(%)
+            "debt_ratio": to_float(pick(row, "lblt_rate")),      # 안정성 — 부채비율(%, 낮을수록 우량)
+            "reserve_ratio": to_float(pick(row, "rsrv_rate")),   # 안정성 — 유보비율(%)
         })
     return rows
 

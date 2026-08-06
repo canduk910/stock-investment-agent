@@ -90,3 +90,42 @@ INDICATOR_CONFIG = {
 
 # NOTE: RSI 과매수/과매도 라벨(70/30)·52주 고점권/저점권 라벨은 W08 스코프 밖 —
 # 스펙 §6.5a 는 rsi 원시값만 반환한다. 도입 시 여기 SSOT 상수 추가 + 사용자 확인.
+
+
+# ── 재무 100점 점수(스크리너 후보 정량화) — SSOT ─────────────────────────────
+# 결정적 코드 점수(LLM/랜덤 0). 4축 균등(각 25점) = 수익성·성장성·안정성·밸류에이션.
+# macro _INDICATOR_SPEC/score_axes 패턴 미러링: 임계·배점을 여기 한 곳에서만 정의하고
+# stock/financial_score.py 가 이 dict 를 읽어 점수화(함수에 숫자 하드코딩 금지 → 잠금 테스트).
+# direction "high"=클수록 우량(value>=threshold → points), "low"=작을수록 우량(value<threshold → points).
+# 어느 티어에도 안 걸리면 floor. 값 None → 해당 축 무투표(가용 축으로 재정규화·임의값 금지).
+FINANCIAL_SCORE_AXIS_MAX = 25
+
+FINANCIAL_SCORE_SPEC = {
+    "roe": {  # 수익성 — 재무비율 roe_val(%)
+        "axis": "수익성", "label": "ROE", "unit": "%", "direction": "high",
+        "tiers": [(15.0, 25), (10.0, 18), (5.0, 10), (0.0, 4)], "floor": 0,
+    },
+    "net_income_growth": {  # 성장성 — 순이익증가율 ntin_inrt(%)
+        "axis": "성장성", "label": "순이익증가율", "unit": "%", "direction": "high",
+        "tiers": [(20.0, 25), (10.0, 18), (0.0, 10)], "floor": 3,
+    },
+    "debt_ratio": {  # 안정성 — 부채비율 lblt_rate(%, 낮을수록 우량)
+        "axis": "안정성", "label": "부채비율", "unit": "%", "direction": "low",
+        "tiers": [(50.0, 25), (100.0, 18), (200.0, 10)], "floor": 3,
+    },
+    "per_vs_avg": {  # 밸류에이션 — 현재 PER vs 자기5년평균(%, 저평가일수록 우량·서빙 라이브 주입)
+        "axis": "밸류에이션", "label": "PER vs 자기평균", "unit": "%", "direction": "low",
+        "tiers": [(-10.0, 25), (10.0, 15), (50.0, 8)], "floor": 2,
+    },
+}
+
+# 프론트 노출용 — 반드시 SPEC 파생(4번째 진실 방지). 라벨/축/최대점만.
+FINANCIAL_SCORE_CONFIG = {
+    "max_score": 100,
+    "axis_max": FINANCIAL_SCORE_AXIS_MAX,
+    "axes": [
+        {"key": k, "axis": v["axis"], "label": v["label"], "unit": v["unit"],
+         "direction": v["direction"], "max": FINANCIAL_SCORE_AXIS_MAX}
+        for k, v in FINANCIAL_SCORE_SPEC.items()
+    ],
+}

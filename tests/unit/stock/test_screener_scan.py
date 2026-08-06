@@ -26,20 +26,36 @@ _UNIVERSE = [
 ]
 
 
-def _cycle(stage):
+def _metrics(stage, *, market_cap=None, roe=None, avg_per=None, spark=None):
+    """fetch_scan_metrics 반환 미러(대순환 + 후보 강화 스냅샷 필드)."""
     return {"stage": stage, "stage_name": f"단계{stage}", "arrangement": "단 > 중 > 장",
-            "band_width_pct": 5.0, "band_direction": "확대", "bars_in_stage": 3}
+            "band_width_pct": 5.0, "band_direction": "확대", "bars_in_stage": 3,
+            "market_cap": market_cap, "roe": roe, "net_income_growth": 10.0,
+            "debt_ratio": 40.0, "avg_per": avg_per, "spark": spark}
+
+
+def _none_metrics():
+    """봉<40 등 — 전 필드 판정 보류(fetch_scan_metrics 가 dict 로 None 들 반환)."""
+    return {k: None for k in (
+        "stage", "stage_name", "arrangement", "band_width_pct", "band_direction",
+        "bars_in_stage", "market_cap", "roe", "net_income_growth", "debt_ratio",
+        "avg_per", "spark")}
 
 
 def _patch(monkeypatch, *, universe=_UNIVERSE):
-    cycles = {"005930": _cycle(1), "000660": _cycle(4), "247540": _cycle(6), "999990": None}
+    metrics = {
+        "005930": _metrics(1, market_cap=4_500_000.0, roe=10.85, avg_per=17.0, spark=[100.0, 110.0]),
+        "000660": _metrics(4, market_cap=900_000.0, roe=9.0),
+        "247540": _metrics(6, market_cap=120_000.0),
+        "999990": _none_metrics(),
+    }
 
     def _fetch(client, ticker):
         if ticker == "111110":
             raise RuntimeError("kis fail")
-        return cycles.get(ticker)
+        return metrics.get(ticker, _none_metrics())
 
-    monkeypatch.setattr(scan, "_fetch_cycle", _fetch)
+    monkeypatch.setattr(scan, "fetch_scan_metrics", _fetch)
     return universe
 
 
@@ -56,8 +72,14 @@ def test_scan_all_stores_rows_and_counts(monkeypatch):
     # stage 산출 종목
     assert by["005930"]["stage"] == 1 and by["005930"]["stage_name"] == "단계1"
     assert by["005930"]["name"] == "삼성전자" and by["005930"]["market"] == "KOSPI"
-    # 봉부족·조회실패는 stage None(판정 보류)
+    # 후보 강화 스냅샷 필드가 저장 행으로 관통(시총 정렬키·재무 원천·avg_per·스파크)
+    assert by["005930"]["market_cap"] == 4_500_000.0
+    assert by["005930"]["roe"] == 10.85 and by["005930"]["net_income_growth"] == 10.0
+    assert by["005930"]["debt_ratio"] == 40.0 and by["005930"]["avg_per"] == 17.0
+    assert by["005930"]["spark"] == [100.0, 110.0]
+    # 봉부족·조회실패는 stage None(판정 보류) + 강화 필드도 None
     assert by["999990"]["stage"] is None and by["111110"]["stage"] is None
+    assert by["999990"]["market_cap"] is None and by["111110"]["market_cap"] is None
     # 카운트
     assert counts["total"] == 5 and counts["scanned"] == 5
     assert counts["with_stage"] == 3   # 005930·000660·247540
@@ -83,7 +105,7 @@ def test_scan_all_default_universe_uses_common_stocks(monkeypatch):
         {"ticker": "005930", "name": "삼성전자", "market": "KOSPI"},
         {"ticker": "005935", "name": "삼성전자우", "market": "KOSPI"},   # 우선주 → 필터
     ])
-    monkeypatch.setattr(scan, "_fetch_cycle", lambda client, ticker: _cycle(1))
+    monkeypatch.setattr(scan, "fetch_scan_metrics", lambda client, ticker: _metrics(1))
     store = FakeStore()
     counts = scan.scan_all(object(), store, as_of_date="2026-08-03")
     _, rows = store.saved
