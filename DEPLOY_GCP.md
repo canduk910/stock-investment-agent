@@ -139,6 +139,12 @@ gcloud scheduler jobs create http dk-invest-screener-daily \
   되고, 동시성 상한(`DEFAULT_CONCURRENCY=8`)+KIS backoff 로 유량초과(EGW00201)를 흡수한다.
 - `screener_results` 테이블은 `create_all`(startup·Job 의 `init_db()`)로 자동 생성(신규 테이블 추가라
   마이그레이션 불요). 같은 날 재실행은 그 날짜 행을 전량 교체(idempotent).
+- **★코드 변경 후 재스캔 = Job 재배포 선행 필수**: CI/CD(`git push`)는 **웹 서비스만** 배포하고 Job 은
+  별개 리소스라 건드리지 않는다. 스캐너/유니버스 필터 코드를 고친 뒤에는 위 **1) `jobs deploy --source`
+  를 먼저** 돌려 Job 이미지를 새로 빌드해야 반영된다 — 이걸 건너뛰고 **2) `jobs execute` 만 반복하면
+  옛 이미지(옛 코드)로 스캔**해 결과가 그대로다(실제로 겪은 함정). 반영 여부는 이미지 digest 로 확인:
+  `gcloud run jobs describe dk-invest-screener-scan --format='value(spec.template.spec.template.spec.containers[0].image)'`
+  의 `@sha256:…` 가 바뀌었는지 대조.
 
 ## 비용 / 정리
 
